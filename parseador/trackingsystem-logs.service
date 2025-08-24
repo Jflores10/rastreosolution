@@ -1,0 +1,13 @@
+[Unit]
+Description=Tracking System Logs
+Requires=network-online.target
+After=network.target network-online.target multi-user.target
+
+[Service]
+User=root
+Type=simple
+Restart=on-failure
+ExecStart=/usr/bin/php /var/www/html/trackingsystem/trackingsystemwebapp/artisan ts:write-log-sockets
+
+[Install]
+WantedBy=multi-user.target

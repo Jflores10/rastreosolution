@@ -1,0 +1,24 @@
+{
+  "name": "trackingsystem",
+  "version": "1.0.0",
+  "description": "Socket parser for tracking",
+  "main": "trackingsystem.js",
+  "dependencies": {
+    "geolib": "^3.3.4",
+    "moment": "^2.19.3",
+    "mongodb": "^3.5.9",
+    "node-schedule": "^1.3.3",
+    "nodemailer": "^4.4.0",
+    "utf8-string-bytes": "^1.0.3"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "node trackingsystem.js",
+    "start": "node trackingsystem.js"
+  },
+  "keywords": [
+    "tracking"
+  ],
+  "author": "KIMERASOFT",
+  "license": "MIT"
+}

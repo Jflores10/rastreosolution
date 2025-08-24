@@ -1,0 +1,15 @@
+
+.page-navigation a {
+    padding: 4px;
+    background-color: darkslategrey;
+    color: #fff;
+}
+
+.page-navigation a[data-selected] {
+    color: darkslategrey;
+    background-color: #fff;
+}
+
+body {
+    font-family: 'Ubuntu', sans-serif;
+}

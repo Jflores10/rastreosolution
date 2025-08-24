@@ -1,0 +1,45 @@
+# Laravel specific
+/vendor/
+/node_modules/
+/public/storage
+/storage/*.key
+.env
+.phpunit.result.cache
+Homestead.yaml
+Homestead.json
+/.vagrant
+
+# Laravel IDE Helper files
+.phpstorm.meta.php
+/_ide_helper.php
+/_ide_helper_models.php
+
+# Laravel Telescope
+/telescope/metrics
+
+# Cache and logs
+/storage/framework/cache/*
+/storage/framework/sessions/*
+/storage/framework/testing/*
+/storage/framework/views/*
+/storage/logs/*
+
+# Composer
+composer.phar
+
+# NPM
+npm-debug.log
+yarn-error.log
+pnpm-debug.log
+
+# IDEs and editors
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# System files
+.DS_Store
+Thumbs.db
+
+.env

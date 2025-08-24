@@ -1,0 +1,34 @@
+[
+  {
+    "_id": { "$oid": "5827714b7b10202ff4485891" },
+    "descripcion": "Distribuidor",
+    "valor": "1"
+  },
+  {
+    "_id": { "$oid": "582771647b10202ff4485892" },
+    "descripcion": "Administrador de cooperativa",
+    "valor": "2"
+  },
+  {
+    "_id": { "$oid": "582771707b10202ff4485893" },
+    "descripcion": "Despachador",
+    "valor": "3"
+  },
+  {
+    "_id": { "$oid": "5827717d7b10202ff4485894" },
+    "descripcion": "Socio",
+    "valor": "4"
+  },
+  {
+    "_id": { "$oid": "5bee25964c34feb713a0233b" },
+    "descripcion": "API",
+    "valor": 10,
+    "updated_at": { "$date": "2017-11-01T02:31:23.000Z" },
+    "created_at": { "$date": "2017-11-01T02:31:23.000Z" }
+  },
+  {
+    "_id": { "$oid": "5e0ec2b1a26f51a0d69b9055" },
+    "descripcion": "Despachador Especial",
+    "valor": "5"
+  }
+]

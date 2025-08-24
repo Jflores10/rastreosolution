@@ -1,0 +1,61 @@
+#marcas, #marcas tr, #marcas td, #totales, #totales tr {
+    border : 2px solid #000000;
+}
+.ticket-left {
+    border-left: 2px solid #000000;
+    text-align: right;
+}
+.ticket-right {
+    border-right: 2px solid #000000;
+    text-align: left;
+}
+
+.center {
+    text-align: center;
+}
+
+.underlined {
+    text-decoration: underline;
+}
+td, th {
+    vertical-align: middle;
+    text-align: center;
+    font-size: 16;
+    height: 20;
+}
+
+.printticket{
+    height: 50;
+}
+
+#header td {
+    font-size: 22;
+    height: 26;
+}
+
+#header:first-child tr:first-child {
+    font-weight: bold;
+    text-align: center;
+}
+
+
+.ticket td {
+    height: 80;
+    font-size: 28;
+}
+
+.ticket-top {
+    border-top: 2px solid #000000;
+    height: 100;
+    font-weight: bold;
+}
+.ticket-bottom {
+    border-bottom: 2px solid #000000;
+    vertical-align: top;
+    height: 100;
+}
+.ticket:first-child td {
+    font-weight: bold;
+    text-align: center;
+}
+
