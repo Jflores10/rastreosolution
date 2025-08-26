@@ -316,7 +316,10 @@
     <script>
       setInterval(function(){
         var today = new Date();
-        var time = today.getHours() + ":" + today.getMinutes() + ":" + today.getSeconds();
+        var hours = String(today.getHours()).padStart(2, '0');
+        var minutes = String(today.getMinutes()).padStart(2, '0');
+        var seconds = String(today.getSeconds()).padStart(2, '0');
+        var time = hours + ":" + minutes + ":" + seconds;
         document.getElementById('reloj').innerHTML='<font color="white">'+time+'</font>';
       }, 1000);
       
