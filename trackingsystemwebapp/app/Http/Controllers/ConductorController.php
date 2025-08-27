@@ -10,7 +10,7 @@ use App\TipoUsuario;
 use Auth;
 use Validator;
 use Excel;
-
+//
 class ConductorController extends Controller
 {
     public function index()
