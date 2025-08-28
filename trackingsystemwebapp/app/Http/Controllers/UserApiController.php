@@ -7,8 +7,8 @@ use Illuminate\Http\Response;
 use App\User;
 use Illuminate\Support\Facades\Validator;
 
-// use Validator;
-// use Hash;
+//use Validator;
+use Hash;
 class UserApiController extends Controller
 {
     public function login(Request $request)
