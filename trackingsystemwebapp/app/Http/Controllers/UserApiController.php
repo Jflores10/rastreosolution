@@ -18,7 +18,6 @@ class UserApiController extends Controller
     		'email' => 'required|max:255|exists:users',
     		'password' => 'required|max:255'
     	]);
-		dd('hola');
     	if ($validator->fails())
     		return response()->json(['error' => true, 'messages' => $validator->errors()]);
     	else 
