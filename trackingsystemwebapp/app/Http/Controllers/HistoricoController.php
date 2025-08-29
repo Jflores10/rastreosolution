@@ -374,8 +374,7 @@ class HistoricoController extends Controller
                     $ruta='';
                     $ruta_fecha='';
                     $ruta_conductor='';
-                    $ruta_fecha_fin='';
-
+                    $ruta_hora_final='';
 
                     if(isset($ruta_actual)){
                         $ruta=$ruta_actual->ruta->descripcion;
