@@ -36,7 +36,7 @@ class UpdateGPSAddress extends Command
 
     private function getAddressFromGPS($latitude, $longitude) {
         $client = new Client();
-        $urlFinal='http://geocoding.kimerasoftec.com/reverse?format=json&lat='.$latitude. '&lon='.$longitude;
+        $urlFinal='https://nominatim.openstreetmap.org/reverse?format=json&lat='.$latitude. '&lon='.$longitude;
         $res = $client->get($urlFinal, [
             'verify' => false
         ]);

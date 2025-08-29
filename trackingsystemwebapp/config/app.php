@@ -69,7 +69,7 @@ return [
     'ws_atm_Getdespacho' => 'getdispatch',
     'ws_atm_ruta' => 'route',
     'ws_atm_timeout'=> 50,
-    'reverse_geocoding_url' => 'http://geocoding.kimerasoftec.com/reverse',
+    'reverse_geocoding_url' => 'https://nominatim.openstreetmap.org/reverse',
 
     /*
     |--------------------------------------------------------------------------

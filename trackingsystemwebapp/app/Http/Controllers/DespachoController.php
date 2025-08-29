@@ -78,7 +78,7 @@ class DespachoController extends Controller
 
                 $key = $index + 2;
 
-                $unidad = Unidad::where('descripcion', (string) $row['unidad'])
+                $unidad = Unidad::where('descripcion', trim((string) $row['unidad']))
                     ->where('cooperativa_id', $cooperativa->_id)
                     ->first();
                 if (!isset($unidad)) {
@@ -91,7 +91,7 @@ class DespachoController extends Controller
                 }
                 $unidad_id = $unidad->_id;
                 
-                $conductor = Conductor::where('cedula', $row['conductor'])
+                $conductor = Conductor::where('cedula', trim((string) $row['conductor']))
                     ->where('cooperativa_id', $cooperativa->_id)
                     ->first();
                 if (!isset($conductor)) {
@@ -104,7 +104,7 @@ class DespachoController extends Controller
                 }
                 $conductor_id = $conductor->_id;
 
-                $ruta = Ruta::where('descripcion', (string) $row['ruta'])
+                $ruta = Ruta::where('descripcion', trim((string) $row['ruta']))
                     ->where('cooperativa_id', $cooperativa->_id)
                     ->first();
                 if (!isset($ruta)) {

@@ -49,8 +49,8 @@ function llenarUnidadesSocio(unidades_id, unidades_descripcion) {
 
 }
 
-function cargaHistorico(url, id_cooperativa, valor_usuario) {
-    //cleanForm();
+function cargaHistorico(url, id_cooperativa, valor_usuario, pagina = 1) {
+
     var unidad_id = document.getElementById('unidad_id');
     var fecha_inicio = document.getElementById('fecha_inicio');
     var fecha_fin = document.getElementById('fecha_fin');
@@ -67,11 +67,7 @@ function cargaHistorico(url, id_cooperativa, valor_usuario) {
     div_fecha_inicio.classList.remove('has-error');
     div_fecha_fin.classList.remove('has-error');
 
-    var id_coop = "";
-    if (valor_usuario == '1')
-        id_coop = document.getElementById('cooperativa_id').value;
-    else
-        id_coop = id_cooperativa;
+    var id_coop = valor_usuario == '1' ? document.getElementById('cooperativa_id').value : id_cooperativa;
 
     $('#progress').modal('show');
     $.post(url, {
@@ -80,132 +76,107 @@ function cargaHistorico(url, id_cooperativa, valor_usuario) {
         fecha_fin: fecha_fin.value,
         opcion: 'getHistorico',
         cooperativa_id: id_coop,
-        evento: document.getElementById('evento').value
+        evento: document.getElementById('evento').value,
+        page: pagina
     }, function (data) {
-        if (data.error == true) {
-            if (data.messages.hasOwnProperty('unidad_id')) {
+        var tr_registros_historicos = $('#div-tabla');
+        tr_registros_historicos.empty();
+
+        if (data.error) {
+            if (data.messages.unidad_id) {
                 div_unidad.classList.add('has-error');
                 span_unidad.innerHTML = '<strong>' + data.messages.unidad_id + '</strong>';
             }
-
-            if (data.messages.hasOwnProperty('fecha_inicio')) {
+            if (data.messages.fecha_inicio) {
                 div_fecha_inicio.classList.add('has-error');
                 span_desde.innerHTML = '<strong>' + data.messages.fecha_inicio + '</strong>';
             }
-
-            if (data.messages.hasOwnProperty('fecha_fin')) {
+            if (data.messages.fecha_fin) {
                 div_fecha_fin.classList.add('has-error');
                 span_hasta.innerHTML = '<strong>' + data.messages.fecha_fin + '</strong>';
             }
         } else {
-            var tr_registros_historicos = $('#div-tabla');
-            tr_registros_historicos.empty();
-
             if (data.array_historico.length == 0) {
                 alert('No se encontró ningún registro.');
                 array_historico = [];
             } else {
                 sortJsonArrayByProperty(data.array_historico, 'fecha_gps');
                 array_historico = data.array_historico;
-               // if (data.tipo != 'GTFRI' || data.ev == 'T') {
-                   /* tr_registros_historicos.append(
-                        '<table class="table" id="tr-registros-historicos">' +
-                        '<thead style="background-color: #FAFAFA;">' +
-                        '<th >Fecha de GPS</th>' +
-                        '<th>Fecha de servidor</th>' +
-                        '<th>Evento</th>' +
-                        '<th>Punto cardinal</th>' +
-                        '<th>Velocidad</th>' +
-                        '<th>Voltaje</th>' +
-                        '<th>Contador</th>' +
-                        '</thead>' +
-                        '<tbody id="tbody-historico"></tbody>' +
-                        '</table>'
+
+                tr_registros_historicos.append(
+                    '<table class="table" id="tr-registros-historicos">' +
+                    '<thead style="background-color: #FAFAFA;">' +
+                    '<th>Fecha de GPS</th><th>Fecha de servidor</th><th>Evento</th><th>Latitud</th>' +
+                    '<th>Longitud</th><th>Mileage</th><th>Ubicación</th><th>Punto cardinal</th>' +
+                    '<th>Velocidad</th><th>Voltaje</th><th>Contador</th>' +
+                    '</thead>' +
+                    '<tbody id="tbody-historico"></tbody>' +
+                    '</table>'
+                );
+                var tbody = $('#div-tabla').find('tbody[id="tbody-historico"]');
+                data.array_historico.forEach(function(item) {
+                    tbody.append(
+                        '<tr id="' + item._id + '">' +
+                        '<td>' + item.fecha_gps + '</td>' +
+                        '<td>' + item.fecha_servidor + '</td>' +
+                        '<td>' + item.evento + '</td>' +
+                        '<td>' + item.latitud + '</td>' +
+                        '<td>' + item.longitud + '</td>' +
+                        '<td>' + item.mileage + '</td>' +
+                        '<td>' + item.ubicacion + '</td>' +
+                        '<td>' + item.angulo + '</td>' +
+                        '<td>' + item.velocidad + '</td>' +
+                        '<td>' + item.voltaje + '</td>' +
+                        '<td>' + item.contador_total + '</td>' +
+                        '</tr>'
                     );
-                    tr_registros_historicos = $('#div-tabla').find('tbody[id="tbody-historico"]');
+                });
 
-                    for (var i = 0, len = data.array_historico.length; i < len; i++)
-                        tr_registros_historicos.append(
-                            '<tr>' +
-                            '<td>' + data.array_historico[i].fecha_gps + '</td>' +
-                            '<td>' + data.array_historico[i].fecha_servidor + '</td>' +
-                            '<td>' + data.array_historico[i].evento + '</td>' +
-                            '<td>' + data.array_historico[i].angulo + '</td>' +
-                            '<td>' + data.array_historico[i].velocidad + '</td>' +
-                            '<td>' + data.array_historico[i].voltaje + '</td>' +
-                            '<td>' + data.array_historico[i].contador_total + '</td>' +
-                            '</tr>'
-                        );*/
-                    //$('#tr-registros-historicos').paginate();
-              //  } else {
-                   // if (data.ev != 'T') {
-                        tr_registros_historicos.append(
-                            '<table class="table" id="tr-registros-historicos">' +
-                            '<thead style="background-color: #FAFAFA;">' +
-                            '<th >Fecha de GPS</th>' +
-                            '<th>Fecha de servidor</th>' +
-                            '<th>Evento</th>' +
-                            '<th>Latitud</th>' +
-                            '<th>Longitud</th>' +
-                            '<th>Mileage</th>' +
-                            '<th>Ubicación</th>' +
-                            '<th>Punto cardinal</th>' +
-                            '<th>Velocidad</th>' +
-                            '<th>Voltaje</th>' +
-                            '<th>Contador</th>' +
-                            '</thead>' +
-                            '<tbody id="tbody-historico"></tbody>' +
-                            '</table>'
-                        );
-                        tr_registros_historicos = $('#div-tabla').find('tbody[id="tbody-historico"]');
+                // PAGINACIÓN DINÁMICA
+                var paginacion = '<ul class="pagination justify-content-center mt-2">';
+                
+                // Botón primero
+                paginacion += (data.current_page > 1) 
+                    ? '<li class="page-item"><a class="page-link" href="javascript:void(0);" onclick="cargaHistorico(\''+ url +'\',\''+ id_cooperativa +'\','+ valor_usuario +',1)">&laquo;&laquo;</a></li>'
+                    : '<li class="page-item disabled"><span class="page-link">&laquo;&laquo;</span></li>';
 
-                        for (var i = 0, len = data.array_historico.length; i < len; i++)
-                            tr_registros_historicos.append(
-                                '<tr id="'+data.array_historico[i]._id+'">' +
-                                '<td>' + data.array_historico[i].fecha_gps + '</td>' +
-                                '<td>' + data.array_historico[i].fecha_servidor + '</td>' +
-                                '<td>' + data.array_historico[i].evento + '</td>' +
-                                '<td>' + data.array_historico[i].latitud + '</td>' +
-                                '<td>' + data.array_historico[i].longitud + '</td>' +
-                                '<td>' + data.array_historico[i].mileage + '</td>' +
-                                '<td>' + data.array_historico[i].ubicacion + '</td>' +
-                                '<td>' + data.array_historico[i].angulo + '</td>' +
-                                '<td>' + data.array_historico[i].velocidad + '</td>' +
-                                '<td>' + data.array_historico[i].voltaje + '</td>' +
-                                '<td>' + data.array_historico[i].contador_total + '</td>' +
-                                '</tr>'
-                            );
-                    //}else{
-                       /* tr_registros_historicos.append(
-                            '<table class="table" id="tr-registros-historicos">' +
-                            '<thead style="background-color: #FAFAFA;">' +
-                            '<th >Fecha de GPS</th>' +
-                            '<th>Fecha de servidor</th>' +
-                            '<th>Evento</th>' +
-                            '<th>Punto cardinal</th>' +
-                            '<th>Velocidad</th>' +
-                            '<th>Voltaje</th>' +
-                            '<th>Contador</th>' +
-                            '</thead>' +
-                            '<tbody id="tbody-historico"></tbody>' +
-                            '</table>'
-                        );
-                        tr_registros_historicos = $('#div-tabla').find('tbody[id="tbody-historico"]');
-    
-                        for (var i = 0, len = data.array_historico.length; i < len; i++)
-                            tr_registros_historicos.append(
-                                '<tr>' +
-                                '<td>' + data.array_historico[i].fecha_gps + '</td>' +
-                                '<td>' + data.array_historico[i].fecha_servidor + '</td>' +
-                                '<td>' + data.array_historico[i].evento + '</td>' +
-                                '<td>' + data.array_historico[i].angulo + '</td>' +
-                                '<td>' + data.array_historico[i].velocidad + '</td>' +
-                                '<td>' + data.array_historico[i].voltaje + '</td>' +
-                                '<td>' + data.array_historico[i].contador_total + '</td>' +
-                                '</tr>'
-                            );*/
-                   // }
-               // }
+                // Botón anterior
+                paginacion += (data.prev_page_url) 
+                    ? '<li class="page-item"><a class="page-link" href="javascript:void(0);" onclick="cargaHistorico(\''+ url +'\',\''+ id_cooperativa +'\','+ valor_usuario +','+ (data.current_page - 1) +')">&laquo;</a></li>'
+                    : '<li class="page-item disabled"><span class="page-link">&laquo;</span></li>';
+
+                // Mostrar solo 5 páginas alrededor de la actual
+                var inicio = Math.max(1, data.current_page - 2);
+                var fin = Math.min(data.last_page, data.current_page + 2);
+
+                if (inicio > 1) {
+                    paginacion += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+                }
+
+                for (var i = inicio; i <= fin; i++) {
+                    if (i == data.current_page) {
+                        paginacion += '<li class="page-item active"><span class="page-link">' + i + '</span></li>';
+                    } else {
+                        paginacion += '<li class="page-item"><a class="page-link" href="javascript:void(0);" onclick="cargaHistorico(\''+ url +'\',\''+ id_cooperativa +'\','+ valor_usuario +','+ i +')">' + i + '</a></li>';
+                    }
+                }
+
+                if (fin < data.last_page) {
+                    paginacion += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+                }
+
+                // Botón siguiente
+                paginacion += (data.next_page_url) 
+                    ? '<li class="page-item"><a class="page-link" href="javascript:void(0);" onclick="cargaHistorico(\''+ url +'\',\''+ id_cooperativa +'\','+ valor_usuario +','+ (data.current_page + 1) +')">&raquo;</a></li>'
+                    : '<li class="page-item disabled"><span class="page-link">&raquo;</span></li>';
+
+                // Botón último
+                paginacion += (data.current_page < data.last_page) 
+                    ? '<li class="page-item"><a class="page-link" href="javascript:void(0);" onclick="cargaHistorico(\''+ url +'\',\''+ id_cooperativa +'\','+ valor_usuario +','+ data.last_page +')">&raquo;&raquo;</a></li>'
+                    : '<li class="page-item disabled"><span class="page-link">&raquo;&raquo;</span></li>';
+
+                paginacion += '</ul>';
+                $('#div-tabla').append(paginacion);
             }
         }
         $('#progress').modal('hide');
@@ -213,6 +184,9 @@ function cargaHistorico(url, id_cooperativa, valor_usuario) {
         $('#progress').modal('hide');
     });
 }
+
+
+
 /*
 function mensajesError(data,div_unidad,span_unidad,div_desde,span_desde,div_hasta,span_hasta)
 {

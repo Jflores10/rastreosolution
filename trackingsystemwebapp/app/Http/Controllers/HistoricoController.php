@@ -374,6 +374,8 @@ class HistoricoController extends Controller
                     $ruta='';
                     $ruta_fecha='';
                     $ruta_conductor='';
+                    $ruta_fecha_fin='';
+
 
                     if(isset($ruta_actual)){
                         $ruta=$ruta_actual->ruta->descripcion;
@@ -381,9 +383,19 @@ class HistoricoController extends Controller
                         date_add($ruta_fecha, date_interval_create_from_date_string('5 hours'));
                         $ruta_fecha=$ruta_fecha->format('H:i');
                         $ruta_conductor=$ruta_actual->conductor->nombre;
+                        //RECORRER LOS PUNTO DE CONTROL PARA OBTENER TIEMPO-PUNTO
+                        $tiempo_final=0;
+                        foreach ($ruta_actual->ruta->puntos_control as $punto) {
+                            $tiempo_final+=$punto['tiempo_llegada'];  
+                        }
+                        //SUMAR MINUTOS A LA HORA DEL DESPACHO
+                        $ruta_hora_final = Carbon::parse($ruta_actual->fecha); // conviertes a Carbon
+                        $ruta_hora_final->addHours(5); 
+                        $ruta_hora_final->addMinutes($tiempo_final); 
+                        $ruta_hora_final = $ruta_hora_final->format('H:i'); // solo hora:minuto
+
                     }
-                    array_push($rutaunidad,["ruta_actual"=>$ruta,"ruta_fecha"=>$ruta_fecha,"ruta_conductor"=>$ruta_conductor]);
-                    
+                    array_push($rutaunidad,["ruta_actual"=>$ruta,"ruta_fecha"=>$ruta_fecha,"ruta_conductor"=>$ruta_conductor,"ruta_hora_fin"=>$ruta_hora_final]);
 
                     $f_gps=$unidad["fecha_gps"]->toDateTime();
                     $f_servidor=$unidad["fecha"]->toDateTime();
@@ -565,14 +577,13 @@ class HistoricoController extends Controller
                     $cursor->where('tipo', $ev);
 
                    /// $cursor->where('tipo', "GTDAT");
-                $cursor = $cursor->get();
+                $cursor = $cursor->paginate(50);
                 $array_historico = [];
                 $evento='--';
                 $ubicacion= '';
                 $angulo_traducido='-';
                 $tipo='';
                 $user=Auth::user();
-
                 foreach ($cursor as $documento) {
                         $fecha = $documento["fecha"];
                         $voltaje = (isset($documento["voltaje"])?$documento["voltaje"]:'-');
@@ -746,7 +757,7 @@ class HistoricoController extends Controller
                                 $longitud_geo=$documento["longitud"];
                                 if($user->tipo_usuario->valor==1 && !isset($documento['gps_address'])){//OSM DIRECCIONES SOLO DISTRIBUIDORES
                                     $client = new Client();
-                                    $urlFinal='http://geocoding.kimerasoftec.com/reverse?format=json&lat='.$documento["latitud"]. '&lon='.$documento["longitud"];
+                                    $urlFinal='https://nominatim.openstreetmap.org/reverse?format=json&lat='.$documento["latitud"]. '&lon='.$documento["longitud"];
                                     $res = $client->get($urlFinal, [
                                         'verify' => false
                                     ]);
@@ -790,8 +801,17 @@ class HistoricoController extends Controller
                         $angulo_traducido='-';
                     }
 
-                return response()->json(['error' => false, 'array_historico' => $array_historico,
-                'tipo'=>$tipo,'ev'=>$ev ]);
+                return response()->json([
+                'error' => false,
+                'array_historico' => $array_historico,
+                'tipo'=>$tipo,
+                'ev'=>$ev ,  
+                'total' => $cursor->total(),
+                'per_page' => $cursor->perPage(),
+                'current_page' => $cursor->currentPage(),
+                'last_page' => $cursor->lastPage(),
+                'next_page_url' => $cursor->nextPageUrl(),
+                'prev_page_url' => $cursor->previousPageUrl()]);
             }
         }
         elseif($request->input('opcion')=='getRutas')

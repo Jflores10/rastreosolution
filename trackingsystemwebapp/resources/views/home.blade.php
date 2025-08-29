@@ -716,8 +716,8 @@ $("#velocimetro").myfunc({divFact:10});
                     '<li><strong>Tipo:</strong>&nbsp'+recorrido.tipo+' </li>' +
                     '<li><strong>Velocidad:</strong>&nbsp'+velocidad+' km/h'+'</li>' +
                     '<li><strong>Voltaje:</strong>&nbsp'+recorrido.voltaje+' v'+'</li>' +
-                    '<li><strong>Contador diario:</strong>&nbsp'+recorrido.contador_diario+'</li>' +
-                    '<li><strong>Contador total:</strong>&nbsp'+recorrido.contador_total+'</li>' +
+                    '<li><strong>C. Total:</strong>&nbsp'+recorrido.contador_total+'</li>' +
+                    '<li><strong>C. Diario:</strong>&nbsp'+recorrido.contador_diario+'</li>' +
                     '<li><strong>Estado:</strong>&nbsp'+estado+'</li>' +
                     '<li><strong>Fecha de servidor:</strong>&nbsp'+'<br/>'+recorrido.fecha_servidor+'</li>' +
                     '<li><strong>Fecha de GPS:</strong>&nbsp'+'<br/>'+recorrido.fecha+'</li>' +
@@ -1131,12 +1131,12 @@ $("#velocimetro").myfunc({divFact:10});
                 '<li><strong>Velocidad:</strong>&nbsp'+unidad.velocidad_actual+' km/h'+'</li>' +
                 '<li><strong>Voltaje:</strong>&nbsp'+unidad.voltaje+' v'+'</li>' +
                 '<li><strong>Mileage:</strong>&nbsp'+unidad.mileage+' km'+'</li>' +
-                '<li><strong>Contador diario:</strong>&nbsp'+unidad.contador_diario+'</li>' +
-                '<li><strong>Contador total:</strong>&nbsp'+unidad.contador_total+'</li>' +
-                '<li><strong>Contador diario 2:</strong>&nbsp'+((unidad.contador_diario_sensor_2 != undefined )?unidad.contador_diario_sensor_2:'-')+'</li>' +
-                '<li><strong>Contador total 2:</strong>&nbsp'+((unidad.contador_total_sensor_2 != undefined)?unidad.contador_total_sensor_2:'-')+'</li>' +
-                '<li><strong>Contador diario 3:</strong>&nbsp'+((unidad.contador_diario_sensor_3 != undefined )?unidad.contador_diario_sensor_3:'-')+'</li>' +
-                '<li><strong>Contador total 3:</strong>&nbsp'+((unidad.contador_total_sensor_3 != undefined)?unidad.contador_total_sensor_3:'-')+'</li>' +
+                '<li><strong>C. Total:</strong>&nbsp'+unidad.contador_total+'</li>' +
+                '<li><strong>C. Diario:</strong>&nbsp'+unidad.contador_diario+'</li>' +
+                '<li><strong>C. Total 2:</strong>&nbsp'+((unidad.contador_total_sensor_2 != undefined)?unidad.contador_total_sensor_2:'-')+'</li>' +
+                '<li><strong>C. Diario 2:</strong>&nbsp'+((unidad.contador_diario_sensor_2 != undefined )?unidad.contador_diario_sensor_2:'-')+'</li>' +
+                '<li><strong>C. Total 3:</strong>&nbsp'+((unidad.contador_total_sensor_3 != undefined)?unidad.contador_total_sensor_3:'-')+'</li>' +
+                '<li><strong>C. Diario 3:</strong>&nbsp'+((unidad.contador_diario_sensor_3 != undefined )?unidad.contador_diario_sensor_3:'-')+'</li>' +
                 '<li><strong>Estado:</strong>&nbsp'+estado+'</li>' +
                 '<li><strong>Fecha de servidor:</strong>&nbsp'+'<br/>'+fecha+'</li>' +
                 '<li><strong>Fecha de GPS:</strong>&nbsp'+'<br/>'+fecha_gps+'</li>' +
@@ -1217,6 +1217,7 @@ $("#velocimetro").myfunc({divFact:10});
             unidad_id : unidad_id
         };
         $.post(url, param, function( data ) {
+
             var tbody=$('#tbody_bitacora');
             tbody.empty();
         
@@ -1224,6 +1225,12 @@ $("#velocimetro").myfunc({divFact:10});
 			{
                 let url='';
                 let fechaIni=new Date(data[i].fechaInicio).addHours(5);
+                let tcreador='';
+                if(data[i].creador!=null){
+                    let tcreador=data[i].creador.name;
+
+                }
+                
 
                 if(data[i].tipo_bitacora=='M')
                     url='/images/mantenimiento.png';
@@ -1232,14 +1239,14 @@ $("#velocimetro").myfunc({divFact:10});
                         url='/images/police.png';
                     else   
                         url='/images/other.png';
-
+                    
                 tbody.append(
                     '<tr>'+
                     '<td>'+data[i].unidad.descripcion+'</td>'+
                     '<td>'+data[i].descripcion+'</td>'+
                     '<td>'+fechaIni.format('d-m-Y H:i:s')+'</td>'+
                     '<td><img width="30" height="30" src="'+url+'"/></td>'+
-                    '<td>'+data[i].creador.name+'</td>'+
+                    '<td>'+tcreador+'</td>'+
                     '<td>'+((data[i].modificador==null)?'--':data[i].modificador.name)+'</td>'+
                     '</tr>'
                 );
@@ -1593,6 +1600,8 @@ $("#velocimetro").myfunc({divFact:10});
                 ruta_fecha=data.array_rutas[i].ruta_fecha;
                 ruta_conductor='';
                 ruta_conductor=data.array_rutas[i].ruta_conductor;
+                
+                ruta_hora_fin=data.array_rutas[i].ruta_hora_fin;
 
                 //si ruta_conductor no es null, entonces solo capturar las dos primeras palabras
                 if(ruta_conductor!=null && ruta_conductor!='')
@@ -1763,7 +1772,7 @@ $("#velocimetro").myfunc({divFact:10});
                                     +((data.unidades[i].puerta_trasera !== 'undefined')?((data.unidades[i].puerta_trasera==='PUERTA ABIERTA (TRASERA)')?'<img src="../images/opendoor.png" height="20" width="20">':((data.unidades[i].puerta_trasera==='PUERTA CERRADA (TRASERA)')?'<img src="../images/closedoor.png" height="20" width="20">':'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>')
                                 @endif
                                 +'&nbsp&nbsp&nbsp|&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ data.unidades[i].latitud+'\',\''+ data.unidades[i].longitud+'\');" class="fa fa-map-marker" style="color:#F44336"></i>&nbsp&nbsp<font color="black">'+ruta_actual+'</font>'
-                                +'&nbsp&nbsp<font color="black">('+ruta_fecha+')</font>&nbsp&nbsp<font color="black">'+ruta_conductor+'</font>'
+                                +'&nbsp&nbsp<font color="black">('+ruta_fecha+')</font>-<font color="red">('+ruta_hora_fin+')</font>&nbsp&nbsp<font color="black">'+ruta_conductor+'</font>'
                                 +((data.array_bitacora[i].bitacora !="")?('&nbsp&nbsp&nbsp|&nbsp&nbsp <img id="' + bId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_Bitacora(\''+ data.unidades[i]._id+'\');" width="20" height="20" src="'+((data.array_bitacora[i].bitacora=="R")?'/images/police.png"':((data.array_bitacora[i].bitacora=="M")?'/images/mantenimiento.png"':((data.array_bitacora[i].bitacora=="O")?'/images/other.png"':'#"')))+'/>'):'&nbsp&nbsp&nbsp')
                                 +'</li>'
                         );
@@ -1795,7 +1804,7 @@ $("#velocimetro").myfunc({divFact:10});
                                 @endif
                                 +'&nbsp&nbsp&nbsp|&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ data.unidades[i].latitud+'\',\''+ data.unidades[i].longitud+'\');" class="fa fa-map-marker" style="color:#f49a16"></i>&nbsp&nbsp<font color="black">'+ruta_actual+'</font>'
                                 // +((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">':'')
-                                +'&nbsp&nbsp<font color="black">('+ruta_fecha+')</font>&nbsp&nbsp<font color="black">'+ruta_conductor+'</font>'
+                                +'&nbsp&nbsp<font color="black">('+ruta_fecha+')</font>-<font color="red">('+ruta_hora_fin+')</font>&nbsp&nbsp<font color="black">'+ruta_conductor+'</font>'
                                 +((data.array_bitacora[i].bitacora !="")?('&nbsp&nbsp&nbsp|&nbsp&nbsp <img id="' + bId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_Bitacora(\''+ data.unidades[i]._id+'\');" width="20" height="20" src="'+((data.array_bitacora[i].bitacora=="R")?'/images/police.png"':((data.array_bitacora[i].bitacora=="M")?'/images/mantenimiento.png"':((data.array_bitacora[i].bitacora=="O")?'/images/other.png"':'#"')))+'/>'):'&nbsp&nbsp&nbsp')
                                 +'</li>'
                         );
@@ -1826,7 +1835,7 @@ $("#velocimetro").myfunc({divFact:10});
                                 @endif
                                 +'&nbsp&nbsp&nbsp|&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ data.unidades[i].latitud+'\',\''+ data.unidades[i].longitud+'\');" class="fa fa-map-marker" style="color:#00AA88"></i>&nbsp&nbsp<font color="black">'+ruta_actual+'</font>'
                                 // +((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">':'')
-                                +'&nbsp&nbsp<font color="black">('+ruta_fecha+')</font>&nbsp&nbsp<font color="black">'+ruta_conductor+'</font>'
+                                +'&nbsp&nbsp<font color="black">('+ruta_fecha+')</font>-<font color="red">('+ruta_hora_fin+')</font>&nbsp&nbsp<font color="black">'+ruta_conductor+'</font>'
                                 +((data.array_bitacora[i].bitacora !="")?('&nbsp&nbsp&nbsp|&nbsp&nbsp <img id="' + bId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_Bitacora(\''+ data.unidades[i]._id+'\');" width="20" height="20" src="'+((data.array_bitacora[i].bitacora=="R")?'/images/police.png"':((data.array_bitacora[i].bitacora=="M")?'/images/mantenimiento.png"':((data.array_bitacora[i].bitacora=="O")?'/images/other.png"':'#"')))+'/>'):'&nbsp&nbsp&nbsp')
                                 +'</li>'
                         );
@@ -1859,7 +1868,7 @@ $("#velocimetro").myfunc({divFact:10});
                                 @endif
                                 +'&nbsp&nbsp&nbsp|&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ data.unidades[i].latitud+'\',\''+ data.unidades[i].longitud+'\');" class="fa fa-map-marker" style="color:#990073"></i>&nbsp&nbsp<font color="black">'+ruta_actual+'</font>'
                                 // +((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">':'')
-                                +'&nbsp&nbsp<font color="black">('+ruta_fecha+')</font>&nbsp&nbsp<font color="black">'+ruta_conductor+'</font>'
+                                +'&nbsp&nbsp<font color="black">('+ruta_fecha+')</font>-<font color="red">('+ruta_hora_fin+')</font>&nbsp&nbsp<font color="black">'+ruta_conductor+'</font>'
                                 +((data.array_bitacora[i].bitacora !="")?('&nbsp&nbsp&nbsp|&nbsp&nbsp <img id="' + bId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_Bitacora(\''+ data.unidades[i]._id+'\');" width="20" height="20" src="'+((data.array_bitacora[i].bitacora=="R")?'/images/police.png"':((data.array_bitacora[i].bitacora=="M")?'/images/mantenimiento.png"':((data.array_bitacora[i].bitacora=="O")?'/images/other.png"':'#"')))+'/>'):'&nbsp&nbsp&nbsp')
                                 +'</li>'
                         );
