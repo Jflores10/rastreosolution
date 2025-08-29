@@ -52,7 +52,7 @@ class DespachoApiController extends Controller
                     $item['descripcion'] =  $punto=PuntoControl::select('descripcion')->findOrFail( $item['id'])->descripcion;
                     return $item;
                 });
-                $despacho->puntos_control = $arrayPuntos;
+                $despacho->puntos_controles = $arrayPuntos;
                 array_push($despachos, $despacho);
             }
             
