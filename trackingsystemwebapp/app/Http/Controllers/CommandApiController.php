@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Trama;
 use Illuminate\Http\Request;
 use Validator;
+use Illuminate\Support\Facades\Redis;
 
 class CommandApiController extends Controller
 {
