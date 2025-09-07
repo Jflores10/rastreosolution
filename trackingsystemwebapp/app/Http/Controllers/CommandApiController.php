@@ -71,7 +71,38 @@ class CommandApiController extends Controller
       $bytesSent += $sent;
     }
 
+    $requestId = str_random(40); 
+    // Publicar comando en Redis
+    Redis::publish('commands', json_encode([
+        'imei'      => $imei,
+        'cmd'       => $payload,
+        'requestId' => $requestId,
+    ]));
+
+    // Esperar respuesta (polling cada 0.5s hasta 5s)
+    $response = null;
+    $timeout = 5;
+    $start = microtime(true);
+    $respuesta='';
+    while ((microtime(true) - $start) < $timeout) {
+        $res = Redis::get("response:$requestId");
+        if ($res) {
+            $response = json_decode($res, true);
+            break;
+        }
+        usleep(500000); 
+    }
+
+    if (!$response) {
+      $respuesta='No hubo respuesta del tracker en el tiempo esperado';
+    }
+    else{
+      $respuesta=$response['data'] ?? $response;
+    }
+
+
     socket_close($socket);
+    
 
     return response()->json([
       'error'       => false,
@@ -79,6 +110,7 @@ class CommandApiController extends Controller
       'bytes_sent'  => $bytesSent,
       'bytes_total' => $totalBytes,
       'payload'     => $payload,
+      'respuesta'   =>$respuesta,
     ]);
   }
 

@@ -40,7 +40,9 @@ var MongoClient = require('mongodb').MongoClient, dbTrackingSystem = null;//Load
 
 var socketArray = [];//Declaring socket array for all default clients
 var logsAdmin = [];
-
+const Redis = require('ioredis');
+const redisSub = new Redis();  // Para subscribirse
+const redisPub = new Redis();  // Para publicar / set / get
 /*
   This event is used to get a socket from the current array
 */
@@ -1311,4 +1313,52 @@ function onClientConnected(socket) {
         console.log(error);
     });
 }
+
+
+
+// Suscribirse al canal de comandos
+redisSub.subscribe('commands', (err, count) => {
+    if (err) console.error('Error subscribing to Redis:', err);
+    else console.log(`Subscribed to ${count} channel(s)`);
+});
+
+// Escuchar mensajes
+redisSub.on('message', async (channel, message) => {
+    try {
+        const data = JSON.parse(message);
+        const { imei, cmd, requestId } = data;
+
+        console.log(`[Node] Comando recibido: ${cmd} para IMEI: ${imei}`);
+
+        // Buscar socket
+        let clientSocket = getSocket(imei);
+        let responseTracker = 'Tracker offline';
+
+        if (clientSocket && clientSocket.writable) {
+            clientSocket.write(cmd + "\r\n");
+
+            responseTracker = await new Promise(resolve => {
+                let buffer = '';
+                const timeout = setTimeout(() => resolve('No response'), 5000);
+
+                clientSocket.on('data', function onData(data) {
+                    buffer += data.toString();
+                    if (buffer.includes('\n')) {
+                        clearTimeout(timeout);
+                        clientSocket.removeListener('data', onData);
+                        resolve(buffer.trim());
+                    }
+                });
+            });
+        }
+
+        console.log(`[Node] Respuesta: ${responseTracker}`);
+
+        // Guardar respuesta con la conexión “normal” (no subscriber)
+        await redisPub.set(`response:${requestId}`, JSON.stringify({ data: responseTracker }), 'EX', 30);
+
+    } catch (e) {
+        console.error('Error al procesar comando desde Redis:', e);
+    }
+});
 

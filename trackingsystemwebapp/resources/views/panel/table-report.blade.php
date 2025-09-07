@@ -1,3 +1,9 @@
+<style>
+/* Cambiar color de las filas pares en table-striped */
+.table-striped > tbody > tr:nth-of-type(odd) {
+  background-color: #E7E7E7 !important; 
+}
+</style>
 @if (isset($reportes) && count($reportes) > 0)
     @foreach ($reportes as $reporte)
         <h4>Unidad: {{ $reporte['unidad']['descripcion'] . '| Ruta: ' . $reporte['ruta']['descripcion'] }}</h4>
@@ -6,118 +12,123 @@
         <button onclick="printmult('{{$reporte['unidad']['_id']}}','{{$reporte['ruta']['_id']}}','S');" type="button" class="btn btn-default">TICKET PADRE MULTA</button>
         <button onclick="printmult2('{{$reporte['unidad']['_id']}}','{{$reporte['ruta']['_id']}}','S');"type="button" class="btn btn-default">TICKET PADRE MULTA 2 </button>
         <div class="table-responsive">
-            <table class="table table-bordered">
-                <tr>
-                    <th></th>
-                    @foreach ($reporte['ruta']->puntos_control as $punto_control)
-                        <th colspan="5">{{ App\PuntoControl::findOrFail($punto_control['id'])->descripcion }}</th>
-                    @endforeach
-                    <th colspan="3">Contador</th>
-                    <th></th>
-                    <th></th>
-                    <th></th>
-                    <th></th>
-                    <th></th>
-                </tr>
-                <tr>
-                    <td><strong>Fecha</strong></td>
-                    @foreach ($reporte['ruta']->puntos_control as $punto_control)
-                        <td><strong>Reloj</strong></td>
-                        <td><strong>Marca</strong></td>
-                        <td><strong>AT/AD</strong></td>
-                        <td><strong>Cont</strong></td>
-                        <td><strong>Desc.</strong></td>
-                    @endforeach
-                    <td><strong>I</strong></td>
-                    <td><strong>F</strong></td>
-                    <td><strong>P</strong></td>
-                    <td><strong>C. Tubo</strong></td>
-                    <td>T. AT</td>
-                    <td>T. AD</td>
-                    <td>Multa</td>
-                    <td>Usuario</td>
-                    <td></td>
-                    <th>Exportado a ATM</th>
-                    <th>Error ATM</th>
-                    <td></td>
-                </tr>
-                @foreach ($reporte['despachos'] as $despacho)
+            <table class="table table-hover table-bordered table-striped">
+                <thead>
                     <tr>
-                        <td class="text-center align-middle" style="vertical-align: middle;">
-                            <div style="display: inline-block; white-space: nowrap;">
-                                @if($despacho->unidad)
-                                    <button type="button" class="btn btn-info btn-xs" title="Ver recorrido" onclick="verReproductor('{{ $despacho->_id }}')" style="margin-right: 6px;">
-                                        <i class="fa fa-road" aria-hidden="true"></i>
-                                    </button>
-                                @endif
-                                <span style="vertical-align: middle; font-size: 13px;">
-                                    {{ $despacho->fecha->addHours(5)->format('d/m/Y H:i') }}
-                                </span>
-                            </div>
-                        </td>
-                        @foreach ($despacho->puntos_control as $punto_control)
-                        
-                            <td>{{ $punto_control['tiempo_esperado']->toDateTime()->format('H:i') }}</td>
-                            <td>{{ (!isset($punto_control['marca']))?'-':DateTime::createFromFormat('Y-m-d H:i:s', $punto_control['marca'])->format('H:i') }}</td>
-                            <td>{{ (!isset($punto_control['tiempo_atraso']))? '-' . (!isset($punto_control['tiempo_adelanto'])?'':$punto_control['tiempo_adelanto']):'+' . $punto_control['tiempo_atraso'] }}</td>
-                            <td>{{ (!isset($punto_control['contador_marca']))?'-':$punto_control['contador_marca'] }}</td>
+                        <th></th>
+                        @foreach ($reporte['ruta']->puntos_control as $punto_control)
+                            <th colspan="5">{{ App\PuntoControl::findOrFail($punto_control['id'])->descripcion }}</th>
+                        @endforeach
+                        <th colspan="3">Contador</th>
+                        <th></th>
+                        <th></th>
+                        <th></th>
+                        <th></th>
+                        <th></th>
+                    </tr>
+                    <tr>
+                        <td><strong>Fecha</strong></td>
+                        @foreach ($reporte['ruta']->puntos_control as $punto_control)
+                            <td><strong>Reloj</strong></td>
+                            <td><strong>Marca</strong></td>
+                            <td><strong>AT/AD</strong></td>
+                            <td><strong>Cont</strong></td>
+                            <td><strong>Desc.</strong></td>
+                        @endforeach
+                        <td><strong>I</strong></td>
+                        <td><strong>F</strong></td>
+                        <td><strong>P</strong></td>
+                        <td><strong>C. Tubo</strong></td>
+                        <td>T. AT</td>
+                        <td>T. AD</td>
+                        <td>Multa</td>
+                        <td>Usuario</td>
+                        <td></td>
+                        <th>Exportado a ATM</th>
+                        <th>Error ATM</th>
+                        <td></td>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach ($reporte['despachos'] as $despacho)
+                        <tr>
+                            <td class="text-center align-middle" style="vertical-align: middle;">
+                                <div style="display: inline-block; white-space: nowrap;">
+                                    @if($despacho->unidad)
+                                        <button type="button" class="btn btn-info btn-xs" title="Ver recorrido" onclick="verReproductor('{{ $despacho->_id }}')" style="margin-right: 6px;">
+                                            <i class="fa fa-road" aria-hidden="true"></i>
+                                        </button>
+                                    @endif
+                                    <span style="vertical-align: middle; font-size: 13px;">
+                                        {{ $despacho->fecha->addHours(5)->format('d/m/Y H:i') }}
+                                    </span>
+                                </div>
+                            </td>
+                            @foreach ($despacho->puntos_control as $punto_control)
+                            
+                                <td>{{ $punto_control['tiempo_esperado']->toDateTime()->format('H:i') }}</td>
+                                <td>{{ (!isset($punto_control['marca']))?'-':DateTime::createFromFormat('Y-m-d H:i:s', $punto_control['marca'])->format('H:i') }}</td>
+                                <td>{{ (!isset($punto_control['tiempo_atraso']))? '-' . (!isset($punto_control['tiempo_adelanto'])?'':$punto_control['tiempo_adelanto']):'+' . $punto_control['tiempo_atraso'] }}</td>
+                                <td>{{ (!isset($punto_control['contador_marca']))?'-':$punto_control['contador_marca'] }}</td>
+                                @php 
+                                    $intervalo=isset($punto_control['intervalo'])?$punto_control['intervalo']:0;
+                                    $atraso=isset($punto_control['atraso'])?$punto_control['atraso']:0;
+                                    $adelanto=isset($punto_control['adelanto'])?$punto_control['adelanto']:0;
+                                    $desc=0;
+                                    if(isset($punto_control['tiempo_atraso'])){
+                                        $desc=$intervalo*$atraso;
+                                    }else{
+                                        $desc=$intervalo*$adelanto;
+                                    }
+
+                                @endphp
+                                <td>{{ $desc }}</td>
+                            @endforeach
+                            <td>{{ $despacho->contador_inicial }}</td>
+                            <td>{{ $despacho->contador_final }}</td>
                             @php 
-                                $intervalo=isset($punto_control['intervalo'])?$punto_control['intervalo']:0;
-                                $atraso=isset($punto_control['atraso'])?$punto_control['atraso']:0;
-                                $adelanto=isset($punto_control['adelanto'])?$punto_control['adelanto']:0;
-                                $desc=0;
-                                if(isset($punto_control['tiempo_atraso'])){
-                                    $desc=$intervalo*$atraso;
-                                }else{
-                                    $desc=$intervalo*$adelanto;
+                                $cont_result=$despacho->contador_final - $despacho->contador_inicial;
+                                if( $cont_result < 0 ){
+                                    $cont_result=($despacho->contador_final + 65535) - $despacho->contador_inicial;
                                 }
+                                if( $cont_result < 0 )
+                                    $cont_result='-';
 
                             @endphp
-                            <td>{{ $desc }}</td>
-                        @endforeach
-                        <td>{{ $despacho->contador_inicial }}</td>
-                        <td>{{ $despacho->contador_final }}</td>
-                        @php 
-                            $cont_result=$despacho->contador_final - $despacho->contador_inicial;
-                            if( $cont_result < 0 ){
-                                $cont_result=($despacho->contador_final + 65535) - $despacho->contador_inicial;
-                            }
-                            if( $cont_result < 0 )
-                                $cont_result='-';
-
-                        @endphp
-                        <td>{{ $cont_result }}</td>                       
-                        <td>{{ $despacho->corte_tubo }}</td>
-                        @php
-                            $atrasos = 0;
-                            $adelantos = 0;
-                            foreach ($despacho->puntos_control as $punto_control) {
-                                if (isset($punto_control['tiempo_atraso'])) 
-                                    $atrasos += $punto_control['intervalo'] * floatval($punto_control['atraso']);
-                                else if (isset($punto_control['tiempo_adelanto']))
-                                    $adelantos += ($punto_control['intervalo'] * -1) * floatval($punto_control['adelanto']);
-                            }
-                        @endphp
-                        <td>{{ $atrasos }}</td>
-                        <td>{{ $adelantos }}</td>
-                        <td>{{ $despacho->multa }}</td>
-                        <td>{{ ($despacho->modificador!=null)?$despacho->modificador->name:""}}</td>
-                        <td><a href="#" onclick="recalcular('{{ $despacho->_id }}');">Recalcular</a></td>
-                        <td>{{ ($despacho->estado_exportacion == 'E')?'Si':'No' }}</td>
-                        @if($despacho->estado_exportacion =='E')
-                            <td></td>
-                        @else
-                            @if(isset($despacho->error_ATM))
-                                <td>
-                                    <button onclick="errorAtm('{{ $despacho->_id }}');" type="button" class="btn btn-info"><i class="fa fa-info"></i> Ver</button>
-                                </td>
-                            @else
+                            <td>{{ $cont_result }}</td>                       
+                            <td>{{ $despacho->corte_tubo }}</td>
+                            @php
+                                $atrasos = 0;
+                                $adelantos = 0;
+                                foreach ($despacho->puntos_control as $punto_control) {
+                                    if (isset($punto_control['tiempo_atraso'])) 
+                                        $atrasos += $punto_control['intervalo'] * floatval($punto_control['atraso']);
+                                    else if (isset($punto_control['tiempo_adelanto']))
+                                        $adelantos += ($punto_control['intervalo'] * -1) * floatval($punto_control['adelanto']);
+                                }
+                            @endphp
+                            <td>{{ $atrasos }}</td>
+                            <td>{{ $adelantos }}</td>
+                            <td>{{ $despacho->multa }}</td>
+                            <td>{{ ($despacho->modificador!=null)?$despacho->modificador->name:""}}</td>
+                            <td><a href="#" onclick="recalcular('{{ $despacho->_id }}');">Recalcular</a></td>
+                            <td>{{ ($despacho->estado_exportacion == 'E')?'Si':'No' }}</td>
+                            @if($despacho->estado_exportacion =='E')
                                 <td></td>
-                            @endif
-                        @endif   
-                        <td><a href="#" onclick="construirImpresion('{{ $despacho->_id }}');">Imprimir</a></td>
-                    </tr>
-                @endforeach
+                            @else
+                                @if(isset($despacho->error_ATM))
+                                    <td>
+                                        <button onclick="errorAtm('{{ $despacho->_id }}');" type="button" class="btn btn-info"><i class="fa fa-info"></i> Ver</button>
+                                    </td>
+                                @else
+                                    <td></td>
+                                @endif
+                            @endif   
+                            <td><a href="#" onclick="construirImpresion('{{ $despacho->_id }}');">Imprimir</a></td>
+                        </tr>
+                    @endforeach
+                </tbody>
+              
             </table>
         </div>
     @endforeach

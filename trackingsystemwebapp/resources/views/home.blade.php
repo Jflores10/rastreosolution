@@ -189,6 +189,10 @@ Dashboard
                     <label for="commandMessage">Comando</label>
                     <textarea id="commandMessage" name="commandMessage" class="form-control" rows="3" placeholder="Ingrese el comando a enviar..."></textarea>
                 </div>
+                 <div class="form-group">
+                    <label for="responseMessage">Respuesta</label>
+                    <textarea id="responseMessage" name="responseMessage" class="form-control" rows="3" placeholder="Respuesta recibida..."></textarea>
+                </div>
                 <div class="form-group text-center">
                     <button id="btnEnviar" type="button" class="btn btn-primary" style="margin-bottom: 15px;">
                         <i class="fa fa-paper-plane"></i> Enviar comando
@@ -2045,10 +2049,13 @@ $("#velocimetro").myfunc({divFact:10});
                 imei : imei,
                 message : message
             }, function (data) {
-                if (data.error)
-                alert('There was an error executing the command.');
-                else
-                alert('The command was successfully executed.');
+                if (data.error){
+                    alert('There was an error executing the command.');
+                }
+                else{
+                    alert('The command was successfully executed.');
+                    $('#responseMessage').val(data.respuesta)
+                }
             }, 'json');
         });
 
