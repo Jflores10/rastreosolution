@@ -42,7 +42,9 @@ class CooperativaController extends Controller
             'mascara' => 'required|max:1',
             'importador_despachos' => 'nullable',
             'finalizacion_automatica' => 'nullable',
-            'redondear_tiempos_atraso' => 'nullable'
+            'redondear_tiempos_atraso' => 'nullable',
+            'pto_bloques' => 'nullable'
+
 
         ]);
         if ($validator->fails())
@@ -65,6 +67,8 @@ class CooperativaController extends Controller
                 'importador_despachos' => $request->input('importador_despachos') == 'true'?true:false,
                 'finalizacion_automatica' => $request->input('finalizacion_automatica')  == 'true'?true:false,
                 'redondear_tiempos_atraso' => $request->input('redondear_tiempos_atraso') == 'true'?true:false,
+                'pto_bloques' => $request->input('pto_bloques') == 'true'?true:false,
+
                 'tolerancia_buffer_minutos' => $request->input('tolerancia_buffer_minutos')
             ]);
 
@@ -93,7 +97,10 @@ class CooperativaController extends Controller
             'mascara' => 'required|max:1',
             'importador_despachos' => 'nullable',
             'finalizacion_automatica' => 'nullable',
-            'redondear_tiempos_atraso' => 'nullable'
+            'redondear_tiempos_atraso' => 'nullable',
+            'pto_bloques' => 'nullable',
+
+
         ]);
         if ($validator->fails())
             return response()->json(['error' => true, 'messages' => $validator->errors()]);
@@ -113,6 +120,12 @@ class CooperativaController extends Controller
             $cooperativa->importador_despachos = $request->input('importador_despachos')  == 'true'?true:false;
             $cooperativa->finalizacion_automatica = $request->input('finalizacion_automatica')  == 'true'?true:false;
             $cooperativa->redondear_tiempos_atraso = $request->input('redondear_tiempos_atraso') == 'true'?true:false;
+            $cooperativa->pto_bloques = $request->input('pto_bloques') == 'true'?true:false;
+
+            $cooperativa->dia_inicial = $request->input('dia_inicial');
+            $cooperativa->hora_sync = $request->input('hora_sync');
+
+
             $cooperativa->save();
             return response()->json(['error' => false, 'cooperativa' => $cooperativa]);
         }

@@ -10,7 +10,7 @@ class Cooperativa extends Moloquent
         'descripcion','multa_tubo','estado' ,'creador_id', 'modificador_id', 'recorrido','cooperativa_id','punto_control_id',
         'taxis', 'ruc', 'despachos_atm', 'email','despachos_job','mascara',
         'importador_despachos', 'finalizacion_automatica',
-        'redondear_tiempos_atraso', 'tolerancia_buffer_minutos'
+        'redondear_tiempos_atraso', 'tolerancia_buffer_minutos','pto_bloques','dia_inicial','hora_sync'
     ];
     public function creador()
     {

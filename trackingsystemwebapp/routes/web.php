@@ -59,6 +59,12 @@ Route::group(['middleware' => ['auth', 'usuario']], function () {
         Route::post('/search-json', 'PuntoControlController@searchJSON');
     });
     Route::resource('puntos-de-control', 'PuntoControlController');
+    Route::post('puntos-de-control-bloques', 'PuntoControlController@store_bloque');
+    Route::put('puntos-de-control-bloques/{id}', 'PuntoControlController@update_bloque');
+    Route::post('puntos-de-control/sync', 'PuntoControlController@actualizarBloques');
+
+
+
 
     Route::group(['prefix' => 'puntos-de-control-atm'], function () {
         Route::match(['get', 'post'], '/search', 'PuntoControlATMController@search');
@@ -173,6 +179,17 @@ Route::group(['middleware' => ['auth', 'usuario']], function () {
     Route::post('/unidad/conteo', 'UnidadController@resetConteo');
 
     Route::match(['get', 'post'], 'historico-atm', 'HistoricoController@historicoAtm');
+   
+    Route::match(['get', 'post'], 'comandos', 'ComandosController@index');
+    Route::get('/comandos/unidades/{id}', 'ComandosController@unidades_by_cooperativa');
+    Route::post('/comandos', 'ComandosController@store');
+    Route::get('/comandos/get/{id}', 'ComandosController@show');
+
+
+
+
+
+
 });
 
 Route::get('/usuarioSuspendido', 'UsuarioController@usuarioSuspendido');

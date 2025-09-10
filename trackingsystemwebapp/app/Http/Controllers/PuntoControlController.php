@@ -11,18 +11,25 @@ use App\PuntoControl;
 use App\Cooperativa;
 use App\TipoUsuario;
 use Auth;
-
+use Carbon\Carbon;
 class PuntoControlController extends Controller
 {
     public function index()
     {
         $user = Auth::user();
+        $cooperativa= Cooperativa::where('_id', $user->cooperativa_id)->first();
+        $is_bloques=false;
+        if(isset($cooperativa) && $cooperativa){
+            $is_bloques=$cooperativa->pto_bloques;
+        }
         return view('panel.lista-puntos-control',
         [
             'puntos_control'=> PuntoControl::permitido($user->cooperativa_id)->orderBy('descripcion', 'asc')
                 ->where('estado','A')
+                ->with('cooperativa')
                 ->paginate(10),
             'id_cooperativa' =>$user->cooperativa_id,
+            'is_bloques'=>$is_bloques,
             'tipo_usuario_valor' => $user->tipo_usuario->valor,
             'cooperativas' => Cooperativa::permitida()->orderBy('descripcion')->where('estado', 'A')->get()
         ]);
@@ -84,10 +91,82 @@ class PuntoControlController extends Controller
             return response()->json(['error' => false, 'punto_control' => $punto_control]);
         }
     }
+
+    public function store_bloque(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'cooperativa_id' => 'required',
+            'estado' => 'required',
+            'puntos' => 'required|array|min:1',
+            'puntos.*.descripcion' => 'required|max:255',
+            'puntos.*.latitud' => 'required|numeric',
+            'puntos.*.longitud' => 'required|numeric',
+            'puntos.*.radio' => 'required|numeric',
+            'puntos.*.pdi' => 'required',
+            'puntos.*.otro' => 'required',
+            'puntos.*.entrada' => 'nullable|required_if:puntos.*.otro,true',
+            'puntos.*.salida' => 'nullable|required_if:puntos.*.otro,true',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => true, 'messages' => $validator->errors()]);
+        }
+
+        $cooperativa_id = $request->input('cooperativa_id');
+        $estado = $request->input('estado');
+        $puntos_guardados = [];
+
+        $diaActual = Carbon::now()->dayOfWeek; // 0=Domingo, 1=Lunes, … 6=Sábado
+        $i=1;
+        foreach ($request->input('puntos') as $p) {
+            $activo=false;
+            if($i==1){
+                $activo=true;
+                $pdi_final = $p['pdi'];
+            }
+            else{
+                $pdi_final = '0'.$p['pdi'];
+            }
+
+            $punto_control = PuntoControl::create([
+                'descripcion' => $p['descripcion'],
+                'cooperativa_id' => $cooperativa_id,
+                'latitud' => $p['latitud'],
+                'longitud' => $p['longitud'],
+                'radio' => $p['radio'],
+                'estado' => $estado,
+                'pdi' => $pdi_final, 
+                'creador_id' => Auth::user()->_id,
+                'modificador_id' => Auth::user()->_id,
+                'entrada' => $p['entrada'],
+                'salida' => $p['salida'],
+                'mt' => $p['otro'],
+                'estado_exportacion' => 'P',
+                'pdi_padre' => $p['pdi'], 
+                'activo' => $activo, 
+                'bloque' => $i, 
+            ]);
+
+            $puntos_guardados[] = $punto_control;
+            $i++;
+        }
+
+        return response()->json(['error' => false, 'puntos_control' => $puntos_guardados]);
+    }
+    
     public function show($id)
     {
+
         $punto_control = PuntoControl::findOrFail($id);
-        return response()->json($punto_control);
+        $bloques=[];
+        if(isset($punto_control->pdi_padre) && $punto_control->pdi_padre!=''){
+            $bloques = PuntoControl::where('pdi_padre', $punto_control->pdi_padre)->get();    
+        }
+       
+        return response()->json([
+            'punto_control' => $punto_control,
+            'bloques' => $bloques
+        ]);
     }
     public function update(Request $request, $id)
     {
@@ -124,6 +203,132 @@ class PuntoControlController extends Controller
             return response()->json(['error' => false, 'punto_control' => $punto_control]);
         }
     }
+
+    public function update_bloque(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'cooperativa_id' => 'required',
+            'estado' => 'required',
+            'puntos' => 'required|array|min:1',
+            'puntos.*.descripcion' => 'required|max:255',
+            'puntos.*.latitud' => 'required|numeric',
+            'puntos.*.longitud' => 'required|numeric',
+            'puntos.*.radio' => 'required|numeric',
+            'puntos.*.pdi' => 'required',
+            'puntos.*.otro' => 'required',
+            'puntos.*.entrada' => 'nullable|required_if:puntos.*.otro,true',
+            'puntos.*.salida' => 'nullable|required_if:puntos.*.otro,true',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => true, 'messages' => $validator->errors()]);
+        }
+
+        $cooperativa_id = $request->input('cooperativa_id');
+        $estado = $request->input('estado');
+        $puntos_guardados = [];
+
+        $diaActual = Carbon::now()->dayOfWeek; // 0=Domingo, 1=Lunes, … 6=Sábado
+       
+        $i=1;
+        foreach ($request->input('puntos') as $p) {
+
+            $activo=false;
+            if($i==1){
+                $activo=true;
+                $pdi_final = $p['pdi'];
+            }
+            else{
+                $pdi_final = '0'.$p['pdi'];
+            }
+         
+            $punto_control = PuntoControl::where('_id',$p['_id'])->first();
+            if($punto_control){
+                $punto_control->update([
+                    'descripcion' => $p['descripcion'],
+                    'cooperativa_id' => $cooperativa_id,
+                    'latitud' => $p['latitud'],
+                    'longitud' => $p['longitud'],
+                    'radio' => $p['radio'],
+                    'estado' => $estado,
+                    'pdi' => $pdi_final, 
+                    'creador_id' => Auth::user()->_id,
+                    'modificador_id' => Auth::user()->_id,
+                    'entrada' => $p['entrada'],
+                    'salida' => $p['salida'],
+                    'mt' => $p['otro'],
+                    'estado_exportacion' => 'P',
+                    'pdi_padre' => $p['pdi'], 
+                    'activo' => $activo, 
+                    'bloque' => $i, 
+
+                ]);
+            }
+            
+            $puntos_guardados[] = $punto_control;
+            $i++;
+        }
+
+
+
+        return response()->json(['error' => false, 'puntos_control' => $puntos_guardados]);
+    }
+
+    public function actualizarBloques(Request $request)
+    {
+        $diaInicio = $request->input('diaInicio'); // 1=Lunes ... 7=Domingo
+
+        if (!$diaInicio || $diaInicio < 1 || $diaInicio > 7) {
+            return response()->json(['error' => 'El parámetro diaInicio es obligatorio y debe estar entre 1 y 7'], 400);
+        }
+        $diaHoy = Carbon::now()->dayOfWeekIso; // 1 (Lunes) ... 7 (Domingo)
+
+        $dias = [
+            1 => 'Lunes',
+            2 => 'Martes',
+            3 => 'Miércoles',
+            4 => 'Jueves',
+            5 => 'Viernes',
+            6 => 'Sábado',
+            7 => 'Domingo'
+        ];
+
+        // Calcular diferencia de días desde el día de inicio
+        $diferencia = ($diaHoy - $diaInicio + 7) % 7;
+
+        // Bloque se alterna cada día
+        // Si diferencia = 0 → Bloque 1
+        // Si diferencia = 1 → Bloque 2
+        // Si diferencia = 2 → Bloque 1
+        // ...
+        $bloqueHoy = ($diferencia % 2 == 0) ? 1 : 2;
+
+        $diaHoyNombre = $dias[$diaHoy];
+
+        // Buscar puntos con pdi_padre
+        $puntos = PuntoControl::where('pdi_padre', '!=', '')->get();
+        $agrupados = $puntos->groupBy('pdi_padre');
+
+        foreach ($agrupados as $pdi_padre => $grupo) {
+            foreach ($grupo as $punto) {
+                if ($punto->bloque == $bloqueHoy) {
+                    $punto->activo = true;
+                    $punto->pdi = $punto->pdi_padre;
+                } else {
+                    $punto->activo = false;
+                    $punto->pdi = '0' . $punto->pdi_padre;
+                }
+                $punto->save();
+            }
+        }
+
+        return response()->json([
+            'msj' => "Bloques actualizados para el día $diaHoyNombre (Bloque $bloqueHoy, inicio desde {$dias[$diaInicio]})"
+        ]);
+    }
+
+
+
    /* public function destroy($id)
     {
         $punto_control = PuntoControl::findOrFail($id);

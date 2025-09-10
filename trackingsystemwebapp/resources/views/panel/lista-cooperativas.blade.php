@@ -80,6 +80,8 @@ Cooperativas
                     <th>Usuario creador</th>
                     <th>Usuario modificador</th>
                     <th></th>
+                    <th></th>
+
                     @foreach ($cooperativas as $cooperativa)
                         <tr class="{{($cooperativa->estado=='I')?'danger':''}}" >
                             <td><button onclick="editarCooperativa('{{ url('/cooperativas/' . $cooperativa->_id) }}');" data-toggle="modal" data-target="#form" class="btn btn-primary"><i class="fa fa-edit"></i></button></td>
@@ -94,6 +96,13 @@ Cooperativas
                             <td>{{ ($cooperativa->creador!=null)?$cooperativa->creador->name:""}}</td>
                             <td>{{ ($cooperativa->modificador!=null)?$cooperativa->modificador->name:""}}</td>
                             <td><input type="checkbox" name="chk_estado" id="chk_estado" {{ ($cooperativa->estado=='A')?'checked':'' }} onchange="estadoCooperativa('{{ url('/cooperativas/' . $cooperativa->_id) }}',(checked)?true:false);"></td>
+                            <td> 
+                                @if($cooperativa->pto_bloques)
+                                <button type="button" class="btn btn-sm btn-info" onclick="sync_bloques('{{ $cooperativa->dia_inicial }}')" title="Sincronizar Bloques"> 
+                                    <i class="fa fa-refresh"></i> 
+                                </button>
+                                @endif
+                            </td>
                         </tr>
                     @endforeach
                 </table>
@@ -193,6 +202,13 @@ Cooperativas
                     </label>
                   </div>
               </div>
+               <div class="form-group">
+                  <div class="checkbox">
+                    <label>
+                        <input type="checkbox" name="pto_bloques" id="pto_bloques" /> Puntos de control por bloques
+                    </label>
+                  </div>
+              </div>
               <div id="div-multa-tubo" class="form-group">
                   <label for="multa_tubo" class="col-sm-2 control-label">Multa tubo</label>
                   <div class="col-sm-10">
@@ -207,6 +223,46 @@ Cooperativas
                   </div>
                   <span class="help-block" id="span_tolerancia_buffer_minutos"></span>
               </div>
+               
+                <div class="row">
+                    <div class="col-md-6 col-sm-12">
+                        <div  class="form-group">
+                            <label >Dia Inicial</label>
+                            <select class="form-control" id="dia_inicial" name="dia_inicial">
+                                <option value='' selected>Seleccione...</option>
+                                <option value="1" >
+                                   Lunes
+                                </option>
+                                <option value="2" >
+                                    Martes
+                                </option>
+                                <option value="3" >
+                                    Miércoles
+                                </option>
+                                <option value="4" >
+                                    Jueves
+                                </option>
+                                <option value="5" >
+                                    Viernes
+                                </option>
+                                <option value="6" >
+                                    Sábado
+                                </option>
+                                <option value="7" >
+                                    Domingo
+                                </option>
+                            </select>
+                        </div>
+
+                    </div>
+                    <div class="col-md-6 col-sm-12">
+                        <div  class="form-group">
+                            <label >Hora de sincronización</label>
+                            <input name="hora_sync" id="hora_sync" class="form-control" type="time" />
+                        </div>
+                    </div>
+                </div>
+              
           </div>
       </div>
       <div class="modal-footer">

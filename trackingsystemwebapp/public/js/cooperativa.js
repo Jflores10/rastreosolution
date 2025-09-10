@@ -16,6 +16,11 @@ function editarCooperativa(url)
     let importador_despachos = document.getElementById('importador_despachos');
     let finalizacion_automatica = document.getElementById('finalizacion_automatica');
     let redondear_tiempos_atraso = document.getElementById('redondear_tiempos_atraso');
+    let pto_bloques = document.getElementById('pto_bloques');
+    let dia_inicial = document.getElementById('dia_inicial');
+    let hora_sync = document.getElementById('hora_sync');
+
+
     $.get(url, function ( data ) {
         actual_id = data._id;
         descripcion.value = data.descripcion;
@@ -29,6 +34,12 @@ function editarCooperativa(url)
         importador_despachos.checked = data.importador_despachos??false;
         finalizacion_automatica.checked = data.finalizacion_automatica??false;
         redondear_tiempos_atraso.checked = data.redondear_tiempos_atraso??false;
+        pto_bloques.checked = data.pto_bloques??false;
+        dia_inicial.value = data.dia_inicial;
+        hora_sync.value = data.hora_sync;
+
+        
+
         document.getElementById('email').value = (data.email != undefined)?data.email:'';
     }, "json");
 }
@@ -52,6 +63,11 @@ function crearCooperativa(url)
     let importador_despachos = document.getElementById('importador_despachos');
     let finalizacion_automatica = document.getElementById('finalizacion_automatica');
     let redondear_tiempos_atraso = document.getElementById('redondear_tiempos_atraso');
+    let pto_bloques = document.getElementById('pto_bloques');
+    let dia_inicial = document.getElementById('dia_inicial');
+    let hora_sync = document.getElementById('hora_sync');
+
+
 
     div_descripcion.classList.remove('has-error');
     div_multa_tubo.classList.remove('has-error');
@@ -69,7 +85,11 @@ function crearCooperativa(url)
         email : email,
         importador_despachos: importador_despachos.checked,
         finalizacion_automatica: finalizacion_automatica.checked,
-        redondear_tiempos_atraso: redondear_tiempos_atraso.checked
+        redondear_tiempos_atraso: redondear_tiempos_atraso.checked,
+        pto_bloques: pto_bloques.checked,
+        dia_inicial: dia_inicial.value,
+        hora_sync: hora_sync.value
+
     };
 
     $.post(url , params ,function( data ) {
@@ -102,6 +122,13 @@ function actualizarCooperativa(url)
     let importador_despachos = document.getElementById('importador_despachos');
     let finalizacion_automatica = document.getElementById('finalizacion_automatica');
     let redondear_tiempos_atraso = document.getElementById('redondear_tiempos_atraso');
+    let pto_bloques = document.getElementById('pto_bloques');
+
+    let dia_inicial = document.getElementById('dia_inicial');
+    let hora_sync = document.getElementById('hora_sync');
+
+
+
     div_descripcion.classList.remove('has-error');
     div_multa_tubo.classList.remove('has-error');
 
@@ -117,7 +144,12 @@ function actualizarCooperativa(url)
         email : email,
         importador_despachos: importador_despachos.checked,
         finalizacion_automatica: finalizacion_automatica.checked,
-        redondear_tiempos_atraso: redondear_tiempos_atraso.checked
+        redondear_tiempos_atraso: redondear_tiempos_atraso.checked,
+        pto_bloques: pto_bloques.checked,
+        dia_inicial: dia_inicial.value,
+        hora_sync: hora_sync.value
+
+        
     }, function( data ) {
         if (data.error == false)
             location.reload(true);
@@ -125,6 +157,24 @@ function actualizarCooperativa(url)
             mensajesError(data,div_descripcion,span_descripcion,div_multa_tubo,span_multa_tubo, div_ruc, span_ruc);
 
     }, "json");
+}
+
+function sync_bloques(dia) {
+    $.ajax({
+        url: '/puntos-de-control/sync',  
+        type: 'POST',
+        data: {
+            diaInicio:dia , 
+        },                
+        dataType: 'json',           
+        success: function(response) {
+           alert(response.msj)
+        },
+        error: function(xhr, status, error) {
+            console.log("Error en la petición:", error);
+            alert("Error al sincronizar. Intente nuevamente.");
+        }
+    });
 }
 
 
@@ -201,6 +251,11 @@ function cleanForm() {
     document.getElementById('importador_despachos').checked = false;
     document.getElementById('finalizacion_automatica').checked = false;
     document.getElementById('redondear_tiempos_atraso').checked = false;
+    document.getElementById('pto_bloques').checked = false;
+
+    document.getElementById('dia_inicial').value = '';
+    document.getElementById('hora_sync').value = '';
+
     
     actual_id=null;
 }
