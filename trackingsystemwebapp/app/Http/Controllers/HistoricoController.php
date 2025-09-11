@@ -355,6 +355,11 @@ class HistoricoController extends Controller
             $place=null;
             $cooperativa_id=$request->input('cooperativa_id');
             $cooperativa= Cooperativa:: findOrFail($cooperativa_id);
+            $punto_control=PuntoControl::where('cooperativa_id',$cooperativa_id)->where('activo',true)->first();
+            $bloque='';
+            if(isset($punto_control) && $punto_control){
+                $bloque=$punto_control->bloque;
+            }
             $desde = Carbon::createFromFormat('Y-m-d H:i:s', date('Y-m-d 00:00:00'));
             $hasta = Carbon::createFromFormat('Y-m-d H:i:s', date('Y-m-d 23:59:59'));
             $f_puerta_abierta=null;
@@ -546,7 +551,7 @@ class HistoricoController extends Controller
             return response()->json(['unidades'=>$unidades,'array_fechas'=>$array,'diferencia'=>$diff,'uni'=>$aa,
             'fecha_puerta_abierta'=>$f_puerta_abierta,'fecha_puerta_cerrada'=>$f_puerta_cerrada,
             'fecha_puerta_abierta_trasera'=>$f_puerta_abierta_trasera,'fecha_puerta_cerrada_trasera'=>$f_puerta_cerrada_trasera,'array_formatted_address'=>$array_geocode,
-            'notificaciones'=>$array_notificaciones,'array_rutas'=>$rutaunidad,'array_bitacora'=>$array_bitacora]);
+            'notificaciones'=>$array_notificaciones,'array_rutas'=>$rutaunidad,'array_bitacora'=>$array_bitacora,"bloque"=>$bloque]);
         }
         elseif($request->input('opcion')=='getHistorico')
         {

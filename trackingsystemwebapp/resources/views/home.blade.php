@@ -59,7 +59,7 @@ Dashboard
                                                     <option value="" disabled selected hidden>Seleccione...</option>
                                                     @endif
                                                     @foreach ($cooperativas as $cooperativa)
-                                                        <option value="{{ $cooperativa->_id }}">{{ $cooperativa->descripcion }}</option>
+                                                        <option data-bloques="{{ json_encode($cooperativa->pto_bloques)}}" value="{{ $cooperativa->_id }}">{{ $cooperativa->descripcion }}</option>
                                                     @endforeach
                                                 </select>
                                             </div>
@@ -77,16 +77,20 @@ Dashboard
                                             </div>
                                         </div>
                                 </div>
-                                <div class="col-lg-12">
-                                <label>Cantidad: </label><span id="cantidad">0</span>&nbsp&nbsp
-                                <i class="fa fa-bus" style="color:#00AA88"></i>&nbsp:&nbsp<span id="cantidad_movimiento">0</span>&nbsp&nbsp
-                                <i class="fa fa-bus" style="color:#F44336"></i>&nbsp:&nbsp<span id="cantidad_stop">0</span>&nbsp&nbsp
-                                <i class="fa fa-bus" style="color:#f49a16"></i>&nbsp:&nbsp<span id="cantidad_e">0</span>&nbsp&nbsp
-                                <i class="fa fa-bus" style="color:#990073"></i>&nbsp:&nbsp<span id="cantidad_no">0</span>&nbsp&nbsp
-                                @if(Auth::user()->tipo_usuario->valor == 1)
-                                    &nbsp&nbsp&nbsp&nbsp<button class="btn btn-info btn-link btn-sm" type="button" onclick="verLogsTramas();"><i class="fa fa-table"></i><span>&nbsp&nbspVer tramas</span></button>
-                                @endif 
+                                <div class="col-lg-12 col-md-12 col-sm-12">
+                                    <label>Cantidad: </label><span id="cantidad">0</span>&nbsp&nbsp
+                                    <i class="fa fa-bus" style="color:#00AA88"></i>&nbsp:&nbsp<span id="cantidad_movimiento">0</span>&nbsp&nbsp
+                                    <i class="fa fa-bus" style="color:#F44336"></i>&nbsp:&nbsp<span id="cantidad_stop">0</span>&nbsp&nbsp
+                                    <i class="fa fa-bus" style="color:#f49a16"></i>&nbsp:&nbsp<span id="cantidad_e">0</span>&nbsp&nbsp
+                                    <i class="fa fa-bus" style="color:#990073"></i>&nbsp:&nbsp<span id="cantidad_no">0</span>&nbsp&nbsp
+                                    
+                                    <span class="label label-primary" id="txtBloque"></span>
+
+                                    @if(Auth::user()->tipo_usuario->valor == 1)
+                                        &nbsp&nbsp&nbsp&nbsp<button class="btn btn-info btn-link btn-sm" type="button" onclick="verLogsTramas();"><i class="fa fa-table"></i><span>&nbsp&nbspVer tramas</span></button>
+                                    @endif 
                                 </div>
+
                                     <div class="col-lg-12 col-md-12 col-sm-12" id="div-mensaje">
                                     </div>
                                     <div class="col-lg-12 col-md-12 col-sm-12" id="div-unidad" style="height:47em;overflow: auto;">
@@ -1286,6 +1290,7 @@ $("#velocimetro").myfunc({divFact:10});
             $('#progress').modal('show');
         var url = '{{url('/home')}}';
         var cooperativa_id=document.getElementById('cooperativa').value;
+
         var consulta=document.getElementById('consulta').value;
        /* var div_unidad=  $('#div-unidad');
 
@@ -1538,7 +1543,7 @@ $("#velocimetro").myfunc({divFact:10});
         var unidad_no=0;
         var unidad_e=0;
         var ul=$('#ul_unidades');
-
+        let bloques = $('#cooperativa').find("option:selected").data("bloques");
         if(data.unidades.length==0)
         {
             ul.empty();
@@ -1549,11 +1554,21 @@ $("#velocimetro").myfunc({divFact:10});
             $('#cantidad_movimiento').text(0);
             $('#cantidad_e').text(0);
             $('#cantidad_stop').text(0);
+            $('#txtBloque').val('');
         }
         else
         {
+
           llenarNotificaciones(data);
           div_mensaje.empty();
+          if (bloques === true) {
+            $('#txtBloque').text("Activo: Bloque "+data.bloque);
+          }
+          else{
+            $('#txtBloque').val('');
+
+          }
+
           $('#cantidad').text(data.unidades.length);
 
             
