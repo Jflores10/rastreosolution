@@ -8,6 +8,8 @@ use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
 //use App\Console\Commands\ExportarATMCommand;
 use App\Console\Commands\FinalizarDespachosDia;
+use App\Console\Commands\SyncBloques;
+
 use App\Console\Commands\UpdateGPSAddress;
 use App\Console\Commands\WriteLogSockets;
 
@@ -27,6 +29,7 @@ class Kernel extends ConsoleKernel
         UpdateGPSAddress::class,
         FinalizarDespachosCommand::class,
         ClearTramasLogsCommand::class,
+        SyncBloques::class,
         //SyncConducDespaATMCommand::class,
         //ImportRutaPocATMCommand::class
     ];
@@ -43,6 +46,7 @@ class Kernel extends ConsoleKernel
         $schedule->command('ts:finalizar-despachos')->everyFiveMinutes()->withoutOverlapping();
         $schedule->command('ts:update-gps-address')->hourly()->withoutOverlapping();
         $schedule->command('ts:clear-tramas-logs')->daily()->withoutOverlapping();
+        $schedule->command('bloques:sync')->everyMinute();
     }
 
     /**
