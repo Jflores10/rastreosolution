@@ -183,7 +183,14 @@ Route::group(['middleware' => ['auth', 'usuario']], function () {
     Route::match(['get', 'post'], 'comandos', 'ComandosController@index');
     Route::get('/comandos/unidades/{id}', 'ComandosController@unidades_by_cooperativa');
     Route::post('/comandos', 'ComandosController@store');
+    Route::post('/comandos/update', 'ComandosController@update');
+
     Route::get('/comandos/get/{id}', 'ComandosController@show');
+    Route::post('/comandos/delete/{id}', 'ComandosController@destroy');
+
+    Route::get('/comandos/enviar/{id}', 'ComandosController@enviar_comando');
+
+
 
 
 

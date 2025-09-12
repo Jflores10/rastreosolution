@@ -355,7 +355,7 @@ class HistoricoController extends Controller
             $place=null;
             $cooperativa_id=$request->input('cooperativa_id');
             $cooperativa= Cooperativa:: findOrFail($cooperativa_id);
-            $punto_control=PuntoControl::where('cooperativa_id',$cooperativa_id)->where('activo',true)->first();
+            $punto_control=PuntoControl::where('cooperativa_id',$cooperativa_id)->where('activo',true)->orderBy('pdi', 'asc')->first();
             $bloque='';
             if(isset($punto_control) && $punto_control){
                 $bloque=$punto_control->bloque;

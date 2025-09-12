@@ -147,6 +147,11 @@
                           || Auth::user()->tipo_usuario->valor=='5')
                           <li><a href="{{ url('/liquidacion') }}">Liquidación de despachos</a></li>
                         @endif --}}
+
+                        @if(Auth::user()->tipo_usuario->valor=='1' )
+                          <li><a href="{{ url('/comandos') }}">Comandos</a></li>
+                        @endif
+
                         @if(Auth::user()->tipo_usuario->valor=='1' || (Auth::user()->tipo_usuario->valor=='2') || (Auth::user()->tipo_usuario->valor=='3') 
                         || (Auth::user()->tipo_usuario->valor=='4')  || Auth::user()->tipo_usuario->valor=='5')
                           <li><a href="{{ url('/sorteos') }}">Sorteos</a></li>
