@@ -68,7 +68,7 @@ class CooperativaController extends Controller
                 'finalizacion_automatica' => $request->input('finalizacion_automatica')  == 'true'?true:false,
                 'redondear_tiempos_atraso' => $request->input('redondear_tiempos_atraso') == 'true'?true:false,
                 'pto_bloques' => $request->input('pto_bloques') == 'true'?true:false,
-
+                'distancia_haversine' => $request->input('distancia_haversine') == 'true'?true:false,
                 'tolerancia_buffer_minutos' => $request->input('tolerancia_buffer_minutos')
             ]);
 
@@ -121,7 +121,7 @@ class CooperativaController extends Controller
             $cooperativa->finalizacion_automatica = $request->input('finalizacion_automatica')  == 'true'?true:false;
             $cooperativa->redondear_tiempos_atraso = $request->input('redondear_tiempos_atraso') == 'true'?true:false;
             $cooperativa->pto_bloques = $request->input('pto_bloques') == 'true'?true:false;
-
+            $cooperativa->distancia_haversine = $request->input('distancia_haversine') == 'true'?true:false;
             $cooperativa->dia_inicial = $request->input('dia_inicial');
             $cooperativa->hora_sync = $request->input('hora_sync');
 

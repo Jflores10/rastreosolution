@@ -23,3 +23,5 @@ Route::group(['middleware' => ['auth.basic', 'api']], function () {
 	Route::post('despachos/socios', 'DespachoApiController@getDespachosSocios');
 	Route::post('despachos/punto', 'DespachoApiController@getPuntoControl');
 });
+Route::post('/recorrido-notify', 'RecorridoController@notify');
+
