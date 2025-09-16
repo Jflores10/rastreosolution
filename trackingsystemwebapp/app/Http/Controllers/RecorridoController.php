@@ -6,23 +6,31 @@ use Illuminate\Http\Request;
 use App\Despacho;
 use App\PuntoControl;
 use App\Cooperativa;
-
 use App\Unidad; // Modelo donde está el IMEI
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
 
 class RecorridoController extends Controller
 {
     public function notify(Request $request)
     {
-        $request->validate([
+        // Usar Validator en lugar de $request->validate()
+        $data = $request->all();
+
+        $validator = Validator::make($data, [
             'latitud'  => 'required|numeric',
             'longitud' => 'required|numeric',
             'imei'     => 'required|string'
         ]);
 
-        $lat = $request->latitud;
-        $lon = $request->longitud;
-        $imei = $request->imei;
+        if ($validator->fails()) {
+            Log::warning("Datos GPS inválidos", ['errors' => $validator->errors()]);
+            return response()->json(['error' => $validator->errors()], 422);
+        }
+
+        $lat = $data['latitud'];
+        $lon = $data['longitud'];
+        $imei = $data['imei'];
 
         // Buscar la unidad por IMEI
         $unidad = Unidad::where('imei', $imei)->first();
@@ -34,22 +42,17 @@ class RecorridoController extends Controller
         $unidad_id = $unidad->_id ?? $unidad->id; // según tu esquema de MongoDB
 
         $cooperativa = Cooperativa::find($unidad->cooperativa_id);
-        // Validar si la cooperativa tiene activado distancia_haversine
         if (!$cooperativa || !$cooperativa->distancia_haversine) {
             Log::info("Cooperativa sin validación de haversine para IMEI {$imei}");
             return response()->json(['message' => 'Cooperativa sin validación de distancia'], 200);
         }
-        
 
         Log::info("Recorrido recibido para IMEI {$imei} (unidad_id {$unidad_id})", [
             'latitud' => $lat,
             'longitud'=> $lon
         ]);
 
-        $cooperativa = Cooperativa::find($unidad->cooperativa_id);
-        $usarHaversine = $cooperativa && $cooperativa->distancia_haversine;
-
-        // Buscar despacho   activo
+        // Buscar despacho activo
         $despacho = Despacho::where('unidad_id', $unidad_id)
             ->where('estado', 'P')
             ->first();
