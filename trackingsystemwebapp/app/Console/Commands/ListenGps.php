@@ -5,6 +5,8 @@ namespace App\Console\Commands;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Http\Request;
+
 class ListenGps extends Command
 {
     /**
@@ -38,7 +40,10 @@ class ListenGps extends Command
      */
     public function handle()
     {
+        Log::info('ListenGps iniciado y esperando mensajes Redis...');
+
         try {
+            // Redis subscribe bloquea y espera mensajes, no es necesario un while
             Redis::subscribe(['gps-channel'], function ($message) {
                 $data = json_decode($message, true);
 
@@ -49,13 +54,17 @@ class ListenGps extends Command
 
                 Log::info("Procesando GPS", $data);
 
-                // === Aquí llamas tu misma lógica de notify() ===
+                // Llamada a la lógica de tu controller
                 app(\App\Http\Controllers\RecorridoController::class)->notify(
-                    new \Illuminate\Http\Request($data)
+                    new Request($data)
                 );
             });
         } catch (\Exception $e) {
-            Log::info("Error en ListenGps: " . $e->getMessage());
+            Log::error("Error en ListenGps: " . $e->getMessage(), [
+                'trace' => $e->getTraceAsString()
+            ]);
         }
+
+        Log::info('ListenGps finalizado.');
     }
 }
