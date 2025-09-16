@@ -38,20 +38,24 @@ class ListenGps extends Command
      */
     public function handle()
     {
-        Redis::subscribe(['gps-channel'], function ($message) {
-            $data = json_decode($message, true);
+        try {
+            Redis::subscribe(['gps-channel'], function ($message) {
+                $data = json_decode($message, true);
 
-            if (!$data || empty($data['imei'])) {
-                Log::warning("GPS inválido recibido", ['data' => $data]);
-                return;
-            }
+                if (!$data || empty($data['imei'])) {
+                    Log::warning("GPS inválido recibido", ['data' => $data]);
+                    return;
+                }
 
-            Log::info("Procesando GPS", $data);
+                Log::info("Procesando GPS", $data);
 
-            // === Aquí llamas tu misma lógica de notify() ===
-            app(\App\Http\Controllers\RecorridoController::class)->notify(
-                new \Illuminate\Http\Request($data)
-            );
-        });
+                // === Aquí llamas tu misma lógica de notify() ===
+                app(\App\Http\Controllers\RecorridoController::class)->notify(
+                    new \Illuminate\Http\Request($data)
+                );
+            });
+        } catch (\Exception $e) {
+            Log::info("Error en ListenGps: " . $e->getMessage());
+        }
     }
 }

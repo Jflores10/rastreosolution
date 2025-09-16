@@ -63,7 +63,7 @@ function enviarALaravelPorWS(data) {
   if (ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify(data));
   } else {
-    console.log("⚠️ WebSocket no disponible, no se pudo enviar:", data);
+    console.log("WebSocket no disponible, no se pudo enviar:", data);
   }
 }
 function getSocket(imei) {
