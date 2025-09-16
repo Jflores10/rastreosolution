@@ -310,6 +310,9 @@ class PuntoControlController extends Controller
         $agrupados = $puntos->groupBy('pdi_padre');
 
         foreach ($agrupados as $pdi_padre => $grupo) {
+            if ($grupo->count() < 2) {
+                continue;
+            }
             foreach ($grupo as $punto) {
                 if ($punto->bloque == $bloqueHoy) {
                     $punto->activo = true;
