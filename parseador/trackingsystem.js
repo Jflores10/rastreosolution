@@ -40,12 +40,32 @@ var MongoClient = require('mongodb').MongoClient, dbTrackingSystem = null;//Load
 
 var socketArray = [];//Declaring socket array for all default clients
 var logsAdmin = [];
+
+const WebSocket = require("ws");
+const ws = new WebSocket("ws://127.0.0.1:6001");
+
+ws.on("open", () => {
+  console.log("Conectado a WebSocket local");
+});
+
+
+
+/*
 const Redis = require('ioredis');
 const redisSub = new Redis();  // Para subscribirse
 const redisPub = new Redis();  // Para publicar / set / get
+*/
 /*
   This event is used to get a socket from the current array
 */
+
+function enviarALaravelPorWS(data) {
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(data));
+  } else {
+    console.log("⚠️ WebSocket no disponible, no se pudo enviar:", data);
+  }
+}
 function getSocket(imei) {
     for (var i = 0; i < socketArray.length; i++) {
         if (socketArray[i].imei === imei)
@@ -449,7 +469,8 @@ function onClientConnected(socket) {
                                             }
                                         }
                                     }
-
+                                    
+                                  
 
                                     dbTrackingSystem.collection('recorridos').insertOne({
                                         imei: data[imei],
@@ -472,8 +493,19 @@ function onClientConnected(socket) {
                                         contador_diario: document.value.contador_diario,
                                         js: true
                                     }, function (err, result) {
-                                        if (err)
+                                        if (err){
                                             console.log(err);
+                                        }
+                                        else {
+                                            // 🔹 Notificar a WebSocket (Laravel recibirá por Redis)
+                                            let recorrido = {
+                                                imei: data[imei],
+                                                latitud: document.value.latitud,
+                                                longitud: document.value.longitud
+                                            };
+
+                                            enviarALaravelPorWS(recorrido);
+                                        }
                                     });
                                 }
                             }
@@ -1315,7 +1347,7 @@ function onClientConnected(socket) {
 }
 
 
-
+/*
 // Suscribirse al canal de comandos
 redisSub.subscribe('commands', (err, count) => {
     if (err) console.error('Error subscribing to Redis:', err);
@@ -1361,4 +1393,5 @@ redisSub.on('message', async (channel, message) => {
         console.error('Error al procesar comando desde Redis:', e);
     }
 });
+*/
 
