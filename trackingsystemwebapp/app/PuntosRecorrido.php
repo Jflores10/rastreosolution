@@ -3,9 +3,9 @@
 namespace App;
 use App\Unidad;
 use App\PuntoControl;
-use Illuminate\Database\Eloquent\Model;
-
-class PuntosRecorrido extends Model
+use Moloquent;
+use Auth;
+class PuntosRecorrido extends Moloquent
 {
     
     protected $fillable = [
