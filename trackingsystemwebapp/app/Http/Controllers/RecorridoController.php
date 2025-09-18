@@ -16,9 +16,9 @@ class RecorridoController extends Controller
 {
     public function notify(Request $request)
     {
-        // Usar Validator en lugar de $request->validate()
         $data = $request->all();
 
+        // Validación de datos
         $validator = Validator::make($data, [
             'latitud'  => 'required|numeric',
             'longitud' => 'required|numeric',
@@ -33,7 +33,7 @@ class RecorridoController extends Controller
         $lon = $data['longitud'];
         $imei = $data['imei'];
 
-        // Buscar la unidad por IMEI
+        // Buscar la unidad
         $unidad = Unidad::where('imei', $imei)->first();
         if (!$unidad) {
             return;
@@ -41,73 +41,64 @@ class RecorridoController extends Controller
 
         $cooperativa = Cooperativa::find($unidad->cooperativa_id);
         if (!$cooperativa || !$cooperativa->distancia_haversine) {
-            //Log::info("Cooperativa sin validación de haversine para IMEI {$imei}");
             return;
         }
-        /*
-        Log::info("Recorrido recibido para IMEI {$imei} (unidad_id {$unidad_id})", [
-            'latitud' => $lat,
-            'longitud'=> $lon
-        ]);
-        */
 
+        // Traer todos los puntos de control de la cooperativa
         $puntos = PuntoControl::where('cooperativa_id', $cooperativa->_id)->get();
 
-        foreach ($puntos as &$punto) {
+        $fecha_actual = Carbon::now()->format('Y-m-d\TH:i:s.vP');
+
+        foreach ($puntos as $punto) {
+
+            // Distancia desde la unidad al punto de control
             $distancia = $this->haversine($lat, $lon, $punto->latitud, $punto->longitud);
             $inside = $distancia <= $punto->radio;
-            $fecha_actual = Carbon::now()->format('Y-m-d\TH:i:s.vP');
+
+            // Último registro de este punto de control
             $ultimo = PuntosRecorrido::where('unidad_id', $unidad->_id)
                 ->where('pto_control_id', $punto->_id)
-                ->latest()
+                ->latest('fecha')
                 ->first();
 
             if ($inside) {
-                if (!$ultimo || $ultimo->tipo == 'S') {
-                    // Registrar entrada solo si no hay último registro
-                    // o si el último fue una salida
+                // Registrar entrada solo si no hay último registro o el último fue salida
+                if (!$ultimo || $ultimo->tipo === 'S') {
                     PuntosRecorrido::create([
-                        'unidad_id'        => $unidad->_id,
-                        'pto_control_id' => $punto->_id,
-                        'latitud'          => $lat,
-                        'longitud'         => $lon,
-                        'fecha'            => $fecha_actual,
-                        'tipo'             => 'E'
+                        'unidad_id'     => $unidad->_id,
+                        'pto_control_id'=> $punto->_id,
+                        'latitud'       => $lat,
+                        'longitud'      => $lon,
+                        'fecha'         => $fecha_actual,
+                        'tipo'          => 'E'
                     ]);
                     Log::info("Entrada al PDI {$punto->_id} por IMEI {$imei}", [
-                        'fecha'    => $fecha_actual,
-                        'latitud'  => $lat,
-                        'longitud' => $lon
+                        'fecha' => $fecha_actual,
+                        'latitud' => $lat,
+                        'longitud'=> $lon
                     ]);
                 }
             } else {
-                if ($ultimo && $ultimo->tipo == 'E') {
-                    // Registrar salida solo si el último registro fue entrada
+                // Registrar salida solo si el último registro fue entrada
+                if ($ultimo && $ultimo->tipo === 'E') {
                     PuntosRecorrido::create([
-                        'unidad_id'        => $unidad->_id,
-                        'pto_control_id' => $punto->_id,
-                        'latitud'          => $lat,
-                        'longitud'         => $lon,
-                        'fecha'            => $fecha_actual,
-                        'tipo'             => 'S'
+                        'unidad_id'     => $unidad->_id,
+                        'pto_control_id'=> $punto->_id,
+                        'latitud'       => $lat,
+                        'longitud'      => $lon,
+                        'fecha'         => $fecha_actual,
+                        'tipo'          => 'S'
                     ]);
                     Log::info("Salida del PDI {$punto->_id} por IMEI {$imei}", [
-                        'fecha'    => $fecha_actual,
-                        'latitud'  => $lat,
-                        'longitud' => $lon
+                        'fecha' => $fecha_actual,
+                        'latitud' => $lat,
+                        'longitud'=> $lon
                     ]);
                 }
             }
-
         }
 
-        /*
-        Log::info("Puntos de control actualizados para despacho {$despacho->id}", [
-            'imei' => $imei
-        ]);
-        */
-
-        //return response()->json(['message' => 'Datos procesados correctamente'], 200);
+        Log::info("Procesamiento completado para IMEI {$imei}");
     }
 
     private function haversine($lat1, $lon1, $lat2, $lon2)
