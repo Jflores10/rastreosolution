@@ -7,7 +7,7 @@ use App\Despacho;
 use App\PuntoControl;
 use App\Cooperativa;
 use Carbon\Carbon;
-
+use App\PuntosRecorrido;
 use App\Unidad; // Modelo donde está el IMEI
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
@@ -26,7 +26,6 @@ class RecorridoController extends Controller
         ]);
 
         if ($validator->fails()) {
-            Log::warning("Datos GPS inválidos");
             return;
         }
 
@@ -37,11 +36,8 @@ class RecorridoController extends Controller
         // Buscar la unidad por IMEI
         $unidad = Unidad::where('imei', $imei)->first();
         if (!$unidad) {
-            Log::warning("Unidad no encontrada para IMEI {$imei}");
             return;
         }
-
-        $unidad_id = $unidad->_id ?? $unidad->id; // según tu esquema de MongoDB
 
         $cooperativa = Cooperativa::find($unidad->cooperativa_id);
         if (!$cooperativa || !$cooperativa->distancia_haversine) {
@@ -55,49 +51,46 @@ class RecorridoController extends Controller
         ]);
         */
 
-        // Buscar despacho activo
-        $despacho = Despacho::where('unidad_id', $unidad_id)
-            ->where('estado', 'P')
-            ->first();
-
-        if (!$despacho) {
-            Log::info("No hay despacho activo para IMEI {$imei}");
-            return;
-        }
-
-        $puntos = $despacho->puntos_control;
+        $puntos = PuntoControl::where('cooperativa_id', $cooperativa->_id)->get();
 
         foreach ($puntos as &$punto) {
-            $p = PuntoControl::where('_id', $punto['id'])->first();
-            if ($p) {
-                $distancia = $this->haversine($lat, $lon, $p->latitud, $p->longitud);
+            $distancia = $this->haversine($lat, $lon, $punto->latitud, $punto->longitud);
+            $inside = $distancia <= $punto->radio;
+            $fecha_actual = Carbon::now()->format('Y-m-d\TH:i:s.vP');
+            $ultimo = PuntosRecorrido::where('unidad_id', $unidad->_id)
+                ->where('pto_control_id', $punto->_id)
+                ->latest()
+                ->first();
 
-                $inside = $distancia <= $p->radio;
-                $fecha_actual = Carbon::now()->format('Y-m-d\TH:i:s.vP');
-                if ($inside && empty($punto['fecha_entrada'])) {
-                    
-                    $punto['fecha_entrada'] = $fecha_actual;
-                    Log::info("Ingreso al PDI {$punto['id']} para IMEI {$imei}", [
-                        'fecha' => $fecha_actual,
-                        'latitud' => $lat,
-                        'longitud' => $lon
+            if ($inside) {
+                if (!$ultimo || $ultimo->tipo == 'S') {
+                    // Registrar entrada solo si no hay último registro
+                    // o si el último fue una salida
+                    PuntosRecorrido::create([
+                        'unidad_id'        => $unidad->_id,
+                        'pto_control_id' => $punto->_id,
+                        'latitud'          => $lat,
+                        'longitud'         => $lon,
+                        'fecha'            => $fecha_actual,
+                        'tipo'             => 'E'
                     ]);
                 }
-
-                if (!$inside && !empty($punto['fecha_entrada']) && empty($punto['fecha_salida'])) {
-                   
-                    $punto['fecha_salida'] = $fecha_actual;
-                    Log::info("Salida del PDI {$punto['id']} para IMEI {$imei}", [
-                        'fecha' => $fecha_actual,
-                        'latitud' => $lat,
-                        'longitud' => $lon
-                    ]); 
+            } else {
+                if ($ultimo && $ultimo->tipo == 'E') {
+                    // Registrar salida solo si el último registro fue entrada
+                    PuntosRecorrido::create([
+                        'unidad_id'        => $unidad->_id,
+                        'pto_control_id' => $punto->_id,
+                        'latitud'          => $lat,
+                        'longitud'         => $lon,
+                        'fecha'            => $fecha_actual,
+                        'tipo'             => 'S'
+                    ]);
                 }
             }
+
         }
 
-        $despacho->puntos_control = $puntos;
-        $despacho->save();
         /*
         Log::info("Puntos de control actualizados para despacho {$despacho->id}", [
             'imei' => $imei
