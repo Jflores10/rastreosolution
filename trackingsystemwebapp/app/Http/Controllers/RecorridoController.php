@@ -48,6 +48,11 @@ class RecorridoController extends Controller
         $puntos = PuntoControl::where('cooperativa_id', $cooperativa->_id)->get();
 
         $fecha_actual = Carbon::now()->format('Y-m-d\TH:i:s.vP');
+        $ultimos = PuntosRecorrido::where('unidad_id', $unidad->_id)
+                ->orderBy('fecha', 'desc')
+                ->get()
+                ->keyBy('pto_control_id'); // clave: id del punto de control
+
 
         foreach ($puntos as $punto) {
 
@@ -55,11 +60,7 @@ class RecorridoController extends Controller
             $distancia = $this->haversine($lat, $lon, $punto->latitud, $punto->longitud);
             $inside = $distancia <= $punto->radio;
 
-            // Último registro de este punto de control
-            $ultimo = PuntosRecorrido::where('unidad_id', $unidad->_id)
-                ->where('pto_control_id', $punto->_id)
-                ->latest('fecha')
-                ->first();
+            $ultimo = $ultimos->get($punto->_id);
 
             if ($inside) {
                 // Registrar entrada solo si no hay último registro o el último fue salida
