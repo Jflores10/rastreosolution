@@ -74,6 +74,11 @@ class RecorridoController extends Controller
                         'fecha'            => $fecha_actual,
                         'tipo'             => 'E'
                     ]);
+                    Log::info("Entrada al PDI {$punto->_id} por IMEI {$imei}", [
+                        'fecha'    => $fecha_actual,
+                        'latitud'  => $lat,
+                        'longitud' => $lon
+                    ]);
                 }
             } else {
                 if ($ultimo && $ultimo->tipo == 'E') {
@@ -85,6 +90,11 @@ class RecorridoController extends Controller
                         'longitud'         => $lon,
                         'fecha'            => $fecha_actual,
                         'tipo'             => 'S'
+                    ]);
+                    Log::info("Salida del PDI {$punto->_id} por IMEI {$imei}", [
+                        'fecha'    => $fecha_actual,
+                        'latitud'  => $lat,
+                        'longitud' => $lon
                     ]);
                 }
             }
