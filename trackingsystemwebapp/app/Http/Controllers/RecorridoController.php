@@ -22,46 +22,51 @@ class RecorridoController extends Controller
         $validator = Validator::make($data, [
             'latitud'  => 'required|numeric',
             'longitud' => 'required|numeric',
-            'imei'     => 'required|string'
+            'imei'     => 'required|string',
+            'fecha'    => 'nullable|date' // opcional si tu GPS envía timestamp
         ]);
 
-        if ($validator->fails()) return;
+        if ($validator->fails()) {
+            return;
+        }
 
         $lat = $data['latitud'];
         $lon = $data['longitud'];
         $imei = $data['imei'];
-        $fecha_actual = Carbon::now()->format('Y-m-d\TH:i:s.vP');
+        $fecha_actual = $data['fecha'] ?? Carbon::now()->format('Y-m-d\TH:i:s.vP');
 
-        // Buscar unidad
+        // Buscar la unidad por IMEI
         $unidad = Unidad::where('imei', $imei)->first();
         if (!$unidad) return;
 
+        // Buscar la cooperativa
         $cooperativa = Cooperativa::find($unidad->cooperativa_id);
         if (!$cooperativa || !$cooperativa->distancia_haversine) return;
 
+        // Traer todos los puntos de control de la cooperativa
         $puntos = PuntoControl::where('cooperativa_id', $cooperativa->_id)->get();
 
-        // Traer últimos registros de todos los PDIs de la unidad
+        // Traer últimos registros de la unidad (una sola consulta)
         $ultimos = PuntosRecorrido::where('unidad_id', $unidad->_id)
-            ->orderBy('fecha', 'desc')
-            ->get()
-            ->keyBy('pto_control_id');
+                    ->orderBy('fecha', 'desc')
+                    ->get();
 
-        $distancias = [];
         foreach ($puntos as $punto) {
-            $distancias[$punto->_id] = $this->haversine($lat, $lon, $punto->latitud, $punto->longitud);
-        }
-
-        // Ordenar PDIs por distancia ascendente
-        asort($distancias);
-
-        foreach ($distancias as $punto_id => $distancia) {
-            $punto = $puntos->firstWhere('_id', $punto_id);
+            // Distancia desde la unidad al punto de control
+            $distancia = $this->haversine($lat, $lon, $punto->latitud, $punto->longitud);
             $inside = $distancia <= $punto->radio;
-            $ultimo = $ultimos->get($punto->_id);
+
+            // Buscar el último registro de este punto manualmente (sin firstWhere)
+            $ultimo = null;
+            foreach ($ultimos as $item) {
+                if ($item->pto_control_id == $punto->_id) {
+                    $ultimo = $item;
+                    break;
+                }
+            }
 
             if ($inside) {
-                // Entrada si último fue salida o no existe
+                // Registrar entrada si no hay último registro o si el último fue salida
                 if (!$ultimo || $ultimo->tipo === 'S') {
                     PuntosRecorrido::create([
                         'unidad_id'     => $unidad->_id,
@@ -78,7 +83,7 @@ class RecorridoController extends Controller
                     ]);
                 }
             } else {
-                // Salida si último fue entrada y realmente salió
+                // Registrar salida si el último fue entrada
                 if ($ultimo && $ultimo->tipo === 'E') {
                     PuntosRecorrido::create([
                         'unidad_id'     => $unidad->_id,
@@ -97,8 +102,9 @@ class RecorridoController extends Controller
             }
         }
 
-        Log::info("Procesamiento avanzado completado para IMEI {$imei}");
+        Log::info("Procesamiento completado para IMEI {$imei}");
     }
+
 
 
     private function haversine($lat1, $lon1, $lat2, $lon2)
