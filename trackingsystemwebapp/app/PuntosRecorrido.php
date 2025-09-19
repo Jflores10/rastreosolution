@@ -7,6 +7,7 @@ use Moloquent;
 use Auth;
 class PuntosRecorrido extends Moloquent
 {
+    protected $collection = 'puntos_recorrido';
     
     protected $fillable = [
         'latitud','longitud','unidad_id','pto_control_id',

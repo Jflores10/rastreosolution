@@ -49,7 +49,7 @@ Reportes
                                 <div class="form-group" id="div-cooperativa">
                                     <select data-placeholder="Cooperativa" class="form-control" id="cooperativa_id" name="cooperativa_id">
                                         @foreach ($cooperativas as $cooperativa)
-                                            <option value="{{ $cooperativa->_id }}">{{ $cooperativa->descripcion }}</option>
+                                            <option value="{{ $cooperativa->_id }}" data-algoritmo="{{ json_encode($cooperativa->distancia_haversine)}}">{{ $cooperativa->descripcion }}</option>
                                         @endforeach
                                     </select>
                                     <span class="help-block" id="span_cooperativa"></span>
@@ -96,8 +96,27 @@ Reportes
                                                 <input type="radio" id="personalizado" name="filtro_fecha" /> Personalizado
                                             </label>
                                         </div>
+                                        <hr>
+                                        <div class="form-group">
+                                            <div class="radio">
+                                                <label for="gps">
+                                                    <input type="radio" value="gps" id="gps" name="tip_calculo" checked /> Dispositivo GPS
+                                                </label>
+                                            </div>
+                                            
+                                            <div class="radio">
+                                                <label for="algoritmo">
+                                                    <input type="radio" value="algoritmo" id="algoritmo" name="tip_calculo" />Algoritmo
+                                                </label>
+                                            </div>
+                                            
+                                        </div>
+
+                                        
                                     </div>
+                                    
                                 </div>
+                             
                                 <div class="col-lg-3 col-md-3 col-sm-12">
                                     <div class="form-group" id="div-fecha-inicio">
                                         <input placeholder="Desde" name="desde" id="fecha_inicio" autocomplete="off" autocorrect="off" class="form-control" type="text" />
@@ -108,8 +127,9 @@ Reportes
                                         <input placeholder="Hasta" name="hasta" id="fecha_fin" autocomplete="off" autocorrect="off" class="form-control" type="text" />
                                         <span class="help-block" id="span_fecha_fin"></span>
                                     </div>
+                                    <br>
                                     <input type="hidden" id="filter" name="filter[]"/>
-                                    <div class="form-group">
+                                    <div class="form-group text-center">
                                         <input onclick="search();" type="button" value="Buscar" class="btn btn-primary" />
                                     </div>
                                 </div>
@@ -179,9 +199,35 @@ Reportes
 
 @section('scripts')
 <script>
+
     window.onload = function () { 
         $('#menu_toggle').trigger('click');
+      
     }
+    $(document).ready(function() {
+        // Obtener el valor del option seleccionado por defecto
+        var selectedOption = $('#f option:selected');
+        var algoritmo = selectedOption.data('algoritmo');
+
+        // Comprobar si algoritmo es falso o vacío
+        if (!algoritmo) {
+            // Ocultar el radio de id="algoritmo"
+            $('#algoritmo').closest('.radio').hide();
+        }
+
+        // También actualizar al cambiar el select
+        $('#cooperativa_id').change(function() {
+            var selectedOption = $(this).find('option:selected');
+            var algoritmo = selectedOption.data('algoritmo');
+
+            if (!algoritmo) {
+                $('#algoritmo').closest('.radio').hide();
+            } else {
+                $('#algoritmo').closest('.radio').show();
+            }
+        });
+    });
+
 
 	function recalcular(id)
 	{

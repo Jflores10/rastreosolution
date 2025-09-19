@@ -40,7 +40,6 @@ class ListenGps extends Command
      */
     public function handle()
     {
-        Log::info('ListenGps iniciado y esperando mensajes Redis...');
 
         try {
             // Redis subscribe bloquea y espera mensajes, no es necesario un while
@@ -52,7 +51,6 @@ class ListenGps extends Command
                     return;
                 }
 
-                Log::info("Procesando GPS", $data);
 
                 // Llamada a la lógica de tu controller
                 app(\App\Http\Controllers\RecorridoController::class)->notify(
@@ -65,6 +63,5 @@ class ListenGps extends Command
             ]);
         }
 
-        Log::info('ListenGps finalizado.');
     }
 }

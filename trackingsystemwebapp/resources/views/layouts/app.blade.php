@@ -104,6 +104,9 @@
                         <li><a href="{{ route('puertas.index') }}">Reporte de puertas</a></li>
                         <li><a href="{{ route('cortetubo.index') }}">Reporte de corte de tubo</a></li>
                       @endif
+                       @if(Auth::user()->tipo_usuario->valor=='1')
+                        <li><a href="{{ url('/es-puntoscontrol') }}">E/S PC Haversine</a></li>
+                      @endif
                       @if(Auth::user()->tipo_usuario->valor=='1' || Auth::user()->tipo_usuario->valor=='2' || Auth::user()->tipo_usuario->valor=='3'  || Auth::user()->tipo_usuario->valor=='5')
                         <li><a href="{{ url('/bitacora') }}">Bitacora Unidades</a></li>
                       @endif

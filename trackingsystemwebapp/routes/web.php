@@ -189,6 +189,10 @@ Route::group(['middleware' => ['auth', 'usuario']], function () {
     Route::post('/comandos/delete/{id}', 'ComandosController@destroy');
 
     Route::get('/comandos/enviar/{id}', 'ComandosController@enviar_comando');
+    Route::get('/es-puntoscontrol', 'RecorridoController@index');
+    Route::post('/es-puntoscontrol/listar', 'RecorridoController@listar');
+
+
 
 
 

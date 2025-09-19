@@ -185,6 +185,149 @@ function cargaHistorico(url, id_cooperativa, valor_usuario, pagina = 1) {
     });
 }
 
+function cargaESPuntosControl(url, pagina = 1) {
+
+    var unidad_id = document.getElementById('unidad_id');
+    var fecha_inicio = document.getElementById('fecha_inicio');
+    var fecha_fin = document.getElementById('fecha_fin');
+
+    var div_unidad = document.getElementById('div-unidad');
+    var div_fecha_inicio = document.getElementById('div-fecha-inicio');
+    var div_fecha_fin = document.getElementById('div-fecha-fin');
+
+    var span_unidad = document.getElementById('span_unidad');
+    var span_desde = document.getElementById('span_fecha_inicio');
+    var span_hasta = document.getElementById('span_fecha_fin');
+
+    div_unidad.classList.remove('has-error');
+    div_fecha_inicio.classList.remove('has-error');
+    div_fecha_fin.classList.remove('has-error');
+
+    var id_coop = document.getElementById('cooperativa_id').value
+
+    $('#progress').modal('show');
+    $.post(url, {
+        unidad_id: unidad_id.value,
+        fecha_inicio: fecha_inicio.value,
+        fecha_fin: fecha_fin.value,
+        cooperativa_id: id_coop,
+        page: pagina
+    }, function (data) {
+        var tr_registros_historicos = $('#div-tabla');
+        tr_registros_historicos.empty();
+
+        if (data.error) {
+            if (data.messages.unidad_id) {
+                div_unidad.classList.add('has-error');
+                span_unidad.innerHTML = '<strong>' + data.messages.unidad_id + '</strong>';
+            }
+            if (data.messages.fecha_inicio) {
+                div_fecha_inicio.classList.add('has-error');
+                span_desde.innerHTML = '<strong>' + data.messages.fecha_inicio + '</strong>';
+            }
+            if (data.messages.fecha_fin) {
+                div_fecha_fin.classList.add('has-error');
+                span_hasta.innerHTML = '<strong>' + data.messages.fecha_fin + '</strong>';
+            }
+        } else {
+            if (data.data.length == 0) {
+                alert('No se encontró ningún registro.');
+                array_historico = [];
+            } else {
+                array_historico = data.data;
+
+                tr_registros_historicos.append(
+                    '<table class="table" id="tr-registros-historicos">' +
+                    '<thead style="background-color: #FAFAFA;">' +
+                    '<th>Fecha</th><th>Evento</th><th>Latitud</th>' +
+                    '<th>Longitud</th>' +
+                    '</thead>' +
+                    '<tbody id="tbody-historico"></tbody>' +
+                    '</table>'
+                );
+                var tbody = $('#div-tabla').find('tbody[id="tbody-historico"]');
+                array_historico.forEach(function(item) {
+                    var tipo=(item.tipo=='E')?"Entrada":"Salida";
+                    var ptocontrol=item.punto_control.descripcion;
+                    var evento=tipo+" al punto de control "+ptocontrol;
+                    const fechaStr = item.fecha; // "2025-09-18T20:39:00.000+00:00"
+                    const fecha = new Date(fechaStr);
+
+                    // Función para rellenar con ceros
+                    const pad = (n) => n.toString().padStart(2, '0');
+                    const dia = pad(fecha.getUTCDate());
+                    const mes = pad(fecha.getUTCMonth() + 1); // Mes empieza desde 0
+                    const anio = fecha.getUTCFullYear().toString().slice(-4); // Últimos 2 dígitos del año
+                    const hora = pad(fecha.getUTCHours());
+                    const minuto = pad(fecha.getUTCMinutes());
+                    const segundo = pad(fecha.getUTCSeconds());
+
+                    const formato = `${dia}/${mes}/${anio} ${hora}:${minuto}:${segundo}`;
+
+                    tbody.append(
+                        '<tr id="' + item._id + '">' +
+                        '<td>' + formato + '</td>' +
+                        '<td>' + evento+ '</td>' +
+                        '<td>' + item.latitud + '</td>' +
+                        '<td>' + item.longitud + '</td>' +
+                        '</tr>'
+                    );
+                });
+
+                // PAGINACIÓN DINÁMICA
+                var paginacion = '<ul class="pagination justify-content-center mt-2">';
+                
+                // Botón primero
+                paginacion += (data.current_page > 1) 
+                    ? '<li class="page-item"><a class="page-link" href="javascript:void(0);" onclick="cargaESPuntosControl(\''+ url +'\',1)">&laquo;&laquo;</a></li>'
+                    : '<li class="page-item disabled"><span class="page-link">&laquo;&laquo;</span></li>';
+
+                // Botón anterior
+                paginacion += (data.prev_page_url) 
+                    ? '<li class="page-item"><a class="page-link" href="javascript:void(0);" onclick="cargaESPuntosControl(\''+ url +'\','+ (data.current_page - 1) +')">&laquo;</a></li>'
+                    : '<li class="page-item disabled"><span class="page-link">&laquo;</span></li>';
+
+                // Mostrar solo 5 páginas alrededor de la actual
+                var inicio = Math.max(1, data.current_page - 2);
+                var fin = Math.min(data.last_page, data.current_page + 2);
+
+                if (inicio > 1) {
+                    paginacion += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+                }
+
+                for (var i = inicio; i <= fin; i++) {
+                    if (i == data.current_page) {
+                        paginacion += '<li class="page-item active"><span class="page-link">' + i + '</span></li>';
+                    } else {
+                        paginacion += '<li class="page-item"><a class="page-link" href="javascript:void(0);" onclick="cargaESPuntosControl(\''+ url +'\','+ i +')">' + i + '</a></li>';
+                    }
+                }
+
+                if (fin < data.last_page) {
+                    paginacion += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+                }
+
+                // Botón siguiente
+                paginacion += (data.next_page_url) 
+                    ? '<li class="page-item"><a class="page-link" href="javascript:void(0);" onclick="cargaESPuntosControl(\''+ url +'\','+ (data.current_page + 1) +')">&raquo;</a></li>'
+                    : '<li class="page-item disabled"><span class="page-link">&raquo;</span></li>';
+
+                // Botón último
+                paginacion += (data.current_page < data.last_page) 
+                    ? '<li class="page-item"><a class="page-link" href="javascript:void(0);" onclick="cargaESPuntosControl(\''+ url +'\','+ data.last_page +')">&raquo;&raquo;</a></li>'
+                    : '<li class="page-item disabled"><span class="page-link">&raquo;&raquo;</span></li>';
+
+                paginacion += '</ul>';
+                $('#div-tabla').append(paginacion);
+            }
+        }
+        $('#progress').modal('hide');
+    }, "json").fail(function () {
+        $('#progress').modal('hide');
+    });
+}
+
+
 
 
 /*

@@ -14,6 +14,46 @@ use Illuminate\Support\Facades\Validator;
 
 class RecorridoController extends Controller
 {
+
+    public function index()
+    {
+       return view('panel.reportes-unidades-alg',
+        [
+            'cooperativas' => Cooperativa::orderBy('descripcion')->where('estado', 'A')->get()
+        ]
+        );
+    }
+
+    public function listar(Request $request)
+    {
+        $unidad=$request->input('unidad_id');
+        $fechai=$request->input('fecha_inicio');
+        $fechaf=$request->input('fecha_fin');
+
+        $fecha_inicio_str = Carbon::parse($fechai, 'America/Guayaquil')->format('Y-m-d\TH:i:s.vP');
+        $fecha_fin_str    = Carbon::parse($fechaf, 'America/Guayaquil')->format('Y-m-d\TH:i:s.vP');
+
+        $query = PuntosRecorrido::with('punto_control');
+        if(!empty($unidad)){
+            $query->where('unidad_id',$unidad);
+        }
+        if (!empty($fechai) && !empty($fechaf)) {
+            $query->whereBetween('fecha', [$fecha_inicio_str, $fecha_fin_str]);
+        }
+        $cursor = $query->orderBy('fecha', 'desc')->paginate(2);
+
+        return response()->json([
+            'error'          => false,
+            'data'           => $cursor->items(),
+            'per_page'       => $cursor->perPage(),
+            'current_page'   => $cursor->currentPage(),
+            'last_page'      => $cursor->lastPage(),
+            'next_page_url'  => $cursor->nextPageUrl(),
+            'prev_page_url'  => $cursor->previousPageUrl(),
+        ]);
+    }
+
+
     
     public function notify(Request $request)
     {
@@ -73,11 +113,7 @@ class RecorridoController extends Controller
                         'fecha'         => $fecha_actual,
                         'tipo'          => 'E'
                     ]);
-                    Log::info("Entrada al PDI {$punto->_id} por IMEI {$imei}", [
-                        'fecha' => $fecha_actual,
-                        'latitud' => $lat,
-                        'longitud'=> $lon
-                    ]);
+                  
                 }
             } else {
                 // Registrar salida solo si el último registro fue entrada
@@ -90,16 +126,11 @@ class RecorridoController extends Controller
                         'fecha'         => $fecha_actual,
                         'tipo'          => 'S'
                     ]);
-                    Log::info("Salida del PDI {$punto->_id} por IMEI {$imei}", [
-                        'fecha' => $fecha_actual,
-                        'latitud' => $lat,
-                        'longitud'=> $lon
-                    ]);
+                   
                 }
             }
         }
 
-        Log::info("Procesamiento completado para IMEI {$imei}");
     }
 
     private function haversine($lat1, $lon1, $lat2, $lon2)

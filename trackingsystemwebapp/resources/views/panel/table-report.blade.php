@@ -65,22 +65,45 @@
                                 </div>
                             </td>
                             @foreach ($despacho->puntos_control as $punto_control)
-                            
+                                @if($tip_calculo=='algoritmo')
+                                    @php
+                                        $marcaptorecorrido = \App\Helper\FunctionsHelper::diferenciaPuntoRecorrido(
+                                            $punto_control,
+                                            $despacho->unidad_id,
+                                            $despacho->fecha->addHours(5),
+                                            $despacho->fecha_culminacion['date']
+                                        );
+                                    @endphp
+                                @endif
+
                                 <td>{{ $punto_control['tiempo_esperado']->toDateTime()->format('H:i') }}</td>
-                                <td>{{ (!isset($punto_control['marca']))?'-':DateTime::createFromFormat('Y-m-d H:i:s', $punto_control['marca'])->format('H:i') }}</td>
-                                <td>{{ (!isset($punto_control['tiempo_atraso']))? '-' . (!isset($punto_control['tiempo_adelanto'])?'':$punto_control['tiempo_adelanto']):'+' . $punto_control['tiempo_atraso'] }}</td>
+                                @if($tip_calculo=='algoritmo')
+                                    <td>{{ (!isset($marcaptorecorrido))?'-':DateTime::createFromFormat('Y-m-d H:i:s', $marcaptorecorrido->fecha)->format('H:i') }}</td>
+                                    <td>{{ (!isset($marcaptorecorrido))? '-' : $marcaptorecorrido->tiempo}}</td>
+
+                                @else
+                                    <td>{{ (!isset($punto_control['marca']))?'-':DateTime::createFromFormat('Y-m-d H:i:s', $punto_control['marca'])->format('H:i') }}</td>
+                                    <td>{{ (!isset($punto_control['tiempo_atraso']))? '-' . (!isset($punto_control['tiempo_adelanto'])?'':$punto_control['tiempo_adelanto']):'+' . $punto_control['tiempo_atraso'] }}</td>
+                                @endif
+                              
                                 <td>{{ (!isset($punto_control['contador_marca']))?'-':$punto_control['contador_marca'] }}</td>
                                 @php 
-                                    $intervalo=isset($punto_control['intervalo'])?$punto_control['intervalo']:0;
-                                    $atraso=isset($punto_control['atraso'])?$punto_control['atraso']:0;
-                                    $adelanto=isset($punto_control['adelanto'])?$punto_control['adelanto']:0;
-                                    $desc=0;
-                                    if(isset($punto_control['tiempo_atraso'])){
-                                        $desc=$intervalo*$atraso;
-                                    }else{
-                                        $desc=$intervalo*$adelanto;
-                                    }
+                                   $intervalo = ($tip_calculo == 'algoritmo')
+                                        ? ($marcaptorecorrido->minutos ?? 0)
+                                        : ($punto_control['intervalo'] ?? 0);
+                                    
+                                    $atraso   = $punto_control['atraso']   ?? 0;
+                                    $adelanto = $punto_control['adelanto'] ?? 0;
 
+                                    if ($tip_calculo == 'algoritmo') {
+                                        $desc = (isset($marcaptorecorrido->estado) && $marcaptorecorrido->estado === 'n')
+                                            ? $intervalo * $adelanto
+                                            : $intervalo * $atraso;
+                                    } else {
+                                        $desc = isset($punto_control['tiempo_atraso'])
+                                            ? $intervalo * $atraso
+                                            : $intervalo * $adelanto;
+                                    }
                                 @endphp
                                 <td>{{ $desc }}</td>
                             @endforeach
@@ -97,19 +120,43 @@
                             @endphp
                             <td>{{ $cont_result }}</td>                       
                             <td>{{ $despacho->corte_tubo }}</td>
-                            @php
-                                $atrasos = 0;
-                                $adelantos = 0;
-                                foreach ($despacho->puntos_control as $punto_control) {
-                                    if (isset($punto_control['tiempo_atraso'])) 
-                                        $atrasos += $punto_control['intervalo'] * floatval($punto_control['atraso']);
-                                    else if (isset($punto_control['tiempo_adelanto']))
-                                        $adelantos += ($punto_control['intervalo'] * -1) * floatval($punto_control['adelanto']);
+                         @php
+                            $atrasos = 0;
+                            $adelantos = 0;
+                            $multa = 0;
+
+                            foreach ($despacho->puntos_control as $punto_control) {
+                                
+                                if($tip_calculo == 'algoritmo'){
+                                    $marcaptorecorrido1 = \App\Helper\FunctionsHelper::diferenciaPuntoRecorrido(
+                                            $punto_control,
+                                            $despacho->unidad_id,
+                                            $despacho->fecha->addHours(5),
+                                            $despacho->fecha_culminacion['date']
+                                        );
+                                    $valor = 0;
+                                    if(isset($marcaptorecorrido1) && $marcaptorecorrido1->estado === 'n'){
+                                        $valor = ($marcaptorecorrido1->minutos * -1) * floatval($punto_control['adelanto'] ?? 0);
+                                        $adelantos += $valor;
+                                    } else {
+                                        $valor = ($marcaptorecorrido1->minutos ?? 0) * floatval($punto_control['atraso'] ?? 0);
+                                        $atrasos += $valor;
+                                    }
+                                    $multa += $valor;
+                                } else {
+                                    if(isset($punto_control['tiempo_atraso'])){
+                                        $valor = ($punto_control['intervalo'] ?? 0) * floatval($punto_control['atraso'] ?? 0);
+                                        $atrasos += $valor;
+                                    } elseif(isset($punto_control['tiempo_adelanto'])){
+                                        $valor = ($punto_control['intervalo'] ?? 0) * -1 * floatval($punto_control['adelanto'] ?? 0);
+                                        $adelantos += $valor;
+                                    }
                                 }
-                            @endphp
+                            }
+                        @endphp
                             <td>{{ $atrasos }}</td>
                             <td>{{ $adelantos }}</td>
-                            <td>{{ $despacho->multa }}</td>
+                            <td>{{ ($tip_calculo == 'algoritmo')?number_format($multa, 2): $despacho->multa }}</td>
                             <td>{{ ($despacho->modificador!=null)?$despacho->modificador->name:""}}</td>
                             <td><a href="#" onclick="recalcular('{{ $despacho->_id }}');">Recalcular</a></td>
                             <td>{{ ($despacho->estado_exportacion == 'E')?'Si':'No' }}</td>

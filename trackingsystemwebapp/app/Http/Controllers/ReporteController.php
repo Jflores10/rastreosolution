@@ -49,10 +49,14 @@ class ReporteController extends Controller
             'unidad_id' => 'required|array',
             'ruta_id' => 'required|exists:rutas,_id',
             'desde' => 'required|date',
-            'hasta' => 'required|date'
+            'hasta' => 'required|date',
+            'tip_calculo' => 'required'
+
         ]);
         //$d = new Carbon($request->input('desde') . ' 00:00:00');
         $d = new Carbon($request->input('desde'));
+        $tip_calculo = $request->input('tip_calculo');
+
         date_sub($d, date_interval_create_from_date_string('5 hours'));
         //$d = new UTCDateTime(($desde->getTimestamp()) * 1000);
         // $h = new Carbon($request->input('hasta') . ' 23:59:59');
@@ -87,7 +91,7 @@ class ReporteController extends Controller
         return view('panel.table-report', [
             'cooperativas' => $cooperativas, 'reportes' => $reportes, 'unidades' => $unidad_id,
             'rutas' => $rutas, 'cooperativa_id' => $request->input('cooperativa_id'),
-            'desde' => $request->input('desde'), 'hasta' => $request->input('hasta')
+            'desde' => $request->input('desde'), 'hasta' => $request->input('hasta'), 'tip_calculo'=>$tip_calculo
         ]);
     }
 
