@@ -40,7 +40,7 @@ class RecorridoController extends Controller
         if (!empty($fechai) && !empty($fechaf)) {
             $query->whereBetween('fecha', [$fecha_inicio_str, $fecha_fin_str]);
         }
-        $cursor = $query->orderBy('fecha', 'desc')->paginate(2);
+        $cursor = $query->orderBy('fecha', 'desc')->paginate(50);
 
         return response()->json([
             'error'          => false,
