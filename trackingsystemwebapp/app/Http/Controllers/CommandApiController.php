@@ -71,7 +71,7 @@ class CommandApiController extends Controller
 
       $bytesSent += $sent;
     }
-
+    /*
     $requestId = str_random(40); 
     // Publicar comando en Redis
     Redis::publish('commands', json_encode([
@@ -100,6 +100,7 @@ class CommandApiController extends Controller
     else{
       $respuesta=$response['data'] ?? $response;
     }
+      */
 
 
     socket_close($socket);
@@ -111,7 +112,7 @@ class CommandApiController extends Controller
       'bytes_sent'  => $bytesSent,
       'bytes_total' => $totalBytes,
       'payload'     => $payload,
-      'respuesta'   =>$respuesta,
+      //'respuesta'   =>$respuesta,
     ]);
   }
 
