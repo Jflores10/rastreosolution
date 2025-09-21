@@ -251,22 +251,23 @@ function cargaESPuntosControl(url, pagina = 1) {
                     var ptocontrol=item.punto_control.descripcion;
                     var evento=tipo+" al punto de control "+ptocontrol;
                     const fechaStr = item.fecha; // "2025-09-18T20:39:00.000+00:00"
-                    const fecha = new Date(fechaStr);
 
-                    // Función para rellenar con ceros
-                    const pad = (n) => n.toString().padStart(2, '0');
-                    const dia = pad(fecha.getUTCDate());
-                    const mes = pad(fecha.getUTCMonth() + 1); // Mes empieza desde 0
-                    const anio = fecha.getUTCFullYear().toString().slice(-4); // Últimos 2 dígitos del año
-                    const hora = pad(fecha.getUTCHours());
-                    const minuto = pad(fecha.getUTCMinutes());
-                    const segundo = pad(fecha.getUTCSeconds());
+                    let fecha = new Date(fechaStr);
+                    function pad(n) {
+                    return n < 10 ? '0' + n : n;
+                    }
+                    let dia   = pad(fecha.getDate());
+                    let mes   = pad(fecha.getMonth() + 1); // Los meses en JS empiezan en 0
+                    let anio  = fecha.getFullYear().toString().slice(-2); // solo 2 dígitos
+                    let hora  = pad(fecha.getHours());
+                    let min   = pad(fecha.getMinutes());
+                    let seg   = pad(fecha.getSeconds());
 
-                    const formato = `${dia}/${mes}/${anio} ${hora}:${minuto}:${segundo}`;
+                    let fechaFormateada = `${dia}/${mes}/${anio} ${hora}:${min}:${seg}`;
 
                     tbody.append(
                         '<tr id="' + item._id + '">' +
-                        '<td>' + formato + '</td>' +
+                        '<td>' + fechaFormateada + '</td>' +
                         '<td>' + evento+ '</td>' +
                         '<td>' + item.latitud + '</td>' +
                         '<td>' + item.longitud + '</td>' +
