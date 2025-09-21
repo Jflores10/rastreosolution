@@ -12,14 +12,16 @@ class FunctionsHelper
 
         $fecha_inicio_str = Carbon::parse($fecha_inicio, 'America/Guayaquil')->format('Y-m-d\TH:i:s.vP');
         $fecha_fin_str    = Carbon::parse($fecha_fin, 'America/Guayaquil')->format('Y-m-d\TH:i:s.vP');
-        $fecha_esperado_str    = Carbon::parse($pto_control['tiempo_esperado'], 'America/Guayaquil')->format('Y-m-d\TH:i:s.vP');
+        $tiempoEsperado = Carbon::instance($pto_control['tiempo_esperado']->toDateTime())
+        ->addHours(5) // este ajuste lo estás aplicando en tu código
+        ->setTimezone('America/Guayaquil');
 
         // Buscar el punto recorrido que cumpla condiciones
         $punto = PuntosRecorrido::where('unidad_id', $unidad_id)
             ->where('pto_control_id', $pto_control['id'])
             ->where('tipo','E')
              ->whereBetween('fecha', [$fecha_inicio_str, $fecha_fin_str])
-            ->where('fecha', '>=', $fecha_esperado_str)
+            ->where('fecha', '>=', $tiempoEsperado->format('Y-m-d\TH:i:s.vP'))
             ->orderBy('fecha', 'asc')
             ->first();
         if (!$punto) {
@@ -28,7 +30,6 @@ class FunctionsHelper
 
         // Convertir fechas a Carbon
         $fechaRecorrido = Carbon::parse($punto->fecha);
-        $tiempoEsperado = Carbon::instance($pto_control['tiempo_esperado']->toDateTime())->addHours(5)->setTimezone('America/Guayaquil');
         // Calcular diferencia en segundos
         $diferenciaSegundos =$tiempoEsperado->diffInSeconds($fechaRecorrido, false); // false = puede ser negativo
         // Determinar símbolo
