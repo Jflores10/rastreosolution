@@ -17,7 +17,7 @@ class FunctionsHelper
         ->setTimezone('America/Guayaquil');
 
         // Buscar el punto recorrido que cumpla condiciones
-        $puntos = PuntosRecorrido::where('unidad_id', $unidad_id)
+        $query  = PuntosRecorrido::where('unidad_id', $unidad_id)
             ->where('pto_control_id', $pto_control['id'])
             ->whereBetween('fecha', [$fecha_inicio_str, $fecha_fin_str]);
         
