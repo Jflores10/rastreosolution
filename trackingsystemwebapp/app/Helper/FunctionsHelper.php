@@ -7,7 +7,7 @@ use Carbon\Carbon;
 use MongoDB\BSON\UTCDateTime;
 class FunctionsHelper
 {
-    public static function diferenciaPuntoRecorrido($pto_control, $unidad_id, $fecha_inicio, $fecha_fin)
+    public static function diferenciaPuntoRecorrido($pto_control, $unidad_id, $fecha_inicio, $fecha_fin, $index)
     {
 
         $fecha_inicio_str = Carbon::parse($fecha_inicio, 'America/Guayaquil')->format('Y-m-d\TH:i:s.vP');
@@ -19,9 +19,13 @@ class FunctionsHelper
         // Buscar el punto recorrido que cumpla condiciones
         $puntos = PuntosRecorrido::where('unidad_id', $unidad_id)
             ->where('pto_control_id', $pto_control['id'])
-            ->where('tipo', 'E')
-            ->whereBetween('fecha', [$fecha_inicio_str, $fecha_fin_str])
-            ->get();
+            ->whereBetween('fecha', [$fecha_inicio_str, $fecha_fin_str]);
+        
+        if ($index != 0) {
+            $query->where('tipo', 'E');
+        }
+
+        $puntos = $query->get();
 
         if ($puntos->isEmpty()) {
             return null;

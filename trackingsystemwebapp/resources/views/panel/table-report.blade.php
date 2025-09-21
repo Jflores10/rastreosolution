@@ -71,7 +71,8 @@
                                             $punto_control,
                                             $despacho->unidad_id,
                                             $despacho->fecha->addHours(5),
-                                            $despacho->fecha_culminacion['date']
+                                            $despacho->fecha_culminacion['date'],
+                                            $loop->index
                                         );
                                     @endphp
                                 @endif
@@ -132,7 +133,8 @@
                                             $punto_control,
                                             $despacho->unidad_id,
                                             $despacho->fecha->addHours(5),
-                                            $despacho->fecha_culminacion['date']
+                                            $despacho->fecha_culminacion['date'],
+                                            $loop->index
                                         );
                                     $valor = 0;
                                     if(isset($marcaptorecorrido1) && $marcaptorecorrido1->estado === 'n'){
