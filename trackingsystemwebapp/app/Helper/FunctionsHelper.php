@@ -17,16 +17,20 @@ class FunctionsHelper
         ->setTimezone('America/Guayaquil');
 
         // Buscar el punto recorrido que cumpla condiciones
-        $punto = PuntosRecorrido::where('unidad_id', $unidad_id)
+        $puntos = PuntosRecorrido::where('unidad_id', $unidad_id)
             ->where('pto_control_id', $pto_control['id'])
-            ->where('tipo','E')
-             ->whereBetween('fecha', [$fecha_inicio_str, $fecha_fin_str])
-            ->where('fecha', '>=', $tiempoEsperado->format('Y-m-d\TH:i:s.vP'))
-            ->orderBy('fecha', 'asc')
-            ->first();
-        if (!$punto) {
-            return null; 
+            ->where('tipo', 'E')
+            ->whereBetween('fecha', [$fecha_inicio_str, $fecha_fin_str])
+            ->get();
+
+        if ($puntos->isEmpty()) {
+            return null;
         }
+
+        $punto = $puntos->sortBy(function ($item) use ($tiempoEsperado) {
+        return abs(Carbon::parse($item->fecha)->diffInSeconds($tiempoEsperado, false));
+        })->first();
+
 
         // Convertir fechas a Carbon
         $fechaRecorrido = Carbon::parse($punto->fecha);
