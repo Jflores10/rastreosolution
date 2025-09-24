@@ -94,13 +94,13 @@ class RecorridoController extends Controller
 
         $fecha_actual = Carbon::now();
 
-        
+        $margen = 10;
         foreach ($puntos as $punto) {
             // Calcular distancia al punto de control
             $distancia = $this->haversine($lat, $lon, $punto->latitud, $punto->longitud);
 
             // Estado actual: 'E' dentro del radio, 'S' fuera
-            $estadoActual = ($distancia <= $punto->radio) ? 'E' : 'S';
+            $estadoActual = ($distancia <= ($punto->radio + $margen)) ? 'E' : 'S';
 
             // Consultar solo el último registro de este punto para esta unidad
             $ultimo = PuntosRecorrido::where('unidad_id', $unidad->_id)
