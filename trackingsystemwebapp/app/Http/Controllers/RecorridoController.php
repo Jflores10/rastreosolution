@@ -12,7 +12,7 @@ use App\Unidad; // Modelo donde está el IMEI
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use MongoDB\BSON\UTCDateTime;
-
+use Illuminate\Support\Facades\Cache;
 class RecorridoController extends Controller
 {
 
@@ -55,12 +55,12 @@ class RecorridoController extends Controller
     }
 
 
-    
+        
     public function notify(Request $request)
     {
         $data = $request->only(['latitud', 'longitud', 'imei']);
 
-        // Validación de datos
+            // Validación de datos
         $validator = Validator::make($data, [
             'latitud'  => 'required|numeric',
             'longitud' => 'required|numeric',
@@ -75,7 +75,7 @@ class RecorridoController extends Controller
         $lon = $data['longitud'];
         $imei = $data['imei'];
 
-        // Buscar la unidad
+            // Buscar la unidad
         $unidad = Unidad::where('imei', $imei)->first();
         if (!$unidad) {
             return;
@@ -86,59 +86,48 @@ class RecorridoController extends Controller
             return;
         }
 
-        // Traer todos los puntos de control de la cooperativa
+            // Traer todos los puntos de control de la cooperativa
         $puntos = PuntoControl::where('cooperativa_id', $cooperativa->_id)->get();
         if ($puntos->isEmpty()) {
             return;
         }
 
-         $ultimos = PuntosRecorrido::where('unidad_id', $unidad->_id)
-            ->whereIn('pto_control_id', $puntos->pluck('_id')->toArray()) // en 5.3 hay que forzar a array
-            ->orderBy('fecha', 'desc')
-            ->get()
-            ->groupBy('pto_control_id');
-
-
         $fecha_actual = Carbon::now();
 
         foreach ($puntos as $punto) {
 
-            // Distancia desde la unidad al punto de control
+                // Distancia desde la unidad al punto de control
             $distancia = $this->haversine($lat, $lon, $punto->latitud, $punto->longitud);
-            $inside = $distancia <= $punto->radio;
+            $inside = $distancia <= ($punto->radio + 5);
 
-            // Último registro de este punto de control
-            $ultimo = PuntosRecorrido::where('unidad_id', $unidad->_id)
-                ->where('pto_control_id', $punto->_id)
-                ->latest('fecha')
-                ->first();
+                 // Cache en Laravel 5.3 (usando file/redis/memcached según config)
+            $cacheKey = "estado:{$unidad->_id}:{$punto->_id}";
+            $estadoAnterior = Cache::get($cacheKey, 'S'); // default fuera
 
-            if ($inside) {
-                // Registrar entrada solo si no hay último registro o el último fue salida
-                if (!$ultimo || $ultimo->tipo === 'S') {
-                    PuntosRecorrido::create([
-                        'unidad_id'     => $unidad->_id,
-                        'pto_control_id'=> $punto->_id,
-                        'latitud'       => $lat,
-                        'longitud'      => $lon,
-                        'fecha'         => new UTCDateTime($fecha_actual->timestamp * 1000),
-                        'tipo'          => 'E'
-                    ]);
-                  
-                }
-            } else {
-                // Registrar salida solo si el último registro fue entrada
-                if ($ultimo && $ultimo->tipo === 'E') {
-                    PuntosRecorrido::create([
-                        'unidad_id'     => $unidad->_id,
-                        'pto_control_id'=> $punto->_id,
-                        'latitud'       => $lat,
-                        'longitud'      => $lon,
-                        'fecha'         => new UTCDateTime($fecha_actual->timestamp * 1000),
-                        'tipo'          => 'S'
-                    ]);
-                   
-                }
+            if ($inside && $estadoAnterior === 'S') {
+                    // Entrada
+                PuntosRecorrido::create([
+                    'unidad_id'      => $unidad->_id,
+                    'pto_control_id' => $punto->_id,
+                    'latitud'        => $lat,
+                    'longitud'       => $lon,
+                    'fecha'          => new UTCDateTime($fecha_actual->timestamp * 1000),
+                    'tipo'           => 'E'
+                ]);
+                Cache::put($cacheKey, 'E', 0);
+            }
+
+            if (!$inside && $estadoAnterior === 'E') {
+                    // Salida
+                PuntosRecorrido::create([
+                    'unidad_id'      => $unidad->_id,
+                    'pto_control_id' => $punto->_id,
+                    'latitud'        => $lat,
+                    'longitud'       => $lon,
+                    'fecha'          => new UTCDateTime($fecha_actual->timestamp * 1000),
+                    'tipo'           => 'S'
+                ]);
+                Cache::put($cacheKey, 'S', 0);
             }
         }
 
