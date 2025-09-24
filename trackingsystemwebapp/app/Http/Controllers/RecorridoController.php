@@ -99,19 +99,22 @@ class RecorridoController extends Controller
             // --- Distancia al punto de control
             $distancia = $this->haversine($lat, $lon, $punto->latitud, $punto->longitud);
 
-            // --- Márgenes de tolerancia para entrada/salida
-            $margenEntrada = $punto->radio + 5; // más permisivo
-            $margenSalida  = $punto->radio - 5; // más estricto
+            $margenEntrada = $punto->radio + 5;
+            $margenSalida  = $punto->radio - 5;
 
             $inside = false;
             if ($distancia <= $margenEntrada) $inside = true;
-            if ($distancia >= $margenSalida) $inside = false;
+            if ($distancia >= $margenSalida)  $inside = false;
 
-            // --- Cache por punto de control usando Redis
-            $cacheKey = "estado:{$unidad->_id}:{$punto->_id}";
-              $estadoAnterior = Cache::get($cacheKey, 'S'); // por defecto fuera
+            // --- Último registro en base de datos
+            $ultimo = PuntosRecorrido::where('unidad_id', $unidad->_id)
+                ->where('pto_control_id', $punto->_id)
+                ->latest('fecha')
+                ->first();
 
-            // --- Entrada: estaba fuera y ahora dentro
+            $estadoAnterior = $ultimo ? $ultimo->tipo : 'S';
+
+            // --- Registrar solo si hay cambio de estado
             if ($inside && $estadoAnterior === 'S') {
                 PuntosRecorrido::create([
                     'unidad_id'      => $unidad->_id,
@@ -121,10 +124,8 @@ class RecorridoController extends Controller
                     'fecha'          => new UTCDateTime($fecha_actual->timestamp * 1000),
                     'tipo'           => 'E'
                 ]);
-                 Cache::put($cacheKey, 'E', 0); // sin expiración
             }
 
-            // --- Salida: estaba dentro y ahora fuera
             if (!$inside && $estadoAnterior === 'E') {
                 PuntosRecorrido::create([
                     'unidad_id'      => $unidad->_id,
@@ -134,10 +135,8 @@ class RecorridoController extends Controller
                     'fecha'          => new UTCDateTime($fecha_actual->timestamp * 1000),
                     'tipo'           => 'S'
                 ]);
-                 Cache::put($cacheKey, 'S', 0);
             }
 
-            // --- Debug opcional
             \Log::info("Unidad {$unidad->_id}, Punto {$punto->_id}, Distancia={$distancia}, Inside=".($inside?'E':'S').", EstadoAnterior={$estadoAnterior}");
         }
 
