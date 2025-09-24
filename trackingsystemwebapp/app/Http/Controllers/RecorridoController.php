@@ -130,7 +130,7 @@ class RecorridoController extends Controller
                 'pto_control_id' => $punto->_id,
                 'latitud'        => $lat,
                 'longitud'       => $lon,
-                'fecha'          => $fecha_actual, 
+                'fecha'          => new UTCDateTime($fecha_actual->getTimestampMs()), 
                 'tipo'           => $tipo
                 
             ]);
