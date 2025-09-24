@@ -10,9 +10,11 @@ class PuntosRecorrido extends Moloquent
     protected $collection = 'puntos_recorrido';
     
     protected $fillable = [
-        'latitud','longitud','unidad_id','pto_control_id',
-        'fecha','tipo'
+        'latitud','longitud','unidad_id','pto_control_id','tipo'
     ];
+
+    protected $dates = ['fecha'];
+
   
 
     public function unidad()
