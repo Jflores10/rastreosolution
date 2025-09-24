@@ -57,7 +57,7 @@ class RecorridoController extends Controller
     
     public function notify(Request $request)
     {
-        $data = $request->all();
+        $data = $request->only(['latitud', 'longitud', 'imei']);
 
         // Validación de datos
         $validator = Validator::make($data, [
@@ -87,8 +87,18 @@ class RecorridoController extends Controller
 
         // Traer todos los puntos de control de la cooperativa
         $puntos = PuntoControl::where('cooperativa_id', $cooperativa->_id)->get();
+        if ($puntos->isEmpty()) {
+            return;
+        }
 
-        $fecha_actual = Carbon::now()->format('Y-m-d\TH:i:s.vP');
+         $ultimos = PuntosRecorrido::where('unidad_id', $unidad->_id)
+            ->whereIn('pto_control_id', $puntos->pluck('_id')->toArray()) 
+            ->orderBy('fecha', 'desc')
+            ->get()
+            ->groupBy('pto_control_id');
+
+
+        $fecha_actual = Carbon::now();
 
         foreach ($puntos as $punto) {
 
@@ -96,39 +106,33 @@ class RecorridoController extends Controller
             $distancia = $this->haversine($lat, $lon, $punto->latitud, $punto->longitud);
             $inside = $distancia <= $punto->radio;
 
-            // Último registro de este punto de control
-            $ultimo = PuntosRecorrido::where('unidad_id', $unidad->_id)
-                ->where('pto_control_id', $punto->_id)
-                ->latest('fecha')
-                ->first();
+            $ultimo = isset($ultimos[$punto->_id]) ? $ultimos[$punto->_id]->first() : null;
 
-            if ($inside) {
-                // Registrar entrada solo si no hay último registro o el último fue salida
-                if (!$ultimo || $ultimo->tipo === 'S') {
-                    PuntosRecorrido::create([
-                        'unidad_id'     => $unidad->_id,
-                        'pto_control_id'=> $punto->_id,
-                        'latitud'       => $lat,
-                        'longitud'      => $lon,
-                        'fecha'         => $fecha_actual,
-                        'tipo'          => 'E'
-                    ]);
-                  
-                }
-            } else {
-                // Registrar salida solo si el último registro fue entrada
-                if ($ultimo && $ultimo->tipo === 'E') {
-                    PuntosRecorrido::create([
-                        'unidad_id'     => $unidad->_id,
-                        'pto_control_id'=> $punto->_id,
-                        'latitud'       => $lat,
-                        'longitud'      => $lon,
-                        'fecha'         => $fecha_actual,
-                        'tipo'          => 'S'
-                    ]);
-                   
-                }
+            // Evitar registros duplicados si ya está en el mismo estado
+            if ($inside && $ultimo && $ultimo->tipo === 'E') {
+                continue; // ya dentro
             }
+            if (!$inside && $ultimo && $ultimo->tipo === 'S') {
+                continue; // ya fuera
+            }
+
+            // Anti-rebote: tiempo mínimo entre registros
+            $minSegundos = 5;
+            if ($ultimo && $fecha_actual->diffInSeconds(\Carbon\Carbon::parse($ultimo->fecha)) < $minSegundos) {
+                continue;
+            }
+
+            // Registrar nuevo evento
+            $tipo = $inside ? 'E' : 'S';
+
+            PuntosRecorrido::create([
+                'unidad_id'      => $unidad->_id,
+                'pto_control_id' => $punto->_id,
+                'latitud'        => $lat,
+                'longitud'       => $lon,
+                'fecha'          => $fecha_actual, 
+                'tipo'           => $tipo
+            ]);
         }
 
     }
