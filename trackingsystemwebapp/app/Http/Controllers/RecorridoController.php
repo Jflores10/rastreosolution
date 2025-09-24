@@ -12,6 +12,7 @@ use App\Unidad; // Modelo donde está el IMEI
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use MongoDB\BSON\UTCDateTime;
+
 class RecorridoController extends Controller
 {
 
@@ -92,7 +93,7 @@ class RecorridoController extends Controller
         }
 
          $ultimos = PuntosRecorrido::where('unidad_id', $unidad->_id)
-            ->whereIn('pto_control_id', $puntos->pluck('_id')->toArray()) 
+            ->whereIn('pto_control_id', $puntos->pluck('_id')->toArray()) // en 5.3 hay que forzar a array
             ->orderBy('fecha', 'desc')
             ->get()
             ->groupBy('pto_control_id');
@@ -106,34 +107,39 @@ class RecorridoController extends Controller
             $distancia = $this->haversine($lat, $lon, $punto->latitud, $punto->longitud);
             $inside = $distancia <= $punto->radio;
 
-            $ultimo = isset($ultimos[$punto->_id]) ? $ultimos[$punto->_id]->first() : null;
+            // Último registro de este punto de control
+            $ultimo = PuntosRecorrido::where('unidad_id', $unidad->_id)
+                ->where('pto_control_id', $punto->_id)
+                ->latest('fecha')
+                ->first();
 
-            // Evitar registros duplicados si ya está en el mismo estado
-            if ($inside && $ultimo && $ultimo->tipo === 'E') {
-                continue; // ya dentro
+            if ($inside) {
+                // Registrar entrada solo si no hay último registro o el último fue salida
+                if (!$ultimo || $ultimo->tipo === 'S') {
+                    PuntosRecorrido::create([
+                        'unidad_id'     => $unidad->_id,
+                        'pto_control_id'=> $punto->_id,
+                        'latitud'       => $lat,
+                        'longitud'      => $lon,
+                        'fecha'         => new UTCDateTime($fecha_actual->timestamp * 1000),
+                        'tipo'          => 'E'
+                    ]);
+                  
+                }
+            } else {
+                // Registrar salida solo si el último registro fue entrada
+                if ($ultimo && $ultimo->tipo === 'E') {
+                    PuntosRecorrido::create([
+                        'unidad_id'     => $unidad->_id,
+                        'pto_control_id'=> $punto->_id,
+                        'latitud'       => $lat,
+                        'longitud'      => $lon,
+                        'fecha'         => new UTCDateTime($fecha_actual->timestamp * 1000),
+                        'tipo'          => 'S'
+                    ]);
+                   
+                }
             }
-            if (!$inside && $ultimo && $ultimo->tipo === 'S') {
-                continue; // ya fuera
-            }
-
-            // Anti-rebote: tiempo mínimo entre registros
-            $minSegundos = 5;
-            if ($ultimo && $fecha_actual->diffInSeconds(Carbon::parse($ultimo->fecha)) < $minSegundos) {
-                continue;
-            }
-
-            // Registrar nuevo evento
-            $tipo = $inside ? 'E' : 'S';
-
-            PuntosRecorrido::create([
-                'unidad_id'      => $unidad->_id,
-                'pto_control_id' => $punto->_id,
-                'latitud'        => $lat,
-                'longitud'       => $lon,
-                'fecha'          => new UTCDateTime($fecha_actual->timestamp * 1000),
-                'tipo'           => $tipo
-                
-            ]);
         }
 
     }
