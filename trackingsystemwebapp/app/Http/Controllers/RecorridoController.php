@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use MongoDB\BSON\UTCDateTime;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Redis;
 class RecorridoController extends Controller
 {
 
@@ -96,17 +97,23 @@ class RecorridoController extends Controller
 
         foreach ($puntos as $punto) {
 
-                // Distancia desde la unidad al punto de control
+            // --- Distancia al punto de control
             $distancia = $this->haversine($lat, $lon, $punto->latitud, $punto->longitud);
-            $inside = $distancia <= ($punto->radio + 5);
 
-                 // Cache en Laravel 5.3 (usando file/redis/memcached según config)
+            // --- Márgenes de tolerancia para entrada/salida
+            $margenEntrada = $punto->radio + 5; // más permisivo
+            $margenSalida  = $punto->radio - 5; // más estricto
+
+            $inside = false;
+            if ($distancia <= $margenEntrada) $inside = true;
+            if ($distancia >= $margenSalida) $inside = false;
+
+            // --- Cache por punto de control usando Redis
             $cacheKey = "estado:{$unidad->_id}:{$punto->_id}";
-            $estadoAnterior = Cache::get($cacheKey, 'S'); // default fuera
-\Log::info("Unidad {$unidad->_id}, Punto {$punto->_id}, Distancia={$distancia}, Inside=".($inside?'SI':'NO').", EstadoAnterior={$estadoAnterior}");
+            $estadoAnterior = Cache::store('redis')->get($cacheKey) ?: 'S'; // default fuera
 
+            // --- Entrada: estaba fuera y ahora dentro
             if ($inside && $estadoAnterior === 'S') {
-                    // Entrada
                 PuntosRecorrido::create([
                     'unidad_id'      => $unidad->_id,
                     'pto_control_id' => $punto->_id,
@@ -115,11 +122,11 @@ class RecorridoController extends Controller
                     'fecha'          => new UTCDateTime($fecha_actual->timestamp * 1000),
                     'tipo'           => 'E'
                 ]);
-                Cache::put($cacheKey, 'E', 0);
+                Cache::store('redis')->put($cacheKey, 'E', 0);
             }
 
+            // --- Salida: estaba dentro y ahora fuera
             if (!$inside && $estadoAnterior === 'E') {
-                    // Salida
                 PuntosRecorrido::create([
                     'unidad_id'      => $unidad->_id,
                     'pto_control_id' => $punto->_id,
@@ -128,8 +135,11 @@ class RecorridoController extends Controller
                     'fecha'          => new UTCDateTime($fecha_actual->timestamp * 1000),
                     'tipo'           => 'S'
                 ]);
-                Cache::put($cacheKey, 'S', 0);
+                Cache::store('redis')->put($cacheKey, 'S', 0);
             }
+
+            // --- Debug opcional
+            \Log::info("Unidad {$unidad->_id}, Punto {$punto->_id}, Distancia={$distancia}, Inside=".($inside?'E':'S').", EstadoAnterior={$estadoAnterior}");
         }
 
     }
