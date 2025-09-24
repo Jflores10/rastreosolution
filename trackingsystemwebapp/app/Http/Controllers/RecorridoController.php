@@ -103,6 +103,7 @@ class RecorridoController extends Controller
                  // Cache en Laravel 5.3 (usando file/redis/memcached según config)
             $cacheKey = "estado:{$unidad->_id}:{$punto->_id}";
             $estadoAnterior = Cache::get($cacheKey, 'S'); // default fuera
+\Log::info("Unidad {$unidad->_id}, Punto {$punto->_id}, Distancia={$distancia}, Inside=".($inside?'SI':'NO').", EstadoAnterior={$estadoAnterior}");
 
             if ($inside && $estadoAnterior === 'S') {
                     // Entrada
