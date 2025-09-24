@@ -11,7 +11,7 @@ use App\PuntosRecorrido;
 use App\Unidad; // Modelo donde está el IMEI
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
-use MongoDB\BSON\UTCDateTime;   
+
 class RecorridoController extends Controller
 {
 
@@ -91,16 +91,22 @@ class RecorridoController extends Controller
             return;
         }
 
+         $ultimos = PuntosRecorrido::where('unidad_id', $unidad->_id)
+            ->whereIn('pto_control_id', $puntos->pluck('_id')->toArray()) 
+            ->orderBy('fecha', 'desc')
+            ->get()
+            ->groupBy('pto_control_id');
+
+
         $fecha_actual = Carbon::now();
 
         foreach ($puntos as $punto) {
+
+            // Distancia desde la unidad al punto de control
             $distancia = $this->haversine($lat, $lon, $punto->latitud, $punto->longitud);
             $inside = $distancia <= $punto->radio;
-           // Último evento de esta unidad en este punto
-            $ultimo = PuntosRecorrido::where('unidad_id', $unidad->_id)
-                ->where('pto_control_id', $punto->_id)
-                ->orderBy('fecha', 'desc')
-                ->first();
+
+            $ultimo = isset($ultimos[$punto->_id]) ? $ultimos[$punto->_id]->first() : null;
 
             // Evitar registros duplicados si ya está en el mismo estado
             if ($inside && $ultimo && $ultimo->tipo === 'E') {
@@ -110,23 +116,21 @@ class RecorridoController extends Controller
                 continue; // ya fuera
             }
 
-            // Anti-rebote: tiempo mínimo entre registros SOLO para el mismo punto y tipo
+            // Anti-rebote: tiempo mínimo entre registros
             $minSegundos = 5;
-            if ($ultimo && $ultimo->tipo === ($inside ? 'E' : 'S') &&
-                $fecha_actual->diffInSeconds(Carbon::parse($ultimo->fecha)) < $minSegundos) {
+            if ($ultimo && $fecha_actual->diffInSeconds(Carbon::parse($ultimo->fecha)) < $minSegundos) {
                 continue;
             }
 
             // Registrar nuevo evento
             $tipo = $inside ? 'E' : 'S';
 
-
             PuntosRecorrido::create([
                 'unidad_id'      => $unidad->_id,
                 'pto_control_id' => $punto->_id,
                 'latitud'        => $lat,
                 'longitud'       => $lon,
-                'fecha'          => new UTCDateTime($fecha_actual->timestamp * 1000), 
+                'fecha'          => new UTCDateTime($fecha_actual->timestamp * 1000),
                 'tipo'           => $tipo
                 
             ]);
