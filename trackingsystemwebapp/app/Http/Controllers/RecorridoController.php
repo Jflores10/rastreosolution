@@ -11,7 +11,7 @@ use App\PuntosRecorrido;
 use App\Unidad; // Modelo donde está el IMEI
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
-
+use MongoDB\BSON\UTCDateTime;   
 class RecorridoController extends Controller
 {
 
@@ -125,7 +125,7 @@ class RecorridoController extends Controller
                 'pto_control_id' => $punto->_id,
                 'latitud'        => $lat,
                 'longitud'       => $lon,
-                'fecha'          => $fecha_actual, 
+                'fecha'          => new UTCDateTime($fecha_actual->timestamp * 1000), 
                 'tipo'           => $tipo
                 
             ]);
