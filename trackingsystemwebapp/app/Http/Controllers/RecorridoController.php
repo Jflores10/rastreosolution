@@ -93,52 +93,50 @@ class RecorridoController extends Controller
         }
 
         $fecha_actual = Carbon::now();
+          // --- Traer todos los últimos registros de la unidad en una sola consulta
+    $ultimosRegistros = PuntosRecorrido::where('unidad_id', $unidad->_id)
+        ->orderBy('fecha', 'desc')
+        ->get()
+        ->groupBy('pto_control_id')
+        ->map(function ($registros) {
+            return $registros->first();
+        });
 
-        foreach ($puntos as $punto) {
+    foreach ($puntos as $punto) {
+        // --- Distancia real al punto
+        $distancia = $this->haversine($lat, $lon, $punto->latitud, $punto->longitud);
 
-            // --- Distancia al punto de control
-            $distancia = $this->haversine($lat, $lon, $punto->latitud, $punto->longitud);
+        // Margen dinámico según el radio del punto
+        $margenEntrada = $punto->radio + 5; // dentro
+        $margenSalida  = $punto->radio - 5; // fuera
 
-            $margenEntrada = $punto->radio + 5;
-            $margenSalida  = $punto->radio - 5;
-
-            $inside = false;
-            if ($distancia <= $margenEntrada) $inside = true;
-            if ($distancia >= $margenSalida)  $inside = false;
-
-            // --- Último registro en base de datos
-            $ultimo = PuntosRecorrido::where('unidad_id', $unidad->_id)
-                ->where('pto_control_id', $punto->_id)
-                ->latest('fecha')
-                ->first();
-
-            $estadoAnterior = $ultimo ? $ultimo->tipo : 'S';
-
-            // --- Registrar solo si hay cambio de estado
-            if ($inside && $estadoAnterior === 'S') {
-                PuntosRecorrido::create([
-                    'unidad_id'      => $unidad->_id,
-                    'pto_control_id' => $punto->_id,
-                    'latitud'        => $lat,
-                    'longitud'       => $lon,
-                    'fecha'          => new UTCDateTime($fecha_actual->timestamp * 1000),
-                    'tipo'           => 'E'
-                ]);
-            }
-
-            if (!$inside && $estadoAnterior === 'E') {
-                PuntosRecorrido::create([
-                    'unidad_id'      => $unidad->_id,
-                    'pto_control_id' => $punto->_id,
-                    'latitud'        => $lat,
-                    'longitud'       => $lon,
-                    'fecha'          => new UTCDateTime($fecha_actual->timestamp * 1000),
-                    'tipo'           => 'S'
-                ]);
-            }
-
-            \Log::info("Unidad {$unidad->_id}, Punto {$punto->_id}, Distancia={$distancia}, Inside=".($inside?'E':'S').", EstadoAnterior={$estadoAnterior}");
+        // --- Estado actual según distancia
+        if ($distancia <= $margenSalida) {
+            $estadoActual = 'E'; // dentro
+        } elseif ($distancia >= $margenEntrada) {
+            $estadoActual = 'S'; // fuera
+        } else {
+            // Zona de transición: no cambiar estado aún
+            $estadoActual = null;
         }
+
+        $ultimo = isset($ultimosRegistros[$punto->_id]) ? $ultimosRegistros[$punto->_id] : null;
+        $estadoAnterior = $ultimo ? $ultimo->tipo : 'S';
+
+        // --- Registrar solo si hay cambio de estado válido
+        if ($estadoActual && $estadoActual !== $estadoAnterior) {
+            PuntosRecorrido::create([
+                'unidad_id'      => $unidad->_id,
+                'pto_control_id' => $punto->_id,
+                'latitud'        => $lat,
+                'longitud'       => $lon,
+                'fecha'          => new UTCDateTime($fecha_actual->timestamp * 1000),
+                'tipo'           => $estadoActual
+            ]);
+
+            \Log::info("Unidad {$unidad->_id}, Punto {$punto->_id}, Distancia={$distancia}, Cambio={$estadoAnterior}=>{$estadoActual}");
+        }
+    }
 
     }
 
