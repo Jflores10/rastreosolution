@@ -13,7 +13,6 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use MongoDB\BSON\UTCDateTime;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Redis;
 class RecorridoController extends Controller
 {
 
@@ -110,7 +109,7 @@ class RecorridoController extends Controller
 
             // --- Cache por punto de control usando Redis
             $cacheKey = "estado:{$unidad->_id}:{$punto->_id}";
-            $estadoAnterior = Cache::store('redis')->get($cacheKey) ?: 'S'; // default fuera
+              $estadoAnterior = Cache::get($cacheKey, 'S'); // por defecto fuera
 
             // --- Entrada: estaba fuera y ahora dentro
             if ($inside && $estadoAnterior === 'S') {
@@ -122,7 +121,7 @@ class RecorridoController extends Controller
                     'fecha'          => new UTCDateTime($fecha_actual->timestamp * 1000),
                     'tipo'           => 'E'
                 ]);
-                Cache::store('redis')->put($cacheKey, 'E', 0);
+                 Cache::put($cacheKey, 'E', 0); // sin expiración
             }
 
             // --- Salida: estaba dentro y ahora fuera
@@ -135,7 +134,7 @@ class RecorridoController extends Controller
                     'fecha'          => new UTCDateTime($fecha_actual->timestamp * 1000),
                     'tipo'           => 'S'
                 ]);
-                Cache::store('redis')->put($cacheKey, 'S', 0);
+                 Cache::put($cacheKey, 'S', 0);
             }
 
             // --- Debug opcional
