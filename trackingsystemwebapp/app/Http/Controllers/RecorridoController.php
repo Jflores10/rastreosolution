@@ -118,7 +118,7 @@ class RecorridoController extends Controller
 
             // Anti-rebote: tiempo mínimo entre registros
             $minSegundos = 5;
-            if ($ultimo && $fecha_actual->diffInSeconds(\Carbon\Carbon::parse($ultimo->fecha)) < $minSegundos) {
+            if ($ultimo && $fecha_actual->diffInSeconds(Carbon::parse($ultimo->fecha)) < $minSegundos) {
                 continue;
             }
 
@@ -132,6 +132,7 @@ class RecorridoController extends Controller
                 'longitud'       => $lon,
                 'fecha'          => $fecha_actual, 
                 'tipo'           => $tipo
+                
             ]);
         }
 
