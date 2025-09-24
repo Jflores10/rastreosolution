@@ -13,9 +13,7 @@ class PuntosRecorrido extends Moloquent
         'latitud','longitud','unidad_id','pto_control_id',
         'fecha','tipo'
     ];
-    protected $casts = [
-        'fecha' => 'datetime',
-    ];
+  
 
     public function unidad()
     {
