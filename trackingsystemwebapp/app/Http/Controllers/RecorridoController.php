@@ -11,7 +11,7 @@ use App\PuntosRecorrido;
 use App\Unidad; // Modelo donde está el IMEI
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
-
+use MongoDB\BSON\UTCDateTime;
 class RecorridoController extends Controller
 {
 
