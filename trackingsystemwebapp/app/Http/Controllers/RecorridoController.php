@@ -94,7 +94,8 @@ class RecorridoController extends Controller
         $fecha_actual = Carbon::now();
 
         foreach ($puntos as $punto) {
-
+            $distancia = $this->haversine($lat, $lon, $punto->latitud, $punto->longitud);
+            $inside = $distancia <= $punto->radio;
            // Último evento de esta unidad en este punto
             $ultimo = PuntosRecorrido::where('unidad_id', $unidad->_id)
                 ->where('pto_control_id', $punto->_id)
