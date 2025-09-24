@@ -94,50 +94,36 @@ class RecorridoController extends Controller
 
         $fecha_actual = Carbon::now();
 
+        
         foreach ($puntos as $punto) {
-
-            // --- Distancia al punto de control
+            // Calcular distancia al punto de control
             $distancia = $this->haversine($lat, $lon, $punto->latitud, $punto->longitud);
 
-            $margenEntrada = $punto->radio + 5;
-            $margenSalida  = $punto->radio - 5;
+            // Estado actual: 'E' dentro del radio, 'S' fuera
+            $estadoActual = ($distancia <= $punto->radio) ? 'E' : 'S';
 
-            $inside = false;
-            if ($distancia <= $margenEntrada) $inside = true;
-            if ($distancia >= $margenSalida)  $inside = false;
-
-            // --- Último registro en base de datos
+            // Consultar solo el último registro de este punto para esta unidad
             $ultimo = PuntosRecorrido::where('unidad_id', $unidad->_id)
                 ->where('pto_control_id', $punto->_id)
-                ->latest('fecha')
+                ->orderBy('fecha', 'desc')
                 ->first();
 
             $estadoAnterior = $ultimo ? $ultimo->tipo : 'S';
 
-            // --- Registrar solo si hay cambio de estado
-            if ($inside && $estadoAnterior === 'S') {
+            // Registrar solo si hubo cambio de estado
+            if ($estadoActual !== $estadoAnterior) {
                 PuntosRecorrido::create([
                     'unidad_id'      => $unidad->_id,
                     'pto_control_id' => $punto->_id,
                     'latitud'        => $lat,
                     'longitud'       => $lon,
+                    'aValue'         => $aValue,
                     'fecha'          => new UTCDateTime($fecha_actual->timestamp * 1000),
-                    'tipo'           => 'E'
+                    'tipo'           => $estadoActual
                 ]);
-            }
 
-            if (!$inside && $estadoAnterior === 'E') {
-                PuntosRecorrido::create([
-                    'unidad_id'      => $unidad->_id,
-                    'pto_control_id' => $punto->_id,
-                    'latitud'        => $lat,
-                    'longitud'       => $lon,
-                    'fecha'          => new UTCDateTime($fecha_actual->timestamp * 1000),
-                    'tipo'           => 'S'
-                ]);
+                \Log::info("Unidad {$unidad->_id}, Punto {$punto->_id}, Distancia={$distancia}, Cambio={$estadoAnterior}=>{$estadoActual}");
             }
-
-            \Log::info("Unidad {$unidad->_id}, Punto {$punto->_id}, Distancia={$distancia}, Inside=".($inside?'E':'S').", EstadoAnterior={$estadoAnterior}");
         }
 
     }
