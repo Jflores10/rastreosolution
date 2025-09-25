@@ -60,7 +60,7 @@ class RecorridoController extends Controller
     {
         $data = $request->only(['latitud', 'longitud', 'imei']);
 
-            // Validación de datos
+        // Validación de datos
         $validator = Validator::make($data, [
             'latitud'  => 'required|numeric',
             'longitud' => 'required|numeric',
@@ -74,8 +74,8 @@ class RecorridoController extends Controller
         $lat = $data['latitud'];
         $lon = $data['longitud'];
         $imei = $data['imei'];
-        
-            // Buscar la unidad
+
+        // Buscar la unidad
         $unidad = Unidad::where('imei', $imei)->first();
         if (!$unidad) {
             return;
@@ -86,31 +86,44 @@ class RecorridoController extends Controller
             return;
         }
 
-            // Traer todos los puntos de control de la cooperativa
+        // Traer puntos de control de la cooperativa
         $puntos = PuntoControl::where('cooperativa_id', $cooperativa->_id)->get();
         if ($puntos->isEmpty()) {
             return;
         }
-        
+
         $fecha_actual = Carbon::now();
-        $radio = 25; // radio en metros
-        $tiempo_min_entre_eventos = 5; // segundos mínimos entre eventos de un mismo punto
+        $tiempo_min_entre_eventos = 60; // segundos mínimos entre eventos
 
         foreach ($puntos as $punto) {
+            // Usar radio configurado o fallback al de la cooperativa
+            $radioBase = $punto->radio ?? $cooperativa->distancia_haversine;
+
+            // Definir radio de entrada y salida (histeresis)
+            $radioEntrada = $radioBase;        // para marcar "E"
+            $radioSalida  = $radioBase + 20;   // debe alejarse un poco más para marcar "S"
+
             $distancia = $this->haversine($lat, $lon, $punto->latitud, $punto->longitud);
 
-            $estadoActual = ($distancia <= $radio) ? 'E' : 'S';
-
+            // Último registro del bus en este punto
             $ultimo = PuntosRecorrido::where('unidad_id', $unidad->_id)
                 ->where('pto_control_id', $punto->_id)
                 ->orderBy('fecha', 'desc')
                 ->first();
 
-            $estadoAnterior = $ultimo ? $ultimo->tipo : 'S';
+            $estadoAnterior = $ultimo ? $ultimo->tipo : 'S'; // por defecto "S" (fuera)
             $tiempoDesdeUltimo = $ultimo ? $fecha_actual->diffInSeconds($ultimo->fecha) : null;
 
-            // Registrar cambio solo si hay cambio de estado y pasó suficiente tiempo desde el último evento
-            if ($estadoActual !== $estadoAnterior) {
+            // Determinar nuevo estado con tolerancia
+            $nuevoEstado = $estadoAnterior; // por defecto se mantiene
+            if ($estadoAnterior == 'S' && $distancia <= $radioEntrada) {
+                $nuevoEstado = 'E';
+            } elseif ($estadoAnterior == 'E' && $distancia > $radioSalida) {
+                $nuevoEstado = 'S';
+            }
+
+            // Guardar solo si cambió el estado y respetamos el tiempo mínimo
+            if ($nuevoEstado !== $estadoAnterior) {
                 if (!$ultimo || $tiempoDesdeUltimo === null || $tiempoDesdeUltimo >= $tiempo_min_entre_eventos) {
                     PuntosRecorrido::create([
                         'unidad_id'      => $unidad->_id,
@@ -118,22 +131,18 @@ class RecorridoController extends Controller
                         'latitud'        => $lat,
                         'longitud'       => $lon,
                         'fecha'          => new UTCDateTime($fecha_actual->timestamp * 1000),
-                        'tipo'           => $estadoActual
+                        'tipo'           => $nuevoEstado
                     ]);
 
-                    \Log::info("Cambio detectado: Unidad={$unidad->_id}, Punto={$punto->_id}, Distancia={$distancia}m, Estado: {$estadoAnterior} => {$estadoActual}");
+                    \Log::info("Cambio detectado: Unidad={$unidad->_id}, Punto={$punto->_id}, Distancia={$distancia}m, Estado: {$estadoAnterior} => {$nuevoEstado}");
                 }
             }
-
-            // Caso especial: si el bus está en varios radios de puntos de control al mismo tiempo,
-            // registramos cada punto de control de manera independiente.
         }
-
     }
 
     private function haversine($lat1, $lon1, $lat2, $lon2)
     {
-        $R = 6371000; // metros
+        $R = 6371000; // Radio de la tierra en metros
         $lat1 = deg2rad($lat1);
         $lon1 = deg2rad($lon1);
         $lat2 = deg2rad($lat2);
@@ -142,11 +151,11 @@ class RecorridoController extends Controller
         $dLat = $lat2 - $lat1;
         $dLon = $lon2 - $lon1;
 
-        $a = sin($dLat / 2) ** 2 +
-             cos($lat1) * cos($lat2) *
-             sin($dLon / 2) ** 2;
+        $a = sin($dLat/2) * sin($dLat/2) +
+            cos($lat1) * cos($lat2) *
+            sin($dLon/2) * sin($dLon/2);
 
-        $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+        $c = 2 * atan2(sqrt($a), sqrt(1-$a));
 
         return $R * $c;
     }
