@@ -117,7 +117,6 @@ class RecorridoController extends Controller
                     'pto_control_id' => $punto->_id,
                     'latitud'        => $lat,
                     'longitud'       => $lon,
-                    'aValue'         => $aValue,
                     'fecha'          => new UTCDateTime($fecha_actual->timestamp * 1000),
                     'tipo'           => $estadoActual
                 ]);
