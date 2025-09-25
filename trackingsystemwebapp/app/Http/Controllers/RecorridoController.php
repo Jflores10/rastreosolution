@@ -91,55 +91,42 @@ class RecorridoController extends Controller
         if ($puntos->isEmpty()) {
             return;
         }
-
+        
         $fecha_actual = Carbon::now();
+        $radio = 25; // radio en metros
+        $tiempo_min_entre_eventos = 5; // segundos mínimos entre eventos de un mismo punto
 
-        $margen = 3; // metros
         foreach ($puntos as $punto) {
-            // Calcular distancia al punto (Haversine)
             $distancia = $this->haversine($lat, $lon, $punto->latitud, $punto->longitud);
 
-            // Estado actual
-            $estadoActual = ($distancia <= ($punto->radio + $margen)) ? 'E' : 'S';
+            $estadoActual = ($distancia <= $radio) ? 'E' : 'S';
 
-            // Último registro de este punto para esta unidad
             $ultimo = PuntosRecorrido::where('unidad_id', $unidad->_id)
                 ->where('pto_control_id', $punto->_id)
                 ->orderBy('fecha', 'desc')
                 ->first();
 
             $estadoAnterior = $ultimo ? $ultimo->tipo : 'S';
+            $tiempoDesdeUltimo = $ultimo ? $fecha_actual->diffInSeconds($ultimo->fecha) : null;
 
-            // Evitar duplicados muy seguidos (ej. mismo evento en < 2 seg)
-            if ($ultimo && $estadoActual === $estadoAnterior) {
-                $segundos = $fecha_actual->diffInSeconds($ultimo->fecha->toDateTime());
-                if ($segundos < 2) {
-                    continue; // ignorar duplicado
-                }
-            }
-
-            // Registrar solo si hubo cambio de estado
+            // Registrar cambio solo si hay cambio de estado y pasó suficiente tiempo desde el último evento
             if ($estadoActual !== $estadoAnterior) {
-                $permanencia = null;
+                if (!$ultimo || $tiempoDesdeUltimo === null || $tiempoDesdeUltimo >= $tiempo_min_entre_eventos) {
+                    PuntosRecorrido::create([
+                        'unidad_id'      => $unidad->_id,
+                        'pto_control_id' => $punto->_id,
+                        'latitud'        => $lat,
+                        'longitud'       => $lon,
+                        'fecha'          => new UTCDateTime($fecha_actual->timestamp * 1000),
+                        'tipo'           => $estadoActual
+                    ]);
 
-                // Si sale, calcular permanencia desde la última entrada
-                if ($estadoActual === 'S' && $ultimo && $ultimo->tipo === 'E') {
-                    $permanencia = $fecha_actual->diffInSeconds($ultimo->fecha->toDateTime());
+                    \Log::info("Cambio detectado: Unidad={$unidad->_id}, Punto={$punto->_id}, Distancia={$distancia}m, Estado: {$estadoAnterior} => {$estadoActual}");
                 }
-
-                PuntosRecorrido::create([
-                    'unidad_id'      => $unidad->_id,
-                    'pto_control_id' => $punto->_id,
-                    'latitud'        => $lat,
-                    'longitud'       => $lon,
-                    'fecha'          => new UTCDateTime($fecha_actual->timestamp * 1000),
-                    'tipo'           => $estadoActual,
-                    'distancia'      => $distancia,
-                    'permanencia'    => $permanencia
-                ]);
-
-                \Log::info("Unidad {$unidad->_id}, Punto {$punto->_id}, Dist={$distancia}m, Cambio={$estadoAnterior}→{$estadoActual}, Permanencia={$permanencia}");
             }
+
+            // Caso especial: si el bus está en varios radios de puntos de control al mismo tiempo,
+            // registramos cada punto de control de manera independiente.
         }
 
     }
