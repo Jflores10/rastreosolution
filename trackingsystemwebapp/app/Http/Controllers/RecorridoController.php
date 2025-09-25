@@ -74,7 +74,7 @@ class RecorridoController extends Controller
         $lat = $data['latitud'];
         $lon = $data['longitud'];
         $imei = $data['imei'];
-        \Log::info("Lat: {$data['latitud']}, Lon: {$data['longitud']}, Unidad={$data['imei']}");
+        
             // Buscar la unidad
         $unidad = Unidad::where('imei', $imei)->first();
         if (!$unidad) {
@@ -94,15 +94,15 @@ class RecorridoController extends Controller
 
         $fecha_actual = Carbon::now();
 
-        $margen = 10;
+        $margen = 3; // metros
         foreach ($puntos as $punto) {
-            // Calcular distancia al punto de control
+            // Calcular distancia al punto (Haversine)
             $distancia = $this->haversine($lat, $lon, $punto->latitud, $punto->longitud);
 
-            // Estado actual: 'E' dentro del radio, 'S' fuera
+            // Estado actual
             $estadoActual = ($distancia <= ($punto->radio + $margen)) ? 'E' : 'S';
 
-            // Consultar solo el último registro de este punto para esta unidad
+            // Último registro de este punto para esta unidad
             $ultimo = PuntosRecorrido::where('unidad_id', $unidad->_id)
                 ->where('pto_control_id', $punto->_id)
                 ->orderBy('fecha', 'desc')
@@ -110,18 +110,35 @@ class RecorridoController extends Controller
 
             $estadoAnterior = $ultimo ? $ultimo->tipo : 'S';
 
+            // Evitar duplicados muy seguidos (ej. mismo evento en < 2 seg)
+            if ($ultimo && $estadoActual === $estadoAnterior) {
+                $segundos = $fecha_actual->diffInSeconds($ultimo->fecha->toDateTime());
+                if ($segundos < 2) {
+                    continue; // ignorar duplicado
+                }
+            }
+
             // Registrar solo si hubo cambio de estado
             if ($estadoActual !== $estadoAnterior) {
+                $permanencia = null;
+
+                // Si sale, calcular permanencia desde la última entrada
+                if ($estadoActual === 'S' && $ultimo && $ultimo->tipo === 'E') {
+                    $permanencia = $fecha_actual->diffInSeconds($ultimo->fecha->toDateTime());
+                }
+
                 PuntosRecorrido::create([
                     'unidad_id'      => $unidad->_id,
                     'pto_control_id' => $punto->_id,
                     'latitud'        => $lat,
                     'longitud'       => $lon,
                     'fecha'          => new UTCDateTime($fecha_actual->timestamp * 1000),
-                    'tipo'           => $estadoActual
+                    'tipo'           => $estadoActual,
+                    'distancia'      => $distancia,
+                    'permanencia'    => $permanencia
                 ]);
 
-                \Log::info("Unidad {$unidad->_id}, Punto {$punto->_id}, Distancia={$distancia}, Cambio={$estadoAnterior}=>{$estadoActual}");
+                \Log::info("Unidad {$unidad->_id}, Punto {$punto->_id}, Dist={$distancia}m, Cambio={$estadoAnterior}→{$estadoActual}, Permanencia={$permanencia}");
             }
         }
 
