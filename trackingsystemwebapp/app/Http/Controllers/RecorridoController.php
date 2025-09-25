@@ -97,7 +97,8 @@ class RecorridoController extends Controller
 
         foreach ($puntos as $punto) {
             // Usar radio configurado o fallback al de la cooperativa
-            $radioBase = $punto->radio ?? $cooperativa->distancia_haversine;
+            $radioBase = ($punto->radio && $punto->radio > 0) ? $punto->radio : 25;
+
 
             // Definir radio de entrada y salida (histeresis)
             $radioEntrada = $radioBase;        // para marcar "E"
