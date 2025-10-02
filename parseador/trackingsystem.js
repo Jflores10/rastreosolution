@@ -20,6 +20,9 @@ const GTDTT = 'GTDTT'; //TRAMA PUERTAS ADICIONALES GV300
 const GTDTTDGT = 'DGT'; //TRAMA PUERTAS ADICIONALES GV300 DGT
 const ADMIN = 'ADMIN';
 const GTLOG = 'GTLOG'; //TRAMA LOGS
+const GTGOT='GTGOT';
+const GTGIN='GTGIN';
+
 const ATM = '*ATM*';
 const DATE_FORMAT = 'YYYY-MM-DD HH:mm:ss';//Formato de fecha
 const DEVICE_DATE_FORMAT = 'YYYYMMDDHHmmss';//Format provenient from device
@@ -753,6 +756,81 @@ function onClientConnected(socket) {
                     }
                 }
             }
+            else if (!message.includes(ADMIN) && (message.includes(GTGOT) || message.includes(GTGIN)) && !message.includes(ACK)) {
+                let imei = 2;
+                let speed = 14;
+                let angle = 15;
+                let height = 16;
+                let longitude = 17;
+                let latitude = 18;
+                let datetime = 19;
+                let sentTime = 26;
+                let infoControlPoint=7;
+                let data = message.split(',');
+                const indiceval=20;
+
+                dbTrackingSystem.collection('unidads').findOne({
+                    imei: data[imei], estado: 'A'
+                }, function (err, document) {
+                    if (err) console.log(err);
+                    else if (document) {
+                        let pdi=indiceval+ parseInt(data[infoControlPoint], 10);
+                      
+                        var estado_movil = document.estado_movil;
+                        var latitud = toFloat(data[latitude]);
+                        var longitud = toFloat(data[longitude]);
+                        var fecha_servidor = new Date();
+                        var fecha_gps = (toInteger(data[datetime]) != 0) ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate() : new Date();
+
+                        if (latitud === 0 || longitud === 0) {
+                            estado_movil = 'E';
+                            latitud = document.latitud;
+                            longitud = document.longitud;
+                        }
+
+                        // Actualizar unidad
+                        dbTrackingSystem.collection('unidads').updateOne({ _id: document._id }, {
+                            $set: {
+                                latitud: latitud,
+                                longitud: longitud,
+                                estado_movil: estado_movil,
+                                velocidad_actual: toFloat(data[speed]),
+                                angulo: toInteger(data[angle]),
+                                fecha_gps: fecha_gps,
+                                is_atm: (message.includes(ATM) ? 1 : 0),
+                                fecha: fecha_servidor
+                            }
+                        });
+
+                        // Determinar si es entrada o salida
+                        let entrada = message.includes("GTGIN") ? 1 : 0;
+                        let origen = message.includes("GTGIN") ? "GTGIN" : "GTGOT";
+
+                        // Insertar recorrido transformando GTGIN/GTGOT a GTGEO
+                        dbTrackingSystem.collection('recorridos').insertOne({
+                            imei: data[imei],
+                            tipo: "GTGEO",   // Se unifican como GTGEO
+                            origen: origen,  // Guardar el identificador real: GTGIN o GTGOT
+                            unidad_id: document._id,
+                            pdi:pdi,
+                            entrada: entrada, // 1 = entrada, 0 = salida
+                            latitud: latitud,
+                            longitud: longitud,
+                            velocidad: toFloat(data[speed]),
+                            angulo: toInteger(data[angle]),
+                            altura: toFloat(data[height]),
+                            fecha_gps: fecha_gps,
+                            fecha: fecha_servidor,
+                            fecha_envio: (toInteger(data[sentTime]) != 0) ? moment(data[sentTime], DEVICE_DATE_FORMAT).toDate() : new Date(),
+                            contador_diario: document.contador_diario,
+                            contador_total: document.contador_total,
+                            js: true
+                        });
+                    }
+                });
+            }
+
+
             else if (!message.includes(ADMIN) && message.includes(GTGEO) && !message.includes(ACK))//If the message contains control points data
             {
                 let imei = 2;//Index for imei

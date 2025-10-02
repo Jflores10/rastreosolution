@@ -9,7 +9,7 @@ class PuntoControl extends Moloquent
     protected $fillable = [
         'descripcion','latitud','longitud','estado',
         'radio','creador_id', 'modificador_id','cooperativa_id','pdi', 'entrada', 'salida', 
-        'mt', 'estado_exportacion', 'fecha_exportacion','pdi_padre','activo','bloque'
+        'mt', 'estado_exportacion', 'fecha_exportacion','pdi_padre','activo','bloque','tipo_mar','poligono'
     ];
     protected $dates = [
         'fecha_exportacion'

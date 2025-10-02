@@ -39,19 +39,67 @@ function editarPuntoControl(url, tipo_usuario_valor, is_bloque=false)
 }
 */
 
+
+function drawPolygonOnMap(bloque, poligono) {
+    // limpiar polígono anterior si existe
+    if (polygon[bloque]) {
+        polygon[bloque].setMap(null);
+    }
+
+    // normalizar coordenadas: convertir string → float y quitar inválidas
+    var coords = poligono
+        .map(function (p) {
+            return {
+                lat: parseFloat(p.lat),
+                lng: parseFloat(p.lng)
+            };
+        })
+        .filter(function (p) {
+            return !isNaN(p.lat) && !isNaN(p.lng);
+        });
+
+    if (coords.length === 0) {
+        console.warn("⚠️ No hay coordenadas válidas para dibujar el polígono.");
+        return;
+    }
+
+    // crear y dibujar polígono
+    polygon[bloque] = new google.maps.Polygon({
+        paths: coords,
+        strokeColor: "#FF0000",
+        strokeOpacity: 0.8,
+        strokeWeight: 2,
+        fillColor: "#FF0000",
+        fillOpacity: 0.35,
+        editable: false,
+        map: map[bloque]
+    });
+
+    // calcular bounds del polígono
+    var bounds = new google.maps.LatLngBounds();
+    coords.forEach(function (p) {
+        bounds.extend(new google.maps.LatLng(p.lat, p.lng));
+    });
+
+    // 🔑 Esperar un poco para que el modal termine de abrir
+    setTimeout(function () {
+        google.maps.event.trigger(map[bloque], "resize");
+        map[bloque].fitBounds(bounds);
+        map[bloque].panTo(bounds.getCenter());
+    }, 300);
+}
+
+
+
 function editarPuntoControl(url, tipo_usuario_valor, is_bloque = false) {
     cleanForm2(tipo_usuario_valor,is_bloque);
     $.get(url, function (data) {
-
+        console.log(is_bloque)
         if (is_bloque === false || is_bloque === "false" || is_bloque == 0) {
             actual_id = data.punto_control._id;
             // ---------- BLOQUE 1 ----------
             $("#pdi").val(data.punto_control.pdi);
             $("#descripcion").val(data.punto_control.descripcion);
-            $("#latitud").val(data.punto_control.latitud);
-            $("#longitud").val(data.punto_control.longitud);
-            $("#radio").val(data.punto_control.radio);
-
             if (tipo_usuario_valor == 1) {
                 $("#cooperativa_id").val(data.punto_control.cooperativa_id);
             }
@@ -65,11 +113,30 @@ function editarPuntoControl(url, tipo_usuario_valor, is_bloque = false) {
             }
 
             // Mapa
-            let pos = { lat: parseFloat(data.punto_control.latitud), lng: parseFloat(data.punto_control.longitud) };
-            marker[1].setPosition(pos);
-            circle[1].setCenter(pos);
-            map[1].setCenter(pos);
-            circle[1].setRadius(parseFloat(data.punto_control.radio));
+            if (data.punto_control.tipo_mar == 2 ) {
+                $("input[name='tipo_mar'][value='2']").prop("checked", true).trigger("change");
+                data.punto_control.poligono.forEach(function (p, idx) {
+                    if (idx < 4) { // solo hasta 4 puntos
+                        $("#lat" + (idx+1)).val(p.lat);
+                        $("#lng" + (idx+1)).val(p.lng);
+                    }
+                });
+
+                drawPolygonOnMap(1, data.punto_control.poligono);
+            } else {
+                $("#latitud").val(data.punto_control.latitud);
+                $("#longitud").val(data.punto_control.longitud);
+                $("input[name='tipo_mar'][value='1']").prop("checked", true).trigger("change");
+
+                // Mapa normal con radio
+                let pos = { lat: parseFloat(data.punto_control.latitud), lng: parseFloat(data.punto_control.longitud) };
+                marker[1].setPosition(pos);
+                circle[1].setCenter(pos);
+                map[1].setCenter(pos);
+                circle[1].setRadius(parseFloat(data.punto_control.radio));
+                $("#radio").val(data.punto_control.radio);
+
+            }
 
         } else {
             actual_id = data.bloques[0].pdi_padre;
@@ -80,79 +147,111 @@ function editarPuntoControl(url, tipo_usuario_valor, is_bloque = false) {
             if (data.bloques && data.bloques[0]) {
                 $("#pdi").val(data.bloques[0].pdi_padre);
                 $("#descripcion").val(data.bloques[0].descripcion);
-                $("#latitud").val(data.bloques[0].latitud);
-                $("#longitud").val(data.bloques[0].longitud);
-
+                
                 $("#_id").val(data.bloques[0]._id);
 
-                let pos1 = { lat: parseFloat(data.bloques[0].latitud), lng: parseFloat(data.bloques[0].longitud) };
-                marker[1].setPosition(pos1);
-                circle[1].setCenter(pos1);
-                map[1].setCenter(pos1);
+                if (data.bloques[0].tipo_mar == 2 ) {
+                    $("input[name='tipo_mar'][value='2']").prop("checked", true).trigger("change");
+                    if (tipo_usuario_valor == 1) {
+                        $("#cooperativa_id").val(data.bloques[0].cooperativa_id);
+                        $("#cooperativa_id").trigger("change");
+                    }
 
-                if (tipo_usuario_valor == 1) {
-                    $("#cooperativa_id").val(data.bloques[0].cooperativa_id);
-                    $("#cooperativa_id").trigger("change");
-                }
+                    if (data.bloques[0].entrada && data.bloques[0].salida) {
+                        $("#otro").prop("checked", false).trigger("click");
+                        $("#entrada").val(data.bloques[0].entrada);
+                        $("#salida").val(data.bloques[0].salida);
+                    } else {
+                        $("#otro").prop("checked", true).trigger("click");
+                    }
 
-                if (data.bloques[0].entrada && data.bloques[0].salida) {
-                    $("#otro").prop("checked", false).trigger("click");
-                    $("#entrada").val(data.bloques[0].entrada);
-                    $("#salida").val(data.bloques[0].salida);
+                    data.bloques[0].poligono.forEach(function (p, idx) {
+                        if (idx < 4) {
+                            $("#lat" + (idx+1)).val(p.lat);
+                            $("#lng" + (idx+1)).val(p.lng);
+                        }
+                    });
+                    drawPolygonOnMap(1, data.bloques[0].poligono);
                 } else {
-                    $("#otro").prop("checked", true).trigger("click");
-                }
-                $("#radio").val(data.bloques[0].radio);
-                /*
-                $("input[name='dias[]']").prop("checked", false);
-                // Luego marcamos según la data que llega
-                if (data.bloques[0].l == 1) $("input[name='dias[]'][value='1']").prop("checked", true); // Lunes
-                if (data.bloques[0].m == 1) $("input[name='dias[]'][value='2']").prop("checked", true); // Martes
-                if (data.bloques[0].mi == 1) $("input[name='dias[]'][value='3']").prop("checked", true); // Miércoles
-                if (data.bloques[0].j == 1) $("input[name='dias[]'][value='4']").prop("checked", true); // Jueves
-                if (data.bloques[0].v == 1) $("input[name='dias[]'][value='5']").prop("checked", true); // Viernes
-                if (data.bloques[0].s == 1) $("input[name='dias[]'][value='6']").prop("checked", true); // Sábado
-                if (data.bloques[0].d == 1) $("input[name='dias[]'][value='7']").prop("checked", true); // Domingo
+                    $("#latitud").val(data.bloques[0].latitud);
+                    $("#longitud").val(data.bloques[0].longitud);
+                    $("input[name='tipo_mar'][value='1']").prop("checked", true).trigger("change");
+                    let pos1 = { lat: parseFloat(data.bloques[0].latitud), lng: parseFloat(data.bloques[0].longitud) };
+                    marker[1].setPosition(pos1);
+                    circle[1].setCenter(pos1);
+                    map[1].setCenter(pos1);
 
-                */
-                circle[1].setRadius(parseFloat(data.bloques[0].radio));
+                    if (tipo_usuario_valor == 1) {
+                        $("#cooperativa_id").val(data.bloques[0].cooperativa_id);
+                        $("#cooperativa_id").trigger("change");
+                    }
+
+                    if (data.bloques[0].entrada && data.bloques[0].salida) {
+                        $("#otro").prop("checked", false).trigger("click");
+                        $("#entrada").val(data.bloques[0].entrada);
+                        $("#salida").val(data.bloques[0].salida);
+                    } else {
+                        $("#otro").prop("checked", true).trigger("click");
+                    }
+                    $("#radio").val(data.bloques[0].radio);
+                
+                    circle[1].setRadius(parseFloat(data.bloques[0].radio));
+                }
+
+
+               
 
             }
             if (data.bloques && data.bloques[1]) {
                  // ---------- BLOQUE 2 ----------
                 $("#descripcion1").val(data.bloques[1].descripcion);
-                $("#latitud1").val(data.bloques[1].latitud);
-                $("#longitud1").val(data.bloques[1].longitud);
-
+               
                 $("#_id1").val(data.bloques[1]._id);
 
-               
-                let pos2 = { lat: parseFloat(data.bloques[1].latitud), lng: parseFloat(data.bloques[1].longitud) };
-                marker[2].setPosition(pos2);
-                circle[2].setCenter(pos2);
-                map[2].setCenter(pos2);
+                 if (data.bloques[1].tipo_mar == 2 ) {
+                    $("input[name='tipo_mar'][value='2']").prop("checked", true).trigger("change");
+                    data.bloques[1].poligono.forEach(function (p, idx) {
+                        if (idx < 4) {
+                            $("#lat" + (idx+1) + "_b2").val(p.lat);
+                            $("#lng" + (idx+1) + "_b2").val(p.lng);
+                        }
+                    });
+                    drawPolygonOnMap(2, data.bloques[1].poligono);
+                    
+                    if (data.bloques[1].entrada && data.bloques[1].salida) {
+                        $("#otro1").prop("checked", false).trigger("click");
+                        $("#entrada1").val(data.bloques[1].entrada);
+                        $("#salida1").val(data.bloques[1].salida);
+                    } else {
+                        $("#otro1").prop("checked", true).trigger("click");
+                    }
 
-                  if (data.bloques[1].entrada && data.bloques[1].salida) {
-                    $("#otro1").prop("checked", false).trigger("click");
-                    $("#entrada1").val(data.bloques[1].entrada);
-                    $("#salida1").val(data.bloques[1].salida);
                 } else {
-                    $("#otro1").prop("checked", true).trigger("click");
-                }
-                 $("#radio1").val(data.bloques[1].radio);
+                    $("#latitud1").val(data.bloques[1].latitud);
+                    $("#longitud1").val(data.bloques[1].longitud);
+                    $("input[name='tipo_mar'][value='1']").prop("checked", true).trigger("change");
 
-                /*
-                $("input[name='dias1[]']").prop("checked", false);
-                // Luego marcamos según la data que llega
-                if (data.bloques[1].l == 1) $("input[name='dias1[]'][value='1']").prop("checked", true); // Lunes
-                if (data.bloques[1].m == 1) $("input[name='dias1[]'][value='2']").prop("checked", true); // Martes
-                if (data.bloques[1].mi == 1) $("input[name='dias1[]'][value='3']").prop("checked", true); // Miércoles
-                if (data.bloques[1].j == 1) $("input[name='dias1[]'][value='4']").prop("checked", true); // Jueves
-                if (data.bloques[1].v == 1) $("input[name='dias1[]'][value='5']").prop("checked", true); // Viernes
-                if (data.bloques[1].s == 1) $("input[name='dias1[]'][value='6']").prop("checked", true); // Sábado
-                if (data.bloques[1].d == 1) $("input[name='dias1[]'][value='7']").prop("checked", true); // Domingo
-                */
-                circle[2].setRadius(parseFloat(data.bloques[1].radio));
+                    let pos2 = { lat: parseFloat(data.bloques[1].latitud), lng: parseFloat(data.bloques[1].longitud) };
+                    marker[2].setPosition(pos2);
+                    circle[2].setCenter(pos2);
+                    map[2].setCenter(pos2);
+
+                    if (data.bloques[1].entrada && data.bloques[1].salida) {
+                        $("#otro1").prop("checked", false).trigger("click");
+                        $("#entrada1").val(data.bloques[1].entrada);
+                        $("#salida1").val(data.bloques[1].salida);
+                    } else {
+                        $("#otro1").prop("checked", true).trigger("click");
+                    }
+                    $("#radio1").val(data.bloques[1].radio);
+
+                    
+                    circle[2].setRadius(parseFloat(data.bloques[1].radio));
+                }
+
+
+               
+              
             }
            
         }
@@ -197,6 +296,20 @@ function crearPuntoControl(url, tipo_usuario_valor, id_cooperativa)
     div_entrada.classList.remove('has-error');
     div_salida.classList.remove('has-error');
 
+    var tipo_mar = $("input[name='tipo_mar']:checked").val(); // "1" = Radio, "2" = Polígono
+
+    var poligono = [];
+    if (tipo_mar === "2") {
+        for (var i = 1; i <= 4; i++) {
+            var lat = $("#lat" + i).val();
+            var lng = $("#lng" + i).val();
+            if (lat && lng) {
+                poligono.push({ lat: lat, lng: lng });
+            }
+        }
+    }
+
+
 
     var param;
 
@@ -217,7 +330,9 @@ function crearPuntoControl(url, tipo_usuario_valor, id_cooperativa)
             estado: "A",
             entrada: entrada.value,
             salida: salida.value,
-            otro: otro.checked
+            otro: otro.checked,
+            tipo_mar: tipo_mar,
+            poligono: poligono
         }
     }
     else
@@ -232,7 +347,9 @@ function crearPuntoControl(url, tipo_usuario_valor, id_cooperativa)
               estado:"A",
               entrada: entrada.value,
               salida: salida.value,
-              otro: otro.checked
+              otro: otro.checked,
+              tipo_mar: tipo_mar,
+              poligono: poligono
           }
      }
 
@@ -265,6 +382,21 @@ function guardarPuntosControl(url, tipo_usuario_valor, id_cooperativa) {
     var entrada = document.getElementById('entrada');
     var salida = document.getElementById('salida');
     var otro = document.getElementById('otro');
+
+     var tipo_mar = $("input[name='tipo_mar']:checked").val(); // 1 = radio, 2 = polígono
+
+    // Si es polígono, capturamos los 4 vértices
+    var poligono1 = [];
+    if (tipo_mar === "2") {
+        for (var i = 1; i <= 4; i++) {
+            var lat = $("#lat" + i).val();
+            var lng = $("#lng" + i).val();
+            if (lat && lng) {
+                poligono1.push({ lat: lat, lng: lng });
+            }
+        }
+    }
+
     /*
     // Días bloque 1
     var dias1 = [];
@@ -282,6 +414,8 @@ function guardarPuntosControl(url, tipo_usuario_valor, id_cooperativa) {
         entrada: entrada.value,
         salida: salida.value,
         otro: otro.checked,
+        tipo_mar: tipo_mar,
+        poligono: poligono1
         //dias: dias1
     };
 
@@ -293,6 +427,18 @@ function guardarPuntosControl(url, tipo_usuario_valor, id_cooperativa) {
     var entrada1 = document.getElementById('entrada1');
     var salida1 = document.getElementById('salida1');
     var otro1 = document.getElementById('otro1');
+
+    var poligono2 = [];
+    if (tipo_mar === "2") {
+        for (var j = 1; j <= 4; j++) {
+            var lat2 = $("#lat" + j + "_b2").val();
+            var lng2 = $("#lng" + j + "_b2").val();
+            if (lat2 && lng2) {
+                poligono2.push({ lat: lat2, lng: lng2 });
+            }
+        }
+    }
+
     /*
     // Días bloque 2
     var dias2 = [];
@@ -310,6 +456,8 @@ function guardarPuntosControl(url, tipo_usuario_valor, id_cooperativa) {
         entrada: entrada1.value,
         salida: salida1.value,
         otro: otro1.checked,
+        tipo_mar: tipo_mar,
+        poligono: poligono2
         //dias: dias2
     };
 
@@ -351,6 +499,20 @@ function actualizarPuntoControlBloq(url, tipo_usuario_valor, id_cooperativa) {
     var entrada = document.getElementById('entrada');
     var salida = document.getElementById('salida');
     var otro = document.getElementById('otro');
+    var tipo_mar = $("input[name='tipo_mar']:checked").val(); // 1 = radio, 2 = polígono
+    // Si es polígono, capturamos los 4 vértices
+    var poligono1 = [];
+    if (tipo_mar === "2") {
+        for (var i = 1; i <= 4; i++) {
+            var lat = $("#lat" + i).val();
+            var lng = $("#lng" + i).val();
+            if (lat && lng) {
+                poligono1.push({ lat: lat, lng: lng });
+            }
+        }
+    }
+
+
     /*
     // Días bloque 1
     var dias1 = [];
@@ -369,6 +531,8 @@ function actualizarPuntoControlBloq(url, tipo_usuario_valor, id_cooperativa) {
         entrada: entrada.value,
         salida: salida.value,
         otro: otro.checked,
+        tipo_mar: tipo_mar,
+        poligono: poligono1
         //dias: dias1
     };
 
@@ -381,6 +545,19 @@ function actualizarPuntoControlBloq(url, tipo_usuario_valor, id_cooperativa) {
     var entrada1 = document.getElementById('entrada1');
     var salida1 = document.getElementById('salida1');
     var otro1 = document.getElementById('otro1');
+
+    
+    var poligono2 = [];
+    if (tipo_mar === "2") {
+        for (var j = 1; j <= 4; j++) {
+            var lat2 = $("#lat" + j + "_b2").val();
+            var lng2 = $("#lng" + j + "_b2").val();
+            if (lat2 && lng2) {
+                poligono2.push({ lat: lat2, lng: lng2 });
+            }
+        }
+    }
+
     /*
     // Días bloque 2
     var dias2 = [];
@@ -399,6 +576,8 @@ function actualizarPuntoControlBloq(url, tipo_usuario_valor, id_cooperativa) {
         entrada: entrada1.value,
         salida: salida1.value,
         otro: otro1.checked,
+        tipo_mar: tipo_mar,
+        poligono: poligono2
        // dias: dias2
     };
 
@@ -474,6 +653,20 @@ function actualizarPuntoControl(url, tipo_usuario_valor, id_cooperativa)
 
     var param;
 
+    var tipo_mar = $("input[name='tipo_mar']:checked").val(); // "1" = Radio, "2" = Polígono
+    var poligono = [];
+    if (tipo_mar === "2") {
+        for (var i = 1; i <= 4; i++) {
+            var lat = $("#lat" + i).val();
+            var lng = $("#lng" + i).val();
+            if (lat && lng) {
+                poligono.push({ lat: lat, lng: lng });
+            }
+        }
+    }
+
+
+
     if(tipo_usuario_valor=='1') {
 
          cooperativa_id = document.getElementById('cooperativa_id');
@@ -491,7 +684,9 @@ function actualizarPuntoControl(url, tipo_usuario_valor, id_cooperativa)
             _method : 'PUT',
             entrada: entrada.value,
             salida: salida.value,
-            otro: otro.checked
+            otro: otro.checked,
+            tipo_mar: tipo_mar,
+            poligono: poligono
         }
     }
     else
@@ -506,7 +701,9 @@ function actualizarPuntoControl(url, tipo_usuario_valor, id_cooperativa)
             _method : 'PUT',
             entrada: entrada.value,
             salida: salida.value,
-            otro: otro.checked
+            otro: otro.checked,
+            tipo_mar: tipo_mar,
+            poligono: poligono
         }
     }
 
@@ -658,7 +855,26 @@ function cleanForm2 (tipo_usuario_valor)
 
 }
 */
+
+function limpiarInputsPoligono(bloque) {
+  for (var i = 1; i <= 4; i++) {
+    // caso normal con sufijo _b{bloque}
+    var $lat = $("#lat" + i + "_b" + bloque);
+    var $lng = $("#lng" + i + "_b" + bloque);
+
+    if ($lat.length && $lng.length) {
+      $lat.val('');
+      $lng.val('');
+    } else {
+      // fallback a los inputs que no tienen sufijo _b
+      $("#lat" + i).val('');
+      $("#lng" + i).val('');
+    }
+  }
+}
+
 function cleanForm2(tipo_usuario_valor, is_bloque=false) {
+    limpiarInputsPoligono();
     // --- Bloque 1 ---
     document.getElementById('span_descripcion').innerHTML = '<strong></strong>';
     document.getElementById('span_latitud').innerHTML = '<strong></strong>';

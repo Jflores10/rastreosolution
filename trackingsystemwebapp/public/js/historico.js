@@ -108,7 +108,7 @@ function cargaHistorico(url, id_cooperativa, valor_usuario, pagina = 1) {
                     '<thead style="background-color: #FAFAFA;">' +
                     '<th>Fecha de GPS</th><th>Fecha de servidor</th><th>Evento</th><th>Latitud</th>' +
                     '<th>Longitud</th><th>Mileage</th><th>Ubicación</th><th>Punto cardinal</th>' +
-                    '<th>Velocidad</th><th>Voltaje</th><th>Contador</th>' +
+                    '<th>Velocidad</th><th>Voltaje</th><th>Contador</th><th>Movimiento</th>' +
                     '</thead>' +
                     '<tbody id="tbody-historico"></tbody>' +
                     '</table>'
@@ -128,6 +128,7 @@ function cargaHistorico(url, id_cooperativa, valor_usuario, pagina = 1) {
                         '<td>' + item.velocidad + '</td>' +
                         '<td>' + item.voltaje + '</td>' +
                         '<td>' + item.contador_total + '</td>' +
+                        '<td>' + item.tipo_marcacion + '</td>' +
                         '</tr>'
                     );
                 });

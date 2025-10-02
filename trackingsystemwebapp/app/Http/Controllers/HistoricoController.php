@@ -555,6 +555,7 @@ class HistoricoController extends Controller
         }
         elseif($request->input('opcion')=='getHistorico')
         {
+
             $validator = Validator::make($request->all(), [
                 'fecha_inicio' => 'required',
                 'fecha_fin' => 'required',
@@ -581,6 +582,7 @@ class HistoricoController extends Controller
                     $cursor->where('tipo', $ev);
 
                    /// $cursor->where('tipo', "GTDAT");
+
                 $cursor = $cursor->paginate(50);
                 $array_historico = [];
                 $evento='--';
@@ -791,6 +793,7 @@ class HistoricoController extends Controller
                             'fecha_servidor' => $fecha,
                             'fecha_gps' => $fecha_gps,
                             'evento' => $evento,
+                            'tipo_marcacion' => isset($documento['origen'])?$documento['origen']:"-",
                             'ubicacion' => isset($documento['gps_address']) ? $documento['gps_address'] : $ubicacion,
                             'angulo' => $angulo_traducido,
                             'latitud'=>$latitud_geo,

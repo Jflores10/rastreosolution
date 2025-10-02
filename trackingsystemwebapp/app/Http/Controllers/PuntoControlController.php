@@ -59,100 +59,141 @@ class PuntoControlController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'descripcion' => 'required|max:255',
-            'latitud' => 'required|numeric',
-            'longitud' => 'required|numeric',
-            'radio' => 'required|numeric',
-            'cooperativa_id' => 'required',
-            'pdi'=>'required',
-            'otro' => 'required',
-            'entrada' => 'nullable|required_if:otro,true',
-            'salida' => 'nullable|required_if:otro,true'
-        ]);
-        if ($validator->fails())
-            return response()->json(['error' => true, 'messages' => $validator->errors()]);
-        else
-        {
-            $punto_control = PuntoControl::create([
-                'descripcion' => $request->input('descripcion'),
-                'cooperativa_id' => $request->input('cooperativa_id'),
-                'latitud' => $request->input('latitud'),
-                'longitud' => $request->input('longitud'),
-                'radio' => $request->input('radio'),
-                'estado' => $request->input('estado'),
-                'pdi' =>  $request->input('pdi'),
-                'creador_id' => Auth::user()->_id,
-                'modificador_id' => Auth::user()->_id,
-                'entrada' => $request->input('entrada'),
-                'salida' => $request->input('salida'),
-                'mt' => $request->input('otro'),
-                'estado_exportacion' => 'P'
-            ]);
-            return response()->json(['error' => false, 'punto_control' => $punto_control]);
-        }
-    }
+            'descripcion'     => 'required|max:255',
+            'cooperativa_id'  => 'required',
+            'pdi'             => 'required',
+            'otro'            => 'required',
+            'entrada'         => 'nullable|required_if:otro,true',
+            'salida'          => 'nullable|required_if:otro,true',
 
-    public function store_bloque(Request $request)
-    {
-        $validator = Validator::make($request->all(), [
-            'cooperativa_id' => 'required',
-            'estado' => 'required',
-            'puntos' => 'required|array|min:1',
-            'puntos.*.descripcion' => 'required|max:255',
-            'puntos.*.latitud' => 'required|numeric',
-            'puntos.*.longitud' => 'required|numeric',
-            'puntos.*.radio' => 'required|numeric',
-            'puntos.*.pdi' => 'required',
-            'puntos.*.otro' => 'required',
-            'puntos.*.entrada' => 'nullable|required_if:puntos.*.otro,true',
-            'puntos.*.salida' => 'nullable|required_if:puntos.*.otro,true',
+            // --- Ajuste: validación condicional ---
+            'tipo_mar'        => 'required|in:1,2', // 1=Radio, 2=Polígono
+            'latitud'         => 'required_if:tipo_mar,1|numeric|nullable',
+            'longitud'        => 'required_if:tipo_mar,1|numeric|nullable',
+            'radio'           => 'required_if:tipo_mar,1|numeric|nullable',
+            'poligono'        => 'required_if:tipo_mar,2|array|nullable',
+            'poligono.*.lat'  => 'required_if:tipo_mar,2|numeric|nullable',
+            'poligono.*.lng'  => 'required_if:tipo_mar,2|numeric|nullable',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['error' => true, 'messages' => $validator->errors()]);
         }
 
-        $cooperativa_id = $request->input('cooperativa_id');
-        $estado = $request->input('estado');
-        $puntos_guardados = [];
+        $puntoData = [
+            'descripcion'       => $request->input('descripcion'),
+            'cooperativa_id'    => $request->input('cooperativa_id'),
+            'estado'            => $request->input('estado'),
+            'pdi'               => $request->input('pdi'),
+            'creador_id'        => Auth::user()->_id,
+            'modificador_id'    => Auth::user()->_id,
+            'entrada'           => $request->input('entrada'),
+            'salida'            => $request->input('salida'),
+            'mt'                => $request->input('otro'),
+            'estado_exportacion'=> 'P',
+            'tipo_mar'          => $request->input('tipo_mar'),
+        ];
 
-        $diaActual = Carbon::now()->dayOfWeek; // 0=Domingo, 1=Lunes, … 6=Sábado
-        $i=1;
-        foreach ($request->input('puntos') as $p) {
-            $activo=false;
-            if($i==1){
-                $activo=true;
-                $pdi_final = $p['pdi'];
-            }
-            else{
-                $pdi_final = '0'.$p['pdi'];
-            }
-
-            $punto_control = PuntoControl::create([
-                'descripcion' => $p['descripcion'],
-                'cooperativa_id' => $cooperativa_id,
-                'latitud' => $p['latitud'],
-                'longitud' => $p['longitud'],
-                'radio' => $p['radio'],
-                'estado' => $estado,
-                'pdi' => $pdi_final, 
-                'creador_id' => Auth::user()->_id,
-                'modificador_id' => Auth::user()->_id,
-                'entrada' => $p['entrada'],
-                'salida' => $p['salida'],
-                'mt' => $p['otro'],
-                'estado_exportacion' => 'P',
-                'pdi_padre' => $p['pdi'], 
-                'activo' => $activo, 
-                'bloque' => $i, 
-            ]);
-
-            $puntos_guardados[] = $punto_control;
-            $i++;
+        if ($request->input('tipo_mar') == "1") {
+            // Radio
+            $puntoData['latitud'] = $request->input('latitud');
+            $puntoData['longitud'] = $request->input('longitud');
+            $puntoData['radio'] = $request->input('radio');
+            $puntoData['poligono'] = [];
+        } else {
+            // Polígono
+            $puntoData['latitud'] = null;
+            $puntoData['longitud'] = null;
+            $puntoData['radio'] = null;
+            $puntoData['poligono'] = $request->input('poligono');
         }
 
-        return response()->json(['error' => false, 'puntos_control' => $puntos_guardados]);
+        $punto_control = PuntoControl::create($puntoData);
+
+        return response()->json(['error' => false, 'punto_control' => $punto_control]);
     }
+
+        public function store_bloque(Request $request)
+        {
+            $validator = Validator::make($request->all(), [
+                'cooperativa_id' => 'required',
+                'estado' => 'required',
+                'puntos' => 'required|array|min:1',
+                'puntos.*.descripcion' => 'required|max:255',
+                'puntos.*.pdi' => 'required',
+                'puntos.*.otro' => 'required',
+                'puntos.*.entrada' => 'nullable|required_if:puntos.*.otro,true',
+                'puntos.*.salida' => 'nullable|required_if:puntos.*.otro,true',
+
+                // --- Ajuste: validación condicional ---
+                'puntos.*.tipo_mar' => 'required|in:1,2', // 1=Radio, 2=Polígono
+                'puntos.*.latitud' => 'required_if:puntos.*.tipo_mar,1|numeric|nullable',
+                'puntos.*.longitud' => 'required_if:puntos.*.tipo_mar,1|numeric|nullable',
+                'puntos.*.radio' => 'required_if:puntos.*.tipo_mar,1|numeric|nullable',
+                'puntos.*.poligono' => 'required_if:puntos.*.tipo_mar,2|array|nullable',
+                'puntos.*.poligono.*.lat' => 'required_if:puntos.*.tipo_mar,2|numeric|nullable',
+                'puntos.*.poligono.*.lng' => 'required_if:puntos.*.tipo_mar,2|numeric|nullable',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json(['error' => true, 'messages' => $validator->errors()]);
+            }
+
+            $cooperativa_id = $request->input('cooperativa_id');
+            $estado = $request->input('estado');
+            $puntos_guardados = [];
+
+            $diaActual = Carbon::now()->dayOfWeek; // 0=Domingo, 1=Lunes, … 6=Sábado
+            $i=1;
+            foreach ($request->input('puntos') as $p) {
+                $activo=false;
+                if($i==1){
+                    $activo=true;
+                    $pdi_final = $p['pdi'];
+                }
+                else{
+                    $pdi_final = '0'.$p['pdi'];
+                }
+
+                $puntoData = [
+                    'descripcion' => $p['descripcion'],
+                    'cooperativa_id' => $cooperativa_id,
+                    'estado' => $estado,
+                    'pdi' => $pdi_final,
+                    'creador_id' => Auth::user()->_id,
+                    'modificador_id' => Auth::user()->_id,
+                    'entrada' => $p['entrada'],
+                    'salida' => $p['salida'],
+                    'mt' => $p['otro'],
+                    'estado_exportacion' => 'P',
+                    'pdi_padre' => $p['pdi'],
+                    'activo' => $activo,
+                    'bloque' => $i,
+                    'tipo_mar' => $p['tipo_mar'], // Guardamos si es radio o polígono
+                ];
+
+                if ($p['tipo_mar'] == "1") {
+                    // Radio
+                    $puntoData['latitud'] = $p['latitud'];
+                    $puntoData['longitud'] = $p['longitud'];
+                    $puntoData['radio'] = $p['radio'];
+                    $puntoData['poligono'] = [];
+                } else {
+                    // Polígono (guardamos como JSON en DB)
+                    $puntoData['latitud'] = null;
+                    $puntoData['longitud'] = null;
+                    $puntoData['radio'] = null;
+                    $puntoData['poligono'] = $p['poligono'];
+                }
+
+                $punto_control = PuntoControl::create($puntoData);
+
+                $puntos_guardados[] = $punto_control;
+                $i++;
+            }
+
+            return response()->json(['error' => false, 'puntos_control' => $puntos_guardados]);
+        }
     
     public function show($id)
     {
@@ -171,17 +212,21 @@ class PuntoControlController extends Controller
     public function update(Request $request, $id)
     {
         $validator = Validator::make($request->all(), [
-            'descripcion' => 'required|max:255',
-            'latitud' => 'required|numeric',
-            'longitud' => 'required|numeric',
-            'radio' => 'required|numeric',
-            'cooperativa_id' => 'required',
-            'pdi' => 'required',
-            'entrada' => 'nullable',
-            'salida' => 'nullable',
-            'otro' => 'required',
-            'entrada' => 'nullable|required_if:otro,true',
-            'salida' => 'nullable|required_if:otro,true'
+            'descripcion'     => 'required|max:255',
+            'cooperativa_id'  => 'required',
+            'pdi'             => 'required',
+            'otro'            => 'required',
+            'entrada'         => 'nullable|required_if:otro,true',
+            'salida'          => 'nullable|required_if:otro,true',
+
+            // --- Ajuste: validación condicional ---
+            'tipo_mar'        => 'required|in:1,2', // 1=Radio, 2=Polígono
+            'latitud'         => 'required_if:tipo_mar,1|numeric|nullable',
+            'longitud'        => 'required_if:tipo_mar,1|numeric|nullable',
+            'radio'           => 'required_if:tipo_mar,1|numeric|nullable',
+            'poligono'        => 'required_if:tipo_mar,2|array|nullable',
+            'poligono.*.lat'  => 'required_if:tipo_mar,2|numeric|nullable',
+            'poligono.*.lng'  => 'required_if:tipo_mar,2|numeric|nullable',
         ]);
         if ($validator->fails())
             return response()->json(['error' => true, 'messages' => $validator->errors()]);
@@ -199,6 +244,21 @@ class PuntoControlController extends Controller
             $punto_control->salida = $request->input('salida');
             $punto_control->mt = $request->input('otro');
             $punto_control->estado_exportacion = 'P';
+            $punto_control->tipo_mar           = $request->input('tipo_mar');
+
+            if ($request->input('tipo_mar') == "1") {
+                // Radio
+                $punto_control->latitud  = $request->input('latitud');
+                $punto_control->longitud = $request->input('longitud');
+                $punto_control->radio    = $request->input('radio');
+                $punto_control->poligono = [];
+            } else {
+                $punto_control->latitud  = null;
+                $punto_control->longitud = null;
+                $punto_control->radio    = null;
+                $punto_control->poligono = $request->input('poligono');
+               
+            }
             $punto_control->save();
             return response()->json(['error' => false, 'punto_control' => $punto_control]);
         }
@@ -210,14 +270,21 @@ class PuntoControlController extends Controller
             'cooperativa_id' => 'required',
             'estado' => 'required',
             'puntos' => 'required|array|min:1',
+            'puntos.*._id' => 'required', // necesitamos el _id para actualizar
             'puntos.*.descripcion' => 'required|max:255',
-            'puntos.*.latitud' => 'required|numeric',
-            'puntos.*.longitud' => 'required|numeric',
-            'puntos.*.radio' => 'required|numeric',
             'puntos.*.pdi' => 'required',
             'puntos.*.otro' => 'required',
             'puntos.*.entrada' => 'nullable|required_if:puntos.*.otro,true',
             'puntos.*.salida' => 'nullable|required_if:puntos.*.otro,true',
+
+            // --- Validación condicional ---
+            'puntos.*.tipo_mar' => 'required|in:1,2', // 1=Radio, 2=Polígono
+            'puntos.*.latitud' => 'required_if:puntos.*.tipo_mar,1|numeric|nullable',
+            'puntos.*.longitud' => 'required_if:puntos.*.tipo_mar,1|numeric|nullable',
+            'puntos.*.radio' => 'required_if:puntos.*.tipo_mar,1|numeric|nullable',
+            'puntos.*.poligono' => 'required_if:puntos.*.tipo_mar,2|array|nullable',
+            'puntos.*.poligono.*.lat' => 'required_if:puntos.*.tipo_mar,2|numeric|nullable',
+            'puntos.*.poligono.*.lng' => 'required_if:puntos.*.tipo_mar,2|numeric|nullable',
         ]);
 
         if ($validator->fails()) {
@@ -244,27 +311,38 @@ class PuntoControlController extends Controller
          
             $punto_control = PuntoControl::where('_id',$p['_id'])->first();
             if($punto_control){
-                $punto_control->update([
+               
+                $puntoData = [
                     'descripcion' => $p['descripcion'],
                     'cooperativa_id' => $cooperativa_id,
-                    'latitud' => $p['latitud'],
-                    'longitud' => $p['longitud'],
-                    'radio' => $p['radio'],
                     'estado' => $estado,
-                    'pdi' => $pdi_final, 
-                    'creador_id' => Auth::user()->_id,
+                    'pdi' => $pdi_final,
                     'modificador_id' => Auth::user()->_id,
                     'entrada' => $p['entrada'],
                     'salida' => $p['salida'],
                     'mt' => $p['otro'],
                     'estado_exportacion' => 'P',
-                    'pdi_padre' => $p['pdi'], 
-                    'activo' => $activo, 
-                    'bloque' => $i, 
+                    'pdi_padre' => $p['pdi'],
+                    'activo' => $activo,
+                    'bloque' => $i,
+                    'tipo_mar' => $p['tipo_mar'], // radio o polígono
+                ];
 
-                ]);
+                if ($p['tipo_mar'] == "1") {
+                    // Radio
+                    $puntoData['latitud'] = $p['latitud'];
+                    $puntoData['longitud'] = $p['longitud'];
+                    $puntoData['radio'] = $p['radio'];
+                    $puntoData['poligono'] = [];
+                } else {
+                    // Polígono
+                    $puntoData['latitud'] = null;
+                    $puntoData['longitud'] = null;
+                    $puntoData['radio'] = null;
+                    $puntoData['poligono'] = $p['poligono'];
+                }
             }
-            
+            $punto_control->update($puntoData);
             $puntos_guardados[] = $punto_control;
             $i++;
         }

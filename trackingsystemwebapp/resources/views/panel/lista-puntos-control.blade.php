@@ -186,6 +186,14 @@ Puntos de control
                                 </option>
                             @endforeach
                         </select>
+                        <div style="margin-top:10px;">
+                            <label class="radio-inline">
+                                <input type="radio" name="tipo_mar" value="1" checked> Radio
+                            </label>
+                            <label class="radio-inline">
+                                <input type="radio" name="tipo_mar" value="2">Polígono
+                            </label>
+                        </div>
                         <span class="help-block" id="span_cooperativa"></span>
                     </div>
                 </div>
@@ -243,20 +251,22 @@ Puntos de control
                             -->
                         </div>
                         <div class="col-lg-6 col-md-6 col-sm-12">
-                            <div class="form-group"  id="div-latitud">
-                                <label for="latitud">Latitud</label>
-                                <input onkeyup="updateMarkerPosition();" name="latitud" id="latitud" class="form-control" type="number"/>
-                                <span class="help-block" id="span_latitud"></span>
-                            </div>
-                            <div class="form-group"  id="div-longitud">
-                                <label for="longitud">Longitud</label>
-                                <input onkeyup="updateMarkerPosition();" name="longitud" id="longitud" class="form-control" type="number" />
-                                <span class="help-block" id="span_longitud"></span>
-                            </div>
-                            <div class="form-group" id="div-radio">
-                                <label for="radio">Radio</label>
-                                <input type="number" onkeyup="updateRadius();" name="radio" id="radio" class="form-control" />
-                                <span class="help-block" id="span_radio"></span>
+                            <div id="div_lan_lon_radio1">
+                                <div class="form-group"  id="div-latitud">
+                                    <label for="latitud">Latitud</label>
+                                    <input onkeyup="updateMarkerPosition();" name="latitud" id="latitud" class="form-control" type="number"/>
+                                    <span class="help-block" id="span_latitud"></span>
+                                </div>
+                                <div class="form-group"  id="div-longitud">
+                                    <label for="longitud">Longitud</label>
+                                    <input onkeyup="updateMarkerPosition();" name="longitud" id="longitud" class="form-control" type="number" />
+                                    <span class="help-block" id="span_longitud"></span>
+                                </div>
+                                <div class="form-group" id="div-radio">
+                                    <label for="radio">Radio</label>
+                                    <input type="number" onkeyup="updateRadius();" name="radio" id="radio" class="form-control" />
+                                    <span class="help-block" id="span_radio"></span>
+                                </div>
                             </div>
                             <div class="form-group">
                                 <div class="checkbox">
@@ -274,6 +284,25 @@ Puntos de control
                                 <label for="salida">Evento de salida</label>
                                 <input readonly type="text" name="salida" id="salida" class="form-control" />
                                 <span class="help-block" id="span_salida"></span>
+                            </div>
+                        </div>
+                        <div class="col-lg-12" id="contenedor-poligono1" style="display:none;">
+                            <h4>Coordenadas del Polígono </h4>
+                            <div class="row">
+                                @for ($i = 1; $i <= 4; $i++)
+                                    <div class="col-lg-6">
+                                        <div class="form-group">
+                                            <label>Latitud Pto. {{ $i }}</label>
+                                            <input type="text" class="form-control lat-pol" id="lat{{ $i }}" name="lat{{ $i }}" readonly>
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-6">
+                                        <div class="form-group">
+                                            <label>Longitud Pto. {{ $i }}</label>
+                                            <input type="text" class="form-control lng-pol" id="lng{{ $i }}" name="lng{{ $i }}" readonly>
+                                        </div>
+                                    </div>
+                                @endfor
                             </div>
                         </div>
                         <div class="col-lg-12 col-md-12 col-sm-12">
@@ -297,7 +326,7 @@ Puntos de control
                                 <span class="help-block" id="span_descripcion1"></span>
                             </div>
                            
-                            <div class="form-group" id="div-tipo-ingreso">
+                            <div class="form-group" id="div-tipo-ingreso2">
                                 <label for="tipo_ingreso">Tipo de ingreso</label><br/>
                                 <input name="tipo_ingreso1" onchange=cambioOpcion(this.value,'2') id="tipo_ingreso1" type="radio" value="MP" checked /> Mapa<br/>
                                 <input name="tipo_ingreso1" onchange=cambioOpcion(this.value,'2') id="tipo_ingreso1" type="radio" value="MN"/> Manual
@@ -330,20 +359,22 @@ Puntos de control
                                 -->
                         </div>
                         <div class="col-lg-6 col-md-6 col-sm-12">
-                            <div class="form-group"  id="div-latitud1">
-                                <label for="latitud">Latitud</label>
-                                <input onkeyup="updateMarkerPosition('2');" name="latitud1" id="latitud1" class="form-control" type="number"/>
-                                <span class="help-block" id="span_latitud1"></span>
-                            </div>
-                            <div class="form-group"  id="div-longitud1">
-                                <label for="longitud">Longitud</label>
-                                <input onkeyup="updateMarkerPosition('2');" name="longitud1" id="longitud1" class="form-control" type="number" />
-                                <span class="help-block" id="span_longitud1"></span>
-                            </div>
-                            <div class="form-group" id="div-radio1">
-                                <label for="radio">Radio</label>
-                                <input type="number" onkeyup="updateRadius('2');" name="radio1" id="radio1" class="form-control" />
-                                <span class="help-block" id="span_radio1"></span>
+                            <div id="div_lan_lon_radio2">
+                                <div class="form-group"  id="div-latitud1">
+                                    <label for="latitud">Latitud</label>
+                                    <input onkeyup="updateMarkerPosition('2');" name="latitud1" id="latitud1" class="form-control" type="number"/>
+                                    <span class="help-block" id="span_latitud1"></span>
+                                </div>
+                                <div class="form-group"  id="div-longitud1">
+                                    <label for="longitud">Longitud</label>
+                                    <input onkeyup="updateMarkerPosition('2');" name="longitud1" id="longitud1" class="form-control" type="number" />
+                                    <span class="help-block" id="span_longitud1"></span>
+                                </div>
+                                <div class="form-group" id="div-radio1">
+                                    <label for="radio">Radio</label>
+                                    <input type="number" onkeyup="updateRadius('2');" name="radio1" id="radio1" class="form-control" />
+                                    <span class="help-block" id="span_radio1"></span>
+                                </div>
                             </div>
                             <div class="form-group">
                                 <div class="checkbox">
@@ -361,6 +392,25 @@ Puntos de control
                                 <label for="salida">Evento de salida</label>
                                 <input readonly type="text" name="salida1" id="salida1" class="form-control" />
                                 <span class="help-block" id="span_salida1"></span>
+                            </div>
+                        </div>
+                        <div class="col-lg-12" id="contenedor-poligono2" style="display:none;">
+                            <h4>Coordenadas del Polígono</h4>
+                            <div class="row">
+                                @for ($i = 1; $i <= 4; $i++)
+                                    <div class="col-lg-6">
+                                        <div class="form-group">
+                                            <label>Latitud Pto. {{ $i }}</label>
+                                            <input type="text" class="form-control lat-pol2" id="lat{{ $i }}_b2" name="lat{{ $i }}_b2" readonly>
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-6">
+                                        <div class="form-group">
+                                            <label>Longitud Pto. {{ $i }}</label>
+                                            <input type="text" class="form-control lng-pol2" id="lng{{ $i }}_b2" name="lng{{ $i }}_b2" readonly>
+                                        </div>
+                                    </div>
+                                @endfor
                             </div>
                         </div>
                         <div class="col-lg-12 col-md-12 col-sm-12">
@@ -385,376 +435,389 @@ Puntos de control
 @endsection
 @section('scripts')
 <script src="{{ asset('js/punto-control.js') }}"></script>
-
 <script>
   $(document).ready(function() {
-   // $('#div-dias-semana').hide();
-    //$('#div-dias-semana1').hide();
-    
+    // Cooperativa → mostrar/ocultar bloque 2
     $("#cooperativa_id").on("change", function() {
-        var bloques = $(this).find("option:selected").data("bloques");
-        if (bloques === true || bloques === "true" || bloques == 1) {
-            // Mostrar pestaña 2
-            $('ul.nav-tabs li:eq(1)').show(); // pestaña
-           // $('#div-dias-semana').show();
-            //$('#div-dias-semana1').show();
-
-            // Activar Bloque 1 si no lo estaba
-            if (!$('ul.nav-tabs li:eq(0)').hasClass('active')) {
-                $('ul.nav-tabs li:eq(0) a').tab('show');
-            }
-
-        } else {
-            // Ocultar pestaña 2
-            $('ul.nav-tabs li:eq(1)').hide(); // pestaña
-            //$('#div-dias-semana').hide();
-            //$('#div-dias-semana1').hide();
-
-            // Forzar activo Bloque 1
-            $('ul.nav-tabs li:eq(0) a').tab('show');
+      var bloques = $(this).find("option:selected").data("bloques");
+      if (bloques === true || bloques === "true" || bloques == 1) {
+        $('ul.nav-tabs li:eq(1)').show();
+        if (!$('ul.nav-tabs li:eq(0)').hasClass('active')) {
+          $('ul.nav-tabs li:eq(0) a').tab('show');
         }
+      } else {
+        $('ul.nav-tabs li:eq(1)').hide();
+        $('ul.nav-tabs li:eq(0) a').tab('show');
+      }
     });
-
-
-    // Ejecutar al cargar (por si ya hay valor seleccionado)
     $("#cooperativa_id").trigger("change");
-});  
-</script>
-<script>
-$(function() {
-    // Función para sincronizar los checkboxes de días
-    function syncDias(sourceTab, targetTab) {
-        $('#' + sourceTab + ' input[type=checkbox]').change(function() {
-            var dayValue = $(this).val();
-            var checked = $(this).is(':checked');
 
-            // Buscamos el checkbox equivalente en el otro tab
-            var targetCheckbox = $('#' + targetTab + ' input[type=checkbox][value="' + dayValue + '"]');
+    // Cambiar entre Radio y Polígono
+    $("input[name='tipo_mar']").on("change", function () {
+      var isPolygon = $(this).val() === "2";
 
-            if (checked) {
-                targetCheckbox.prop('disabled', true); // Deshabilita en el otro tab
-                targetCheckbox.prop('checked', false); // Desmarca en el otro tab
-            } else {
-                targetCheckbox.prop('disabled', false); // Habilita si se desmarca
-            }
-        });
-    }
+      // Toggle UI
+      $("#div_lan_lon_radio1, #div_lan_lon_radio2").toggle(!isPolygon);
+      $("#contenedor-poligono1, #contenedor-poligono2").toggle(isPolygon);
+      $("#div-tipo-ingreso").toggle(!isPolygon);
+      $("#div-tipo-ingreso2").toggle(!isPolygon);
 
-    // Sincronizamos los días entre tab 1 y tab 2
-    syncDias('bloq1', 'bloq2'); // Cambios en tab 1 afectan tab 2
-    syncDias('bloq2', 'bloq1'); // Cambios en tab 2 afectan tab 1
-});
-</script>
 
-<script>
-    var geocoder = {}, map = {}, marker = {}, circle = {}, markerRadius = {}, distance = {};
-    var guayaquil = {lat: -2.1613905698142006, lng: -79.91300582885742};
-
-    // Inicializa ambos mapas
-    function initMap() {
-        initSingleMap('1', 'map', 'address', 'latitud', 'longitud', 'radio');
-        initSingleMap('2', 'map1', 'address1', 'latitud1', 'longitud1', 'radio1');
-    }
-
-    // Función para inicializar cada mapa individual
-    function initSingleMap(bloque, mapId, addressId, latId, lngId, radiusId) {
-        map[bloque] = new google.maps.Map(document.getElementById(mapId), {
-            center: guayaquil,
-            scrollwheel: true,
-            zoom: 16,
-            mapTypeId: "OSM",
-            mapTypeControl: true,
-            streetViewControl: true
-        });
-
-        // OpenStreetMap tiles
-        map[bloque].mapTypes.set("OSM", new google.maps.ImageMapType({
-            getTileUrl: function(coord, zoom) {
-                var tilesPerGlobe = 1 << zoom;
-                var x = coord.x % tilesPerGlobe;
-                if (x < 0) x = tilesPerGlobe + x;
-                return "http://tile.openstreetmap.org/" + zoom + "/" + x + "/" + coord.y + ".png";
-            },
-            tileSize: new google.maps.Size(256, 256),
-            name: "OSM",
-            maxZoom: 18
-        }));
-
-        geocoder[bloque] = new google.maps.Geocoder();
-
-        var address = document.getElementById(addressId);
-        var searchBox = new google.maps.places.SearchBox(address);
-        map[bloque].controls[google.maps.ControlPosition.TOP_LEFT].push(address);
-
-        marker[bloque] = new google.maps.Marker({
-            map: map[bloque],
-            position: guayaquil,
-            title: 'Punto de control'
-        });
-
-        circle[bloque] = new google.maps.Circle({
-            map: map[bloque],
-            center: guayaquil,
-            radius: 0,
-            strokeColor: '#FF0000',
-            strokeOpacity: 0.8,
-            strokeWeight: 2,
-            fillColor: '#FF0000',
-            fillOpacity: 0.35
-        });
-
-        var icon = "{{ asset('/images/radius.png') }}";
-        markerRadius[bloque] = new google.maps.Marker({
-            map: map[bloque],
-            position: marker[bloque].getPosition(),
-            draggable: true,
-            title: 'Radio',
-            icon: icon
-        });
-
-        searchBox.addListener('places_changed', function () {
-            var places = searchBox.getPlaces();
-            if (!places || places.length === 0) return;
-            var location = places[0].geometry.location;
-            map[bloque].setCenter(location);
-            circle[bloque].setCenter(location);
-            marker[bloque].setPosition(location);
-        });
-
-        google.maps.event.addListener(marker[bloque], 'position_changed', function(){ updateMarkerRadius(bloque); });
-        google.maps.event.addListener(markerRadius[bloque], 'position_changed', function(){ update(bloque); });
-
-        map[bloque].addListener('click', function(e){
-            var latLng = e.latLng;
-            marker[bloque].setPosition(latLng);
-            circle[bloque].setCenter(latLng);
-            map[bloque].setCenter(latLng);
-        });
-
-        update(bloque);
-        cambioOpcion('MP', bloque);
-
-        // Ajustar tamaño del mapa al redimensionar ventana
-        google.maps.event.addDomListener(window, "resize", function() {
-            var center = map[bloque].getCenter();
-            google.maps.event.trigger(map[bloque], "resize");
-            map[bloque].setCenter(center); 
-        });
-    }
-
-    // Cambia tipo de ingreso (Mapa o Manual)
-    function cambioOpcion(opcion, bloque='1') {
-        var latitude = document.getElementById(bloque==='1' ? 'latitud' : 'latitud1');
-        var longitude = document.getElementById(bloque==='1' ? 'longitud' : 'longitud1');
-        var radius = document.getElementById(bloque==='1' ? 'radio' : 'radio1');
-
-        switch(opcion) {
-            case "MP":
-                latitude.readOnly = true;
-                longitude.readOnly = true;
-                radius.readOnly = true;
-
-                google.maps.event.clearListeners(map[bloque], 'click');
-                google.maps.event.addListener(marker[bloque], 'position_changed', function(){ updateMarkerRadius(bloque); });
-                google.maps.event.addListener(markerRadius[bloque], 'position_changed', function(){ update(bloque); });
-
-                map[bloque].addListener('click', function(e){
-                    var latLng = e.latLng;
-                    marker[bloque].setPosition(latLng);
-                    circle[bloque].setCenter(latLng);
-                    map[bloque].setCenter(latLng);
-                });
-
-                markerRadius[bloque].setMap(map[bloque]);
-                markerRadius[bloque].setPosition(marker[bloque].getPosition());
-                circle[bloque].setRadius(0);
-                radius.value = 0;
-            break;
-
-            case "MN":
-                latitude.readOnly = false;
-                longitude.readOnly = false;
-                radius.readOnly = false;
-
-                google.maps.event.clearListeners(map[bloque], 'click');
-                google.maps.event.clearListeners(marker[bloque], 'position_changed');
-                google.maps.event.clearListeners(markerRadius[bloque], 'position_changed');
-                markerRadius[bloque].setMap(null);
-            break;
-        }
-    }
-
-    // Actualiza latitud y longitud
-    function updateMarkerRadius(bloque='1') {
-        var latId = bloque==='1' ? 'latitud' : 'latitud1';
-        var lngId = bloque==='1' ? 'longitud' : 'longitud1';
-        var pos = marker[bloque].getPosition();
-        markerRadius[bloque].setPosition(pos);
-        document.getElementById(latId).value = pos.lat();
-        document.getElementById(lngId).value = pos.lng();
-    }
-
-    // Actualiza radio del círculo
-    function update(bloque='1') {
-        distance[bloque] = google.maps.geometry.spherical.computeDistanceBetween(marker[bloque].getPosition(), markerRadius[bloque].getPosition());
-        circle[bloque].setRadius(distance[bloque]);
-        document.getElementById(bloque==='1' ? 'radio' : 'radio1').value = distance[bloque];
-    }
-
-    // Buscar dirección
-    function codeAddress(bloque='1') {
-        var addressId = bloque==='1' ? 'address' : 'address1';
-        var mapObj = map[bloque];
-        var circ = circle[bloque];
-        var mark = marker[bloque];
-        geocoder[bloque].geocode({ 'address': document.getElementById(addressId).value }, function(results, status) {
-            if (status === google.maps.GeocoderStatus.OK) {
-                var location = results[0].geometry.location;
-                mapObj.setCenter(location);
-                circ.setCenter(location);
-                mark.setPosition(location);
-            } else {
-                console.log("Localización errónea debido a: " + status);
-            }
-        });
-    }
-</script>
-<script src="https://maps.googleapis.com/maps/api/js?key=&libraries=places,geometry&callback=initMap"
-    async defer></script>
-
-<script>
-    $(function() {  
-        // MT2500 checkbox para tab 1
-        $('#otro').click(function () {
-            var checked = $(this).is(':checked');
-            $('#entrada').prop('readonly', !checked);
-            $('#salida').prop('readonly', !checked);
-            if (!checked) {
-                $('#entrada').val(null);
-                $('#salida').val(null);
-            }
-        });
-
-        // MT2500 checkbox para tab 2
-        $('#otro1').click(function () {
-            var checked = $(this).is(':checked');
-            $('#entrada1').prop('readonly', !checked);
-            $('#salida1').prop('readonly', !checked);
-            if (!checked) {
-                $('#entrada1').val(null);
-                $('#salida1').val(null);
-            }
-        });
+      // Alternar modo en mapas (ambos bloques)
+      setPolygonMode('1', isPolygon);
+      setPolygonMode('2', isPolygon);
     });
 
-    // Actualiza radio desde input
-    function updateRadius(bloque='1') {
-        var radiusInput = document.getElementById(bloque==='1' ? 'radio' : 'radio1');
-        if (radiusInput && radiusInput.value !== '') {
-            circle[bloque].setRadius(parseFloat(radiusInput.value));
+    function validarPdi() {
+        var tipo_mar = $("input[name='tipo_mar']:checked").val();
+        var val = parseInt($("#pdi").val(), 10);
+
+        if (tipo_mar === "2") { // Polígono
+            if (isNaN(val) || val < 20 || val > 39) {
+                $("#span_pdi").text("Para Polígono, el PDI debe estar entre 20 y 39.");
+                $("#div-pdi").addClass("has-error");
+                return false;
+            } else {
+                $("#span_pdi").text("");
+                $("#div-pdi").removeClass("has-error");
+                return true;
+            }
+        } else {
+            // Reset si es Radio
+            $("#span_pdi").text("");
+            $("#div-pdi").removeClass("has-error");
+            return true;
         }
     }
 
-    // Actualiza posición del marcador desde inputs
-    function updateMarkerPosition(bloque='1') {
-        var latInput = document.getElementById(bloque==='1' ? 'latitud' : 'latitud1');
-        var lngInput = document.getElementById(bloque==='1' ? 'longitud' : 'longitud1');
+    // Validar al salir del input
+    $("#pdi").on("blur", validarPdi);
 
-        if (latInput.value !== '' && lngInput.value !== '') {
-            var pos = { lat: parseFloat(latInput.value), lng: parseFloat(lngInput.value) };
-            marker[bloque].setPosition(pos);
-            circle[bloque].setCenter(marker[bloque].getPosition());
-            map[bloque].setCenter(marker[bloque].getPosition());
-            update(bloque); // Actualiza radio automáticamente
-        }
+    // Revalidar cuando cambie tipo_mar
+    $("input[name='tipo_mar']").on("change", function() {
+        $("#pdi").trigger("blur");
+    });
+  });
+</script>
+
+<script>
+  // ===== VARIABLES GLOBALES =====
+  var geocoder = {}, map = {}, marker = {}, circle = {}, markerRadius = {}, distance = {};
+  var polygon = {}, polyPath = {};
+  var drawingManager = {}, overlayCompleteListener = {}, pathSetAt = {}, pathInsertAt = {}, pathRemoveAt = {};
+  var mapClickRadio = {};
+  var guayaquil = {lat: -2.1613905698142006, lng: -79.91300582885742};
+
+  // ===== UTIL =====
+  function safeRemoveListener(ref){
+    if (!ref) return;
+    if (typeof ref.remove === 'function') ref.remove();
+    else if (google && google.maps && google.maps.event) google.maps.event.removeListener(ref);
+  }
+
+  function detachRadio(b){
+    safeRemoveListener(mapClickRadio[b]); mapClickRadio[b] = null;
+  }
+  function detachPathListeners(b){
+    safeRemoveListener(pathSetAt[b]);     pathSetAt[b] = null;
+    safeRemoveListener(pathInsertAt[b]);  pathInsertAt[b] = null;
+    safeRemoveListener(pathRemoveAt[b]);  pathRemoveAt[b] = null;
+  }
+  function detachDrawing(b){
+    if (overlayCompleteListener[b]) { safeRemoveListener(overlayCompleteListener[b]); overlayCompleteListener[b] = null; }
+    if (drawingManager[b]) {
+      drawingManager[b].setDrawingMode(null);
+      drawingManager[b].setMap(null);
     }
+  }
 
-    // Para mostrar formulario (ejemplo)
-    function mostrar() {
-        document.form_search.submit();
+  function clearPolygonPath(b){
+    if (!polyPath[b]) return;
+    while (polyPath[b].getLength() > 0) polyPath[b].pop();
+  }
+
+  function fillPolygonInputs(b){
+    if (!polyPath[b]) return;
+    var len = Math.min(4, polyPath[b].getLength());
+    // limpiar primero
+    for (var i=1;i<=4;i++){
+      var $lat = $("#lat"+i+"_b"+b), $lng = $("#lng"+i+"_b"+b);
+      if ($lat.length) $lat.val('');
+      if ($lng.length) $lng.val('');
+      else {
+        // fallback dentro del tab del bloque
+        var $scope = $('#bloq'+b);
+        var $lat2 = $scope.find('#lat'+i), $lng2 = $scope.find('#lng'+i);
+        if ($lat2.length) $lat2.val('');
+        if ($lng2.length) $lng2.val('');
+      }
     }
+    // llenar
+    for (var j=0;j<len;j++){
+      var pt = polyPath[b].getAt(j);
+      var $lat = $("#lat"+(j+1)+"_b"+b), $lng = $("#lng"+(j+1)+"_b"+b);
+      if ($lat.length && $lng.length){
+        $lat.val(pt.lat()); $lng.val(pt.lng());
+      } else {
+        var $scope = $('#bloq'+b);
+        var $lat2 = $scope.find('#lat'+(j+1)), $lng2 = $scope.find('#lng'+(j+1));
+        if ($lat2.length && $lng2.length){ $lat2.val(pt.lat()); $lng2.val(pt.lng()); }
+      }
+    }
+  }
 
-    // Cuando se abre modal, actualizamos el mapa del bloque 1
-    $('#form').on('shown.bs.modal', function (e) {
-        if(map['1']) {
-            google.maps.event.trigger(map['1'],'resize');
-            map['1'].setCenter(marker['1'].getPosition());
+  // ===== RADIO =====
+  function attachRadio(b){
+    detachDrawing(b);
+    detachPathListeners(b);
+
+    // mostrar radio
+    marker[b].setMap(map[b]);
+    circle[b].setMap(map[b]);
+    markerRadius[b].setMap(map[b]);
+
+    // ocultar polígono
+    if (polygon[b]) { polygon[b].setEditable(false); polygon[b].setMap(null); }
+
+    // click en mapa → mover centro del radio
+    detachRadio(b);
+    mapClickRadio[b] = map[b].addListener('click', function(e){
+      var latLng = e.latLng;
+      marker[b].setPosition(latLng);
+      circle[b].setCenter(latLng);
+      map[b].setCenter(latLng);
+    });
+  }
+
+  // ===== POLÍGONO (DrawingManager como en Google Maps) =====
+  function attachPolygon(b){
+    // ocultar radio
+    detachRadio(b);
+    marker[b].setMap(null);
+    circle[b].setMap(null);
+    markerRadius[b].setMap(null);
+
+    // quitar listeners de path anteriores
+    detachPathListeners(b);
+
+    // limpiar polígono previo si existe
+    if (polygon[b]) { polygon[b].setEditable(false); polygon[b].setMap(null); polygon[b] = null; polyPath[b] = null; }
+
+    // crear DrawingManager si no existe
+    if (!drawingManager[b]) {
+      drawingManager[b] = new google.maps.drawing.DrawingManager({
+        drawingMode: google.maps.drawing.OverlayType.POLYGON,
+        drawingControl: true,
+        drawingControlOptions: { position: google.maps.ControlPosition.TOP_CENTER, drawingModes: ['polygon'] },
+        polygonOptions: {
+          fillColor: '#FF0000', fillOpacity: 0.35, strokeColor: '#FF0000', strokeWeight: 2,
+          clickable: true, editable: true, zIndex: 10
         }
+      });
+    }
+    drawingManager[b].setMap(map[b]);
+    drawingManager[b].setDrawingMode(google.maps.drawing.OverlayType.POLYGON);
+
+    // overlay completo (usuario terminó de dibujar: click + doble-click)
+    safeRemoveListener(overlayCompleteListener[b]);
+    overlayCompleteListener[b] = google.maps.event.addListener(drawingManager[b], 'overlaycomplete', function(e){
+      if (e.type !== google.maps.drawing.OverlayType.POLYGON) return;
+
+      // quitar polígono anterior si hubiera
+      if (polygon[b]) { polygon[b].setEditable(false); polygon[b].setMap(null); }
+      polygon[b] = e.overlay;
+      polygon[b].setEditable(true);
+
+      // ya no estamos dibujando, dejamos solo editar
+      drawingManager[b].setDrawingMode(null);
+
+      // path y listeners de edición
+      polyPath[b] = polygon[b].getPath();
+      detachPathListeners(b);
+      pathSetAt[b]    = google.maps.event.addListener(polyPath[b], 'set_at',    function(){ fillPolygonInputs(b); });
+      pathInsertAt[b] = google.maps.event.addListener(polyPath[b], 'insert_at', function(){ fillPolygonInputs(b); });
+      pathRemoveAt[b] = google.maps.event.addListener(polyPath[b], 'remove_at', function(){ fillPolygonInputs(b); });
+
+      // guardar inputs (toma los primeros 4 vértices)
+      fillPolygonInputs(b);
+    });
+  }
+
+  function setPolygonMode(b, enabled){
+    if (enabled) attachPolygon(b);
+    else attachRadio(b);
+  }
+
+  // ===== MAPAS =====
+  function initMap(){
+    initSingleMap('1', 'map',  'address',  'latitud',  'longitud',  'radio');
+    initSingleMap('2', 'map1', 'address1', 'latitud1', 'longitud1', 'radio1');
+
+    // modo inicial: Radio
+    setPolygonMode('1', false);
+    setPolygonMode('2', false);
+  }
+
+  function initSingleMap(bloque, mapId, addressId, latId, lngId, radiusId){
+    map[bloque] = new google.maps.Map(document.getElementById(mapId), {
+      center: guayaquil, zoom: 16, scrollwheel: true, mapTypeId: "OSM", mapTypeControl: true, streetViewControl: true
     });
 
-    var id_cooperativa = null;
-    var is_bloques = false;
+    // OSM tiles
+    map[bloque].mapTypes.set("OSM", new google.maps.ImageMapType({
+      getTileUrl: function(coord, zoom) {
+        var tilesPerGlobe = 1 << zoom;
+        var x = coord.x % tilesPerGlobe; if (x < 0) x = tilesPerGlobe + x;
+        return "https://tile.openstreetmap.org/" + zoom + "/" + x + "/" + coord.y + ".png";
+      },
+      tileSize: new google.maps.Size(256, 256), name: "OSM", maxZoom: 18
+    }));
+
+    geocoder[bloque] = new google.maps.Geocoder();
+    var address = document.getElementById(addressId);
+    var searchBox = new google.maps.places.SearchBox(address);
+    map[bloque].controls[google.maps.ControlPosition.TOP_LEFT].push(address);
+
+    // Radio (marker + circle + markerRadius)
+    marker[bloque] = new google.maps.Marker({ map: map[bloque], position: guayaquil, title: 'Punto de control' });
+    circle[bloque] = new google.maps.Circle({
+      map: map[bloque], center: guayaquil, radius: 0,
+      strokeColor: '#FF0000', strokeOpacity: 0.8, strokeWeight: 2,
+      fillColor: '#FF0000', fillOpacity: 0.35
+    });
+    var icon = "{{ asset('/images/radius.png') }}";
+    markerRadius[bloque] = new google.maps.Marker({ map: map[bloque], position: guayaquil, draggable: true, title: 'Radio', icon: icon });
+
+    // Polígono (se gestiona al entrar a modo polígono)
+    polygon[bloque] = null; polyPath[bloque] = null;
+
+    // Buscar por lugar
+    searchBox.addListener('places_changed', function () {
+      var places = searchBox.getPlaces(); if (!places || places.length === 0) return;
+      var location = places[0].geometry.location;
+      map[bloque].setCenter(location);
+      circle[bloque].setCenter(location);
+      marker[bloque].setPosition(location);
+    });
+
+    // Eventos del radio
+    google.maps.event.addListener(marker[bloque], 'position_changed', function(){ updateMarkerRadius(bloque); });
+    google.maps.event.addListener(markerRadius[bloque], 'position_changed', function(){ update(bloque); });
+
+    // Resize
+    google.maps.event.addDomListener(window, "resize", function() {
+      var center = map[bloque].getCenter();
+      google.maps.event.trigger(map[bloque], "resize");
+      map[bloque].setCenter(center);
+    });
+  }
+
+  // ===== RADIO helpers =====
+  function updateMarkerRadius(bloque){
+    var latId = (bloque==='1' ? 'latitud' : 'latitud1');
+    var lngId = (bloque==='1' ? 'longitud' : 'longitud1');
+    var pos = marker[bloque].getPosition();
+    markerRadius[bloque].setPosition(pos);
+    var latEl = document.getElementById(latId), lngEl = document.getElementById(lngId);
+    if (latEl) latEl.value = pos.lat(); if (lngEl) lngEl.value = pos.lng();
+  }
+  function update(bloque){
+    if (!google.maps.geometry) return;
+    var d = google.maps.geometry.spherical.computeDistanceBetween(marker[bloque].getPosition(), markerRadius[bloque].getPosition());
+    circle[bloque].setRadius(d);
+    var id = (bloque==='1' ? 'radio' : 'radio1'); var el = document.getElementById(id);
+    if (el) el.value = d;
+  }
+
+  // ===== SWITCH tipo_mar (tu UI) =====
+  $(document).ready(function(){
+    $("input[name='tipo_mar']").on("change", function () {
+      var isPolygon = $(this).val() === "2";
+
+      // tu toggle de UI (mantén si ya lo tienes)
+      $("#div_lan_lon_radio1, #div_lan_lon_radio2").toggle(!isPolygon);
+      $("#contenedor-poligono1, #contenedor-poligono2").toggle(isPolygon);
+
+      setPolygonMode('1', isPolygon);
+      setPolygonMode('2', isPolygon);
+    });
+  });
+</script>
 
 
-    @if(isset($id_cooperativa))
-    id_cooperativa='{{$id_cooperativa}}';
-    @endif
 
-    @if(isset($is_bloques))
-    is_bloques='{{$is_bloques}}';
-    @endif
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyByw7IdCHlZUQpHliX9wRU77TkdDlUc59c&libraries=places,geometry,drawing&callback=initMap" async defer></script>
 
+<script>
+  // ===== Resto de utilitarios que ya tenías =====
+  $(function() {  
+    // MT2500 checkbox para tab 1
+    $('#otro').click(function () {
+      var checked = $(this).is(':checked');
+      $('#entrada').prop('readonly', !checked);
+      $('#salida').prop('readonly', !checked);
+      if (!checked) { $('#entrada').val(null); $('#salida').val(null); }
+    });
 
-    
-    // Guardar punto de control
-    /*
-    function guardar() {
-        if (actual_id == null) {
-            crearPuntoControl(
-                '{{ url('/puntos-de-control') }}',
-                '{{$tipo_usuario_valor}}',
-                id_cooperativa
-            );
-             guardarPuntosControl(
-                '{{ url('/puntos-de-control-bloques') }}',
-                '{{$tipo_usuario_valor}}',
-                id_cooperativa
-            );
-        } else {
-            actualizarPuntoControl(
-                '{{ url('/puntos-de-control') }}/' + actual_id,
-                '{{$tipo_usuario_valor}}',
-                id_cooperativa
-            );
-        }
+    // MT2500 checkbox para tab 2
+    $('#otro1').click(function () {
+      var checked = $(this).is(':checked');
+      $('#entrada1').prop('readonly', !checked);
+      $('#salida1').prop('readonly', !checked);
+      if (!checked) { $('#entrada1').val(null); $('#salida1').val(null); }
+    });
+  });
+
+  // Actualiza radio desde input
+  function updateRadius(bloque='1') {
+    var radiusInput = document.getElementById(bloque==='1' ? 'radio' : 'radio1');
+    if (radiusInput && radiusInput.value !== '') {
+      circle[bloque].setRadius(parseFloat(radiusInput.value));
     }
-    */
+  }
 
-    function guardar() {
-        var bloques = $('#cooperativa_id').find('option:selected').data('bloques');
-        if (actual_id == null) {
-            if (bloques === true || bloques === "true" || bloques == 1) {
-                guardarPuntosControl(
-                    '{{ url('/puntos-de-control-bloques') }}',
-                    '{{$tipo_usuario_valor}}',
-                    id_cooperativa
-                );
-            } else {
-                crearPuntoControl(
-                    '{{ url('/puntos-de-control') }}',
-                    '{{$tipo_usuario_valor}}',
-                    id_cooperativa
-                );
-            }
-        } else {
-
-            if (bloques === true || bloques === "true" || bloques == 1) {
-                actualizarPuntoControlBloq(
-                    '{{ url('/puntos-de-control-bloques') }}/' + actual_id,
-                    '{{$tipo_usuario_valor}}',
-                    id_cooperativa
-                );
-            } else {
-                actualizarPuntoControl(
-                    '{{ url('/puntos-de-control') }}/' + actual_id,
-                    '{{$tipo_usuario_valor}}',
-                    id_cooperativa
-                );
-            }
-
-           
-        }
+  // Actualiza posición del marcador desde inputs
+  function updateMarkerPosition(bloque='1') {
+    var latInput = document.getElementById(bloque==='1' ? 'latitud' : 'latitud1');
+    var lngInput = document.getElementById(bloque==='1' ? 'longitud' : 'longitud1');
+    if (latInput.value !== '' && lngInput.value !== '') {
+      var pos = { lat: parseFloat(latInput.value), lng: parseFloat(lngInput.value) };
+      marker[bloque].setPosition(pos);
+      circle[bloque].setCenter(marker[bloque].getPosition());
+      map[bloque].setCenter(marker[bloque].getPosition());
+      update(bloque);
     }
+  }
+
+  function mostrar() { document.form_search.submit(); }
+
+  $('#form').on('shown.bs.modal', function () {
+    if(map['1']) {
+      google.maps.event.trigger(map['1'],'resize');
+      map['1'].setCenter(marker['1'].getPosition());
+    }
+  });
+
+  var id_cooperativa = null, is_bloques = false;
+  @if(isset($id_cooperativa)) id_cooperativa='{{$id_cooperativa}}'; @endif
+  @if(isset($is_bloques))     is_bloques='{{$is_bloques}}';         @endif
+
+  function guardar() {
+    var bloques = $('#cooperativa_id').find('option:selected').data('bloques');
+    if (actual_id == null) {
+      if (bloques === true || bloques === "true" || bloques == 1) {
+        guardarPuntosControl('{{ url('/puntos-de-control-bloques') }}','{{$tipo_usuario_valor}}',id_cooperativa);
+      } else {
+        crearPuntoControl('{{ url('/puntos-de-control') }}','{{$tipo_usuario_valor}}',id_cooperativa);
+      }
+    } else {
+      if (bloques === true || bloques === "true" || bloques == 1) {
+        actualizarPuntoControlBloq('{{ url('/puntos-de-control-bloques') }}/' + actual_id,'{{$tipo_usuario_valor}}',id_cooperativa);
+      } else {
+        actualizarPuntoControl('{{ url('/puntos-de-control') }}/' + actual_id,'{{$tipo_usuario_valor}}',id_cooperativa);
+      }
+    }
+  }
 </script>
 
 @endsection
