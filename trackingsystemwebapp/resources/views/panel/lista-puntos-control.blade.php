@@ -746,7 +746,7 @@ Puntos de control
 
 
 
-<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyByw7IdCHlZUQpHliX9wRU77TkdDlUc59c&libraries=places,geometry,drawing&callback=initMap" async defer></script>
+<script src="https://maps.googleapis.com/maps/api/js?key=&libraries=places,geometry,drawing&callback=initMap" async defer></script>
 
 <script>
   // ===== Resto de utilitarios que ya tenías =====
