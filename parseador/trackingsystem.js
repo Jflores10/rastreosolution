@@ -138,6 +138,26 @@ function toDecimalHex(value) {
     return isNaN(dec) ? 0 : dec;
 }
 
+function hexToBitPosition(hexString) {
+  // Convertir el string hexadecimal a entero
+  let decimal = (typeof hexString === 'string') ? parseInt(hexString, 16) : hexString;
+
+  // Si es cero, no tiene bits en 1
+  if (decimal === 0) return null;
+
+  // Encontrar la posición del primer bit en 1 (desde la derecha)
+  let position = 0;
+  let value = decimal;
+
+  while ((value & 1) === 0) {
+    value >>= 1;  // shift a la derecha
+    position++;
+  }
+
+  return position;
+}
+
+
 /*
   Get the time needed to restart the counter
 */
@@ -774,7 +794,7 @@ function onClientConnected(socket) {
                 }, function (err, document) {
                     if (err) console.log(err);
                     else if (document) {
-                        let pdi=indiceval+ parseInt(data[infoControlPoint], 10);
+                        let pdi=indiceval+ hexToBitPosition(data[infoControlPoint]);
                       
                         var estado_movil = document.estado_movil;
                         var latitud = toFloat(data[latitude]);
