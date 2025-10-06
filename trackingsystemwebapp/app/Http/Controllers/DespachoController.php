@@ -78,6 +78,10 @@ class DespachoController extends Controller
 
                 $key = $index + 2;
 
+                if (empty(trim((string) $row['unidad']))) {
+                    continue;
+                }
+
                 $unidad = Unidad::where('descripcion', trim((string) $row['unidad']))
                     ->where('cooperativa_id', $cooperativa->_id)
                     ->first();

@@ -324,8 +324,6 @@ Crear ruta
         } );
     </script>
     <script>
-    
-
         var puntoControlMap;
         var actualPuntoControliD;
         var actualPuntoControlLiId;
@@ -338,66 +336,51 @@ Crear ruta
         var line;
         var line_2;
 
+        var polygonMap = []; //  arreglo global para polígonos
+        var circleMap = [];
 
         function initMap() {
             @if(!isset($rutas))
-                //  map = new google.maps.Map(document.getElementById('map'), {
-                //     center: {lat: -2.1613905698142006, lng: -79.91300582885742},
-                //     scrollwheel: false,
-                //     zoom: 12
-                // });
-                map = new google.maps.Map(document.getElementById('map'), {
-                    center: {lat: -2.1613905698142006, lng: -79.91300582885742},
-                    scrollwheel: true,
-                    zoom: 12,
-                    mapTypeId: "OSM",
-                    mapTypeControl: true,
-                    streetViewControl: true});
-
-                map.mapTypes.set("OSM", new google.maps.ImageMapType({
-                    getTileUrl: function(coord, zoom) {
-                        var tilesPerGlobe = 1 << zoom;
-                        var x = coord.x % tilesPerGlobe;
-                        if (x < 0) {
-                            x = tilesPerGlobe+x;}
-                        return "http://tile.openstreetmap.org/" + zoom + "/" + x + "/" + coord.y + ".png";
-                    },
-                    tileSize: new google.maps.Size(256, 256),
-                    name: "OpenStreetMap",
-                    maxZoom: 18
-                }));
-            @endif
-            // viewMap = new google.maps.Map(document.getElementById('view_map'), {
-            //     center: {lat: -34.397, lng: 150.644},
-            //     scrollwheel: false,
-            //     zoom: 14
-            // });
-            viewMap = new google.maps.Map(document.getElementById('view_map'), {
-                center: {lat: -34.397, lng: 150.644},
+            map = new google.maps.Map(document.getElementById('map'), {
+                center: {lat: -2.1613905698142006, lng: -79.91300582885742},
                 scrollwheel: true,
-                zoom: 14,
+                zoom: 12,
                 mapTypeId: "OSM",
                 mapTypeControl: true,
-                streetViewControl: true});
-
-            viewMap.mapTypes.set("OSM", new google.maps.ImageMapType({
+                streetViewControl: true
+            });
+            map.mapTypes.set("OSM", new google.maps.ImageMapType({
                 getTileUrl: function(coord, zoom) {
                     var tilesPerGlobe = 1 << zoom;
                     var x = coord.x % tilesPerGlobe;
-                    if (x < 0) {
-                        x = tilesPerGlobe+x;}
+                    if (x < 0) x = tilesPerGlobe + x;
                     return "http://tile.openstreetmap.org/" + zoom + "/" + x + "/" + coord.y + ".png";
                 },
                 tileSize: new google.maps.Size(256, 256),
                 name: "OpenStreetMap",
                 maxZoom: 18
             }));
+            @endif
 
-            // puntoControlMap = new google.maps.Map(document.getElementById('punto_control_map'), {
-            //     center: {lat: -34.397, lng: 150.644},
-            //     scrollwheel: false,
-            //     zoom: 14
-            // });
+            viewMap = new google.maps.Map(document.getElementById('view_map'), {
+                center: {lat: -34.397, lng: 150.644},
+                scrollwheel: true,
+                zoom: 14,
+                mapTypeId: "OSM",
+                mapTypeControl: true,
+                streetViewControl: true
+            });
+            viewMap.mapTypes.set("OSM", new google.maps.ImageMapType({
+                getTileUrl: function(coord, zoom) {
+                    var tilesPerGlobe = 1 << zoom;
+                    var x = coord.x % tilesPerGlobe;
+                    if (x < 0) x = tilesPerGlobe + x;
+                    return "http://tile.openstreetmap.org/" + zoom + "/" + x + "/" + coord.y + ".png";
+                },
+                tileSize: new google.maps.Size(256, 256),
+                name: "OpenStreetMap",
+                maxZoom: 18
+            }));
 
             puntoControlMap = new google.maps.Map(document.getElementById('punto_control_map'), {
                 center: {lat: -34.397, lng: 150.644},
@@ -405,30 +388,26 @@ Crear ruta
                 zoom: 14,
                 mapTypeId: "OSM",
                 mapTypeControl: true,
-                streetViewControl: true});
-
+                streetViewControl: true
+            });
             puntoControlMap.mapTypes.set("OSM", new google.maps.ImageMapType({
                 getTileUrl: function(coord, zoom) {
                     var tilesPerGlobe = 1 << zoom;
                     var x = coord.x % tilesPerGlobe;
-                    if (x < 0) {
-                        x = tilesPerGlobe+x;}
+                    if (x < 0) x = tilesPerGlobe + x;
                     return "http://tile.openstreetmap.org/" + zoom + "/" + x + "/" + coord.y + ".png";
                 },
                 tileSize: new google.maps.Size(256, 256),
                 name: "OpenStreetMap",
                 maxZoom: 18
             }));
-            
+
             google.maps.event.addDomListener(window, "resize", function() {
                 google.maps.event.trigger(puntoControlMap, "resize");
-            });
-            google.maps.event.addDomListener(window, "resize", function() {
                 google.maps.event.trigger(viewMap, "resize");
             });
-            marker = new google.maps.Marker({
-                map: puntoControlMap
-            });
+
+            marker = new google.maps.Marker({ map: puntoControlMap });
             circle = new google.maps.Circle({
                 strokeColor: '#00942b',
                 strokeOpacity: 0.8,
@@ -437,9 +416,7 @@ Crear ruta
                 fillOpacity: 0.35,
                 map: puntoControlMap
             });
-            viewMarker = new google.maps.Marker({
-                map: viewMap
-            });
+            viewMarker = new google.maps.Marker({ map: viewMap });
             viewCircle = new google.maps.Circle({
                 strokeColor: '#00942b',
                 strokeOpacity: 0.8,
@@ -448,6 +425,7 @@ Crear ruta
                 fillOpacity: 0.35,
                 map: viewMap
             });
+
             line = new google.maps.Polyline({
                 geodesic: true,
                 strokeColor: '#2ecc71',
@@ -455,7 +433,6 @@ Crear ruta
                 strokeWeight: 4
             });
             line.setMap(map);
-
             line_2 = new google.maps.Polyline({
                 geodesic: true,
                 strokeColor: '#FFF',
@@ -465,80 +442,64 @@ Crear ruta
             line_2.setMap(map);
 
             map.addListener('zoom_changed', function() {
-
-
-                if(map.getZoom() >= 15 && map.getZoom() < 18){
-
-                    line.setOptions({strokeWeight: 13});
-
-                    line_2.setOptions({strokeWeight: 2});
-
-                }else{
-                    if(map.getZoom() >= 18){
-                        if(map.getZoom() > 18){
-
-                            line.setOptions({strokeWeight: 20});
-                            line2.setOptions({strokeWeight: 3});
-                        }
-                    }
+                if (map.getZoom() >= 15 && map.getZoom() < 18) {
+                    line.setOptions({ strokeWeight: 13 });
+                    line_2.setOptions({ strokeWeight: 2 });
+                } else if (map.getZoom() >= 18) {
+                    line.setOptions({ strokeWeight: 20 });
+                    line_2.setOptions({ strokeWeight: 3 });
                 }
-
             });
 
             @if(isset($ruta) and $ruta->recorrido != null)
                 var array_recorrido=[];
                 var array_for=[];
                 actual_id='{{$ruta->_id}}';
-
                 document.getElementById('color_ruta').value='{{$ruta->color}}';
-                console.log('{{$ruta->color}}');
-
                 @foreach($ruta->recorrido as $recorrido)
-                   @foreach($recorrido as $campo)
+                    @foreach($recorrido as $campo)
                         array_for.push('{{$campo}}');
+                    @endforeach
+                    array_recorrido.push({
+                        'lat':parseFloat(array_for[0]),
+                        'lng':parseFloat(array_for[1])
+                    });
+                    array_for=[];
                 @endforeach
-                array_recorrido.push({
-                    'lat':parseFloat(array_for[0]),
-                    'lng':parseFloat(array_for[1])
-                });
-                array_for=[];
-                @endforeach
-                 array_ruta=array_recorrido;
-                 generateRoute(array_recorrido);
-                 map.setCenter(array_ruta[0]);
+                generateRoute(array_recorrido);
+                map.setCenter(array_recorrido[0]);
             @endif
 
             @if(isset($ruta) and $ruta->puntos_control!=null and isset($puntos_control))
                 var array_puntos=[];
-
                 @foreach($ruta->puntos_control as $punto_control)
-                        @foreach($puntos_control as $punto)
-                            if('{{$punto_control["id"]}}'== '{{$punto["_id"]}}')
-                                array_puntos.push({
-                                    id:'{{$punto_control["id"]}}',
-                                    adelanto:'{{$punto_control["adelanto"]}}',
-                                    atraso:'{{$punto_control["atraso"]}}',
-                                    tiempo_llegada:'{{$punto_control["tiempo_llegada"]}}',
-                                    secuencia:'{{$punto_control["secuencia"]}}',
-                                    descripcion:'{{$punto["descripcion"]}}',
-                                    latitud:'{{$punto["latitud"]}}',
-                                    longitud:'{{$punto["longitud"]}}',
-                                    radio:'{{$punto["radio"]}}'
-                                });
-                        @endforeach
-               @endforeach
+                    @foreach($puntos_control as $punto)
+                        if('{{$punto_control["id"]}}'== '{{$punto["_id"]}}')
+                            array_puntos.push({
+                                id:'{{$punto_control["id"]}}',
+                                adelanto:'{{$punto_control["adelanto"]}}',
+                                atraso:'{{$punto_control["atraso"]}}',
+                                tiempo_llegada:'{{$punto_control["tiempo_llegada"]}}',
+                                secuencia:'{{$punto_control["secuencia"]}}',
+                                descripcion:'{{$punto["descripcion"]}}',
+                                latitud:'{{$punto["latitud"]}}',
+                                longitud:'{{$punto["longitud"]}}',
+                                radio:'{{$punto["radio"]}}',
+                                tipo_mar:'{{$punto["tipo_mar"]}}',
+                                poligono:`{!! isset($punto["poligono"]) ? json_encode($punto["poligono"]) : '' !!}`
+                            });
+                    @endforeach
+                @endforeach
 
-                for(var i=0;i<array_puntos.length;i++)
-                {
-                    for(var j=0;j<array_puntos.length;j++)
-                    {
-                        if(parseInt(array_puntos[j].secuencia) == i+1)
-                        {
+                for(var i=0;i<array_puntos.length;i++){
+                    for(var j=0;j<array_puntos.length;j++){
+                        if(parseInt(array_puntos[j].secuencia) == i+1){
                             getPuntosControlHtml(array_puntos[j]);
                         }
                     }
                 }
-          @endif
+            @endif
+
             google.maps.event.addDomListener(window, "resize", function() {
                 var center = puntoControlMap.getCenter();
                 google.maps.event.trigger(puntoControlMap, "resize");
@@ -546,56 +507,113 @@ Crear ruta
             });
         }
 
+        //  Dibuja polígonos con banderita roja
+        function drawPolygonOnMap(mapTarget, bloque, poligono){
+            if(typeof poligono==="string" && poligono.trim()!==""){
+                try{ poligono=JSON.parse(poligono); }catch(e){ return; }
+            }
+            if(!Array.isArray(poligono)) return;
+            if(polygonMap[bloque]) polygonMap[bloque].setMap(null);
+
+            var coords=poligono.map(p=>({lat:parseFloat(p.lat),lng:parseFloat(p.lng)})).filter(p=>!isNaN(p.lat)&&!isNaN(p.lng));
+            if(coords.length<3) return;
+
+            polygonMap[bloque]=new google.maps.Polygon({
+                paths:coords,
+                strokeColor:"#00942b",
+                strokeOpacity:0.8,
+                strokeWeight:2,
+                fillColor:"#00942b",
+                fillOpacity:0.25,
+                map:mapTarget
+            });
+
+            //  bandera en centroide
+            /*
+            let sumLat=0,sumLng=0;
+            coords.forEach(c=>{sumLat+=c.lat;sumLng+=c.lng;});
+            const center={lat:sumLat/coords.length,lng:sumLng/coords.length};
+            const icon={url:'{{url("/images/flag.png")}}',scaledSize:new google.maps.Size(25,25)};
+            new google.maps.Marker({map:mapTarget,position:center,icon:icon});
+            */
+        }
+
+        //  Detecta si punto es polígono o círculo
+        function setPuntoControlMap(id){
+            var url="{{ url('/puntos-de-control') }}/"+id;
+            $.get(url,function(data){
+                marker.setMap(null);
+                circle.setMap(null);
+
+                if(data.tipo_mar==2 && data.poligono){
+                    drawPolygonOnMap(puntoControlMap,id,data.poligono);
+                }else{
+                    marker.setPosition({lat:parseFloat(data.latitud),lng:parseFloat(data.longitud)});
+                    circle.setCenter(marker.getPosition());
+                    circle.setRadius(parseFloat(data.radio));
+                    marker.setMap(puntoControlMap);
+                    circle.setMap(puntoControlMap);
+                    puntoControlMap.setCenter(marker.getPosition());
+                }
+            },"json");
+        }
+
         function verifyGoogleMSG(){
             var googlemaps=document.getElementById('map');
-            // console.log(googlemaps.innerHTML);
-            if(googlemaps != null && googlemaps != undefined){
+            if(googlemaps!=null&&googlemaps!=undefined){
                 var googlemapmsg=googlemaps.getElementsByTagName('div');
-                if(googlemapmsg[googlemapmsg.length-3]!= null && googlemapmsg[googlemapmsg.length-3] != undefined )
+                if(googlemapmsg[googlemapmsg.length-3]!=null&&googlemapmsg[googlemapmsg.length-3]!=undefined)
                     googlemapmsg[googlemapmsg.length-3].style="";
             }
         }
-
         setInterval(verifyGoogleMSG,100,null);
     </script>
-    <script src="{{ asset('js/ruta.js') }}"></script>
-    <script>
 
-      window.onload = function () { 
+    
+    <script>
+        window.onload = function () { 
             $('#menu_toggle').trigger('click');
             verificarruta();
         }
 
+        // ============================
+        // Estado y utilidades
+        // ============================
         var list_json=[];
         var list=document.getElementsByName('puntos_control[]');
         var circleMap=[];
+        var polygonMap=[]; //  para polígonos pintados en el mapa principal
         var id_indice_aux=0;
-
         var indice_puntos=0;
 
+        function safeFloat(v, def=null) {
+            var n = parseFloat(v);
+            return (isNaN(n) || !isFinite(n)) ? def : n;
+        }
+
+        // ============================
+        // Cronograma (sin cambios)
+        // ============================
         function agregarCronograma(dia = 1, desde = null, hasta = null) {
             var idDesde = 'desde' + $('#cronograma_body tr').length;
             var idHasta = 'hasta' + $('#cronograma_body tr').length;
             var idDia = 'dia' + $('#cronograma_body tr').length;
             var html = '<tr>'
-                +   '<td><button onclick="agregarCronograma($(\'#' + idDia + '\').val(), $(\'#' + idDesde + '\').val(), $(\'#' + idHasta + '\').val());" class="btn btn-success" type="button"><i class="fa fa-clone"></i></button></td>'
-                +   '<td><select id="' + idDia + '" class="form-control" name="dia[]">'
-                        + '<option' + ((dia == 0)?' selected':'') + ' value="0">Domingo</option>' 
-                        + '<option' + ((dia == 1)?' selected':'') + ' value="1">Lunes</option>'
-                        + '<option' + ((dia == 2)?' selected':'') + ' value="2">Martes</option>'
-                        + '<option' + ((dia == 3)?' selected':'') + ' value="3">Miércoles</option>'
-                        + '<option' + ((dia == 4)?' selected':'') + ' value="4">Jueves</option>'
-                        + '<option' + ((dia == 5)?' selected':'') + ' value="5">Viernes</option>'
-                        + '<option' + ((dia == 6)?' selected':'') + ' value="6">Sábado</option>'
-                    + '</select></td>'
-                +   '<td><input id="' + idDesde + '" name="desde[]" type="text" class="form-control" value="' + ((desde == null)?'':desde) + '" /></td>'
-                +   '<td><input id="' + idHasta + '" name="hasta[]" type="text" class="form-control" value="' + ((hasta == null)?'':hasta) + '" /></td>'
-                +   '<td><button onclick="$(this).parent().parent().remove();" class="btn btn-danger" type="button"><i class="fa fa-trash-o"></i></button></td>'
-                + '</tr>';
-            var options = {
-                datepicker:false,
-                format:'H:i'
-            };
+            +   '<td><button onclick="agregarCronograma($(\'#' + idDia + '\').val(), $(\'#' + idDesde + '\').val(), $(\'#' + idHasta + '\').val());" class="btn btn-success" type="button"><i class="fa fa-clone"></i></button></td>'
+            +   '<td><select id="' + idDia + '" class="form-control" name="dia[]">'
+                    + '<option' + ((dia == 0)?' selected':'') + ' value="0">Domingo</option>' 
+                    + '<option' + ((dia == 1)?' selected':'') + ' value="1">Lunes</option>'
+                    + '<option' + ((dia == 2)?' selected':'') + ' value="2">Martes</option>'
+                    + '<option' + ((dia == 3)?' selected':'') + ' value="3">Miércoles</option>'
+                    + '<option' + ((dia == 4)?' selected':'') + ' value="4">Jueves</option>'
+                    + '<option' + ((dia == 5)?' selected':'') + ' value="5">Viernes</option>'
+                    + '<option' + ((dia == 6)?' selected':'') + ' value="6">Sábado</option>'
+                + '</select></td>'
+            +   '<td><input id="' + idDesde + '" name="desde[]" type="text" class="form-control" value="' + ((desde == null)?'':desde) + '" /></td>'
+            +   '<td><input id="' + idHasta + '" name="hasta[]" type="text" class="form-control" value="' + ((hasta == null)?'':hasta) + '" /></td>'
+            +   '<td><button onclick="$(this).parent().parent().remove();" class="btn btn-danger" type="button"><i class="fa fa-trash-o"></i></button></td>'
+            + '</tr>';
+            var options = { datepicker:false, format:'H:i' };
             $('#cronograma_body').append(html);
             $('#' + idDesde).datetimepicker(options);
             $('#' + idHasta).datetimepicker(options);
@@ -603,34 +621,35 @@ Crear ruta
 
         @if (isset($ruta) && isset($ruta->cronogramas))
             @foreach($ruta->cronogramas as $cronograma)
-                agregarCronograma({{ $cronograma->dia }}, '{{ $cronograma->desde->format('H:i') }}', '{{ $cronograma->hasta->format('H:i') }}');
+            agregarCronograma({{ $cronograma->dia }}, '{{ $cronograma->desde->format('H:i') }}', '{{ $cronograma->hasta->format('H:i') }}');
             @endforeach
         @endif
 
+        // ============================
+        // Mostrar/ocultar secciones (sin cambios)
+        // ============================
         function verificarruta(){
             var eTipoRuta = document.getElementById('tipo_ruta');
             if (eTipoRuta) {
-                var tipo_ruta= eTipoRuta.value;
-                var div_tipo_ruta_padre=document.getElementById('div-tipo_ruta_padre');
-                var div_tipo_ruta_atm=document.getElementById('div-tipo_ruta_atm');
-                var tipo_ruta_padre=document.getElementById('tipo_ruta_padre');
+            var tipo_ruta= eTipoRuta.value;
+            var div_tipo_ruta_padre=document.getElementById('div-tipo_ruta_padre');
+            var div_tipo_ruta_atm=document.getElementById('div-tipo_ruta_atm');
+            var tipo_ruta_padre=document.getElementById('tipo_ruta_padre');
 
-                div_tipo_ruta_atm.style="display:none;";
-                if(tipo_ruta=='H'){
-                    div_tipo_ruta_padre.style="";
-                    if (masc)
-                        $('#div_cronograma').show();
-                }
-                else if(tipo_ruta == 'I' && masc)
-                    $('#div_cronograma').show();
-                else{
-                    if (tipo_ruta_padre != null) {
-                        tipo_ruta_padre.value="";
-                    }
-                    div_tipo_ruta_padre.style="display:none;";
-                    div_tipo_ruta_atm.style="";
-                    $('#div_cronograma').hide();
-                }
+            div_tipo_ruta_atm.style="display:none;";
+            if(tipo_ruta=='H'){
+                div_tipo_ruta_padre.style="";
+                if (masc) $('#div_cronograma').show();
+            }
+            else if(tipo_ruta == 'I' && masc) {
+                $('#div_cronograma').show();
+            }
+            else{
+                if (tipo_ruta_padre != null) tipo_ruta_padre.value="";
+                div_tipo_ruta_padre.style="display:none;";
+                div_tipo_ruta_atm.style="";
+                $('#div_cronograma').hide();
+            }
             }
         }
 
@@ -638,163 +657,214 @@ Crear ruta
         if (coop != undefined && coop != null && coop != '') {
             $('#cooperativa_id').trigger('change');
         }
+        function getCooperativaId(){ return document.getElementById('cooperativa_id').value; }
 
-        function getCooperativaId()
-        {
-            return document.getElementById('cooperativa_id').value;
-        }
-
+        // ============================
+        // Ruta (sin cambios)
+        // ============================
         function generateRoute(path) {
-
             var array_aux = [];
             var heatmapData = [];
-
-            for (var i = 0; i < path.length; i++)
-            {
-                array_aux.push({lat:parseFloat(path[i].lat),lng:parseFloat(path[i].lng)});
-                heatmapData.push(new google.maps.LatLng(parseFloat(path[i].lat),parseFloat(path[i].lng)));
+            for (var i = 0; i < path.length; i++) {
+            array_aux.push({lat:parseFloat(path[i].lat),lng:parseFloat(path[i].lng)});
+            heatmapData.push(new google.maps.LatLng(parseFloat(path[i].lat),parseFloat(path[i].lng)));
             }
-            if (array_aux.length > 0)
-            {
-                line.setPath(array_aux);
-                line_2.setPath(array_aux);
-                map.setCenter(array_aux[0]);
-                map.setZoom(13);
+            if (array_aux.length > 0) {
+            line.setPath(array_aux);
+            line_2.setPath(array_aux);
+            map.setCenter(array_aux[0]);
+            map.setZoom(13);
             }
-
-            // var heatmap = new google.maps.visualization.HeatmapLayer({
-            //                 data: heatmapData
-            //             });
-           // heatmap.setMap(map);
-
+            // heatmap opcional si lo necesitas
         }
 
-
-        function buscarPuntoControl(descripcion, id_cooperativa)
-        {
-            var params = {
-                search : descripcion,
-                cooperativa_id:id_cooperativa
-            };
+        // ============================
+        // Búsqueda de puntos de control (sin cambios visibles)
+        // ============================
+        function buscarPuntoControl(descripcion, id_cooperativa) {
+            var params = { search: descripcion, cooperativa_id:id_cooperativa };
             var url = "{{ url('/puntos-de-control/search-json') }}";
             $('#punto_control').empty();
             $.post(url , params ,function( data ) {
-                for (var i = 0; i < data.length; i++)
-                {
-                    $('#punto_control').append($('<option>', {
-                        value : data[i]._id,
-                        text : data[i].descripcion
-                    }));
-                }
-                if (data.length > 0)
-                {
-                    document.getElementById('punto_control').value = data[0]._id;
-                    setPuntoControlMap(data[0]._id);
-                }
-                else
-                {
-                    marker.setMap(null);
-                    circle.setMap(null);
-                }
+            for (var i = 0; i < data.length; i++) {
+                $('#punto_control').append($('<option>', {
+                value : data[i]._id,
+                text : data[i].descripcion
+                }));
+            }
+            if (data.length > 0) {
+                document.getElementById('punto_control').value = data[0]._id;
+                setPuntoControlMap(data[0]._id); // ⬅️ más abajo maneja círculos vs polígonos
+            } else {
+                marker.setMap(null);
+                circle.setMap(null);
+            }
             }, "json");
         }
 
-        function setDataPuntoControl(adelanto,atraso,puntoControlId,id,tiempo_llegada)
-        {
+        // ============================
+        // Edición del punto (sin cambios)
+        // ============================
+        function setDataPuntoControl(adelanto,atraso,puntoControlId,id,tiempo_llegada){
             document.getElementById('adelanto-modificacion').value=adelanto;
             document.getElementById('atraso-modificacion').value=atraso;
             document.getElementById('tiempo-llegada-modificacion').value=tiempo_llegada;
-
             actualPuntoControliD=id;
             actualPuntoControlLiId=puntoControlId;
         }
 
-        function editarPunto()
-        {
-            if(actualPuntoControliD!=null && actualPuntoControlLiId!=null )
-            {
-                var adelanto=document.getElementById('adelanto-modificacion').value;
-                var atraso=document.getElementById('atraso-modificacion').value;
-                var tiempo_llegada=document.getElementById('tiempo-llegada-modificacion').value;
+        function editarPunto(){
+            if(actualPuntoControliD!=null && actualPuntoControlLiId!=null ){
+            var adelanto=document.getElementById('adelanto-modificacion').value;
+            var atraso=document.getElementById('atraso-modificacion').value;
+            var tiempo_llegada=document.getElementById('tiempo-llegada-modificacion').value;
 
-                if(adelanto==''||adelanto==null)adelanto='0';
-                if(atraso==''||atraso==null)atraso='0';
-                if(tiempo_llegada ==''||tiempo_llegada==null)tiempo_llegada='0';
+            if(adelanto==''||adelanto==null)adelanto='0';
+            if(atraso==''||atraso==null)atraso='0';
+            if(tiempo_llegada ==''||tiempo_llegada==null)tiempo_llegada='0';
 
-                if(parseFloat(tiempo_llegada)>=0  && parseFloat(adelanto)>=0 && parseFloat(atraso)>=0)
-                {
-                        var value= JSON.stringify({
-                            id: actualPuntoControliD,
-                            adelanto: adelanto,
-                            atraso: atraso,
-                            tiempo_llegada:tiempo_llegada,
-                            secuencia: ''
-                        });
-                        $('#'+actualPuntoControlLiId).find('input[id="puntos_control"]').val(value);
-                        let texto = $('#'+actualPuntoControlLiId).find('span').text();
-                        let values = texto.split('|');
-                        $('#'+actualPuntoControlLiId).find('span').text('AT: ' + atraso + '|AD: + ' + adelanto + '|T: ' + tiempo_llegada + '|' + values[3]);
-                        $('#'+actualPuntoControlLiId).find('button[id="set_data_punto"]').attr('onclick',
-                                "setDataPuntoControl('"+adelanto+"','"+atraso+"','"+actualPuntoControlLiId+"','"+actualPuntoControliD+"','"+tiempo_llegada+"');");
-                }
-                else
-                    alert("Error: Todos los datos ingresados deben ser mayores o iguales a cero.");
-
-              }
-            else
-                alert("Ocurrió un error, no se pudo actualizar el punto de control.");
+            if(parseFloat(tiempo_llegada)>=0  && parseFloat(adelanto)>=0 && parseFloat(atraso)>=0){
+                var value= JSON.stringify({
+                id: actualPuntoControliD,
+                adelanto: adelanto,
+                atraso: atraso,
+                tiempo_llegada:tiempo_llegada,
+                secuencia: ''
+                });
+                $('#'+actualPuntoControlLiId).find('input[id="puntos_control"]').val(value);
+                let texto = $('#'+actualPuntoControlLiId).find('span').text();
+                let values = texto.split('|');
+                $('#'+actualPuntoControlLiId).find('span').text('AT: ' + atraso + '|AD: + ' + adelanto + '|T: ' + tiempo_llegada + '|' + values[3]);
+                $('#'+actualPuntoControlLiId).find('button[id="set_data_punto"]').attr('onclick',
+                "setDataPuntoControl('"+adelanto+"','"+atraso+"','"+actualPuntoControlLiId+"','"+actualPuntoControliD+"','"+tiempo_llegada+"');");
+            } else {
+                alert("Error: Todos los datos ingresados deben ser mayores o iguales a cero.");
+            }
+            } else {
+            alert("Ocurrió un error, no se pudo actualizar el punto de control.");
+            }
         }
 
-        function removePuntoControl(id,i)
-        {
-            $('#' + id).remove();
-            if (circleMap[i]!=null)
-               circleMap[i].setMap(null);
-            else
-                alert("Error al eliminar el punto de control.");
-        }
+        // ============================
+        // Helpers de dibujo (círculo / polígono)
+        // ============================
+        function drawCircleOnMap(latitud, longitud, radio){
+            var lat = safeFloat(latitud);
+            var lng = safeFloat(longitud);
+            var rad = safeFloat(radio, 25);
 
-        function verPuntoControl(latitud, longitud, radio)
-        {
-           circleMap[indice_puntos]=new google.maps.Circle({
-                strokeColor: '#00942b',
-                strokeOpacity: 0.8,
-                strokeWeight: 2,
-                fillColor: '#50ff88',
-                fillOpacity: 0.35,
-                map: map
+            if (lat === null || lng === null) {
+            console.log(" Coordenadas inválidas para círculo:", latitud, longitud);
+            return;
+            }
+            circleMap[indice_puntos]=new google.maps.Circle({
+            strokeColor: '#00942b',
+            strokeOpacity: 0.8,
+            strokeWeight: 2,
+            fillColor: '#50ff88',
+            fillOpacity: 0.35,
+            map: map,
+            center: { lat: lat, lng: lng },
+            radius: rad
             });
-            var latLng = { lat: parseFloat(latitud), lng : parseFloat(longitud) };
-            circleMap[indice_puntos].setCenter(latLng);
-            circleMap[indice_puntos].setRadius(parseFloat(radio));
-            map.setCenter(latLng);
+            map.setCenter({lat: lat, lng: lng});
         }
 
-        function viewPuntoControlOnMap(latitud, longitud, indice)
-        {
-          var latLng = { lat: parseFloat(latitud), lng : parseFloat(longitud) };
-          for(var i=0 ; i<14 ; i++)
-          {
-              if(circleMap[i]!=null)
-              {
-                  if(i==indice)
-                      circleMap[i].setOptions(
-                              {
-                                  strokeColor: '#0000FF',
-                                  fillColor: '#2E64FE'
-                              });
-                  else
-                      circleMap[i].setOptions(
-                              {
-                                  strokeColor: '#00942b',
-                                  fillColor: '#50ff88'
-                              });
-              }
-          }
-            map.setCenter(latLng);
+        function drawPolygonOnMap(bloque, poligono){
+            // poligono puede venir como string JSON o como array
+            if (typeof poligono === "string" && poligono.trim() !== "") {
+            try { poligono = JSON.parse(poligono); } catch (e) {
+                console.log("Error al parsear polígono:", poligono);
+                return;
+            }
+            }
+            if (!Array.isArray(poligono)) {
+            console.log("Polígono inválido:", poligono);
+            return;
+            }
+
+            // limpiar polígono previo en ese índice
+            if (polygonMap[bloque]) polygonMap[bloque].setMap(null);
+
+            var coords = poligono
+            .map(function(p){ return { lat: safeFloat(p.lat), lng: safeFloat(p.lng) }; })
+            .filter(function(p){ return p.lat !== null && p.lng !== null; });
+
+            if (coords.length < 3) {
+            console.log(" Polígono requiere al menos 3 coordenadas válidas.");
+            return;
+            }
+
+            polygonMap[bloque] = new google.maps.Polygon({
+            paths: coords,
+            strokeColor: "#00942b",
+            strokeOpacity: 0.8,
+            strokeWeight: 2,
+            fillColor: "#00942b",
+            fillOpacity: 0.25,
+            editable: false,
+            map: map
+            });
+
+            // bandera roja en centroide
+            /*
+            var sumLat=0, sumLng=0;
+            coords.forEach(function(c){ sumLat += c.lat; sumLng += c.lng; });
+            var center = { lat: sumLat/coords.length, lng: sumLng/coords.length };
+
+            new google.maps.Marker({
+            map: map,
+            position: center,
+            icon: {
+                url: '{{url("/images/flag.png")}}',
+                scaledSize: new google.maps.Size(25, 25),
+                labelOrigin: new google.maps.Point(4, 25)
+            }
+            });
+            map.setCenter(center);
+            */
+        }
+
+        // Muestra un punto de control en el mapa según su tipo
+        function verPuntoControl(latitud, longitud, radio, tipo_mar, poligono){
+            var t = (typeof tipo_mar === 'undefined' || tipo_mar === null) ? 1 : parseInt(tipo_mar,10);
+            if (t === 2) {
+            drawPolygonOnMap(indice_puntos, poligono);
+            } else {
+            drawCircleOnMap(latitud, longitud, radio);
+            }
+        }
+
+        // Selección visual en la lista (actualiza estilos y centra)
+        function viewPuntoControlOnMap(latitud, longitud, indice, tipo_mar, poligono){
+            var t = (typeof tipo_mar === 'undefined' || tipo_mar === null) ? 1 : parseInt(tipo_mar,10);
+
+            // resaltar círculo si existe
+            for(var i=0 ; i<14 ; i++){
+            if(circleMap[i]!=null){
+                if(i==indice)
+                circleMap[i].setOptions({ strokeColor: '#0000FF', fillColor: '#2E64FE' });
+                else
+                circleMap[i].setOptions({ strokeColor: '#00942b', fillColor: '#50ff88' });
+            }
+            }
+
+            if (t === 2) {
+            // si es polígono, vuelve a centrar en su centroide
+            drawPolygonOnMap(indice, poligono);
             map.setZoom(16);
+            } else {
+            var lat = safeFloat(latitud), lng = safeFloat(longitud);
+            if (lat !== null && lng !== null) {
+                map.setCenter({lat: lat, lng: lng});
+                map.setZoom(16);
+            }
+            }
         }
 
+        // ============================
+        // Modales de mapas (sin cambios)
+        // ============================
         $('#search').on('shown.bs.modal', function (e) {
             google.maps.event.trigger(puntoControlMap,'resize');
         });
@@ -803,156 +873,236 @@ Crear ruta
             viewMap.setCenter(viewMarker.getPosition());
         });
 
-
-        function setPuntoControlMap(id)
-        {
+        // ============================
+        // Vista previa del punto (AJAX) — ahora soporta polígono
+        // ============================
+        function setPuntoControlMap(id){
             var url = "{{ url('/puntos-de-control') }}/" + id;
             $.get(url, function (data) {
-                marker.setPosition({
-                    lat : parseFloat(data.latitud),
-                    lng : parseFloat(data.longitud)
-                });
-                circle.setCenter(marker.getPosition());
-                circle.setRadius(parseFloat(data.radio));
-                marker.setMap(puntoControlMap);
-                circle.setMap(puntoControlMap);
-                puntoControlMap.setCenter(marker.getPosition());
+            // limpiar anteriores
+            marker.setMap(null);
+            circle.setMap(null);
+
+            // tipo_mar: 2 = polígono
+            if (parseInt(data.tipo_mar,10) === 2 && data.poligono) {
+                // Dibuja polígono en el mapa del modal de búsqueda (puntoControlMap)
+                // Reutilizamos la lógica de drawPolygon pero en este mapa:
+                var pol = data.poligono;
+                if (typeof pol === "string" && pol.trim() !== "") {
+                try { pol = JSON.parse(pol); } catch(e){ pol = null; }
+                }
+                if (Array.isArray(pol)) {
+                // construir coords válidas
+                var coords = pol
+                    .map(function(p){ return { lat: safeFloat(p.lat), lng: safeFloat(p.lng) }; })
+                    .filter(function(p){ return p.lat !== null && p.lng !== null; });
+
+                if (coords.length >= 3) {
+                    // polígono temporal en puntoControlMap
+                    var tempPoly = new google.maps.Polygon({
+                    paths: coords,
+                    strokeColor: "#00942b",
+                    strokeOpacity: 0.8,
+                    strokeWeight: 2,
+                    fillColor: "#00942b",
+                    fillOpacity: 0.25,
+                    editable: false,
+                    map: puntoControlMap
+                    });
+
+                    // bandera y centrado
+                    /*
+                    var sumLat=0, sumLng=0;
+                    coords.forEach(function(c){ sumLat += c.lat; sumLng += c.lng; });
+
+                    var center = { lat: sumLat/coords.length, lng: sumLng/coords.length };
+                    new google.maps.Marker({
+                    map: puntoControlMap,
+                    position: center,
+                    icon: { url: '{{url("/images/flag.png")}}', scaledSize: new google.maps.Size(25,25) }
+                    });
+                    puntoControlMap.setCenter(center);
+                    */
+                }
+                }
+                return;
+            }
+
+            // tipo_mar: 1 = círculo
+            var lat = safeFloat(data.latitud);
+            var lng = safeFloat(data.longitud);
+            var rad = safeFloat(data.radio, 25);
+
+            if (lat === null || lng === null) {
+                console.log(" Punto de control sin coordenadas válidas (tipo_mar=1 esperado).");
+                return;
+            }
+
+            marker.setPosition({ lat: lat, lng: lng });
+            circle.setCenter(marker.getPosition());
+            circle.setRadius(rad);
+            marker.setMap(puntoControlMap);
+            circle.setMap(puntoControlMap);
+            puntoControlMap.setCenter(marker.getPosition());
             }, 'json');
         }
 
+        // ============================
+        // Alta de punto desde selector (sin tocar la data de Blade)
+        // ============================
         function seleccionar() {
             var id = document.getElementById('punto_control').value;
             var adelanto = document.getElementById('adelanto').value;
             var atraso = document.getElementById('atraso').value;
             var tiempo_llegada = document.getElementById('tiempo-llegada').value;
-            if(adelanto==null||adelanto=='' )adelanto='0';
-            if(atraso == null||atraso=='')atraso = '0';
-            if(tiempo_llegada==null||tiempo_llegada=='')tiempo_llegada='0';
-
+            if(adelanto==null||adelanto=='') adelanto='0';
+            if(atraso == null||atraso=='') atraso = '0';
+            if(tiempo_llegada==null||tiempo_llegada=='') tiempo_llegada='0';
 
             if (id != null) {
+            if (list.length == 18) {
+                alert('Error: Una ruta no puede tener más de 14 puntos de control.');
+                return;
+            } else {
+                var aux, cont=1;
+                for (var i = 0; i < list.length; i++) {
+                aux = JSON.parse(list[i].value);
+                if (aux.id == id) {
+                    if(cont==2){
+                    alert('No puede ingresar un mismo punto de control más de dos veces.');
+                    return;
+                    } else cont++;
+                }
+                }
+            }
 
-                    if (list.length == 18) {
-                        alert('Error: Una ruta no puede tener más de 14 puntos de control.');
-                        return;
-                    }
-                    else {
-                        var aux;
-                        var cont=1;
-                        for (var i = 0; i < list.length; i++) {
-                            aux = JSON.parse(list[i].value);
-                            if (aux.id == id) {
-                                if(cont==2)
-                                {
-                                    alert('No puede ingresar un mismo punto de control más de dos veces.');
-                                    return;
-                                }
-                                else
-                                    cont++;
-                            }
-                        }
-                    }
+            if(parseFloat(tiempo_llegada)>=0 && parseFloat(adelanto)>=0 && parseFloat(atraso)>=0){
+                var id_punto_aux=[];
+                var punto_control=null;
 
-                    if(parseFloat(tiempo_llegada)>=0 && parseFloat(adelanto)>=0 && parseFloat(atraso)>=0)
-                    {
-                        var id_punto_aux=[];
-                        var punto_control=null;
+                @foreach($puntos_control as $punto_control)
+                punto_control ='{{$punto_control["_id"]}}';
+                if(punto_control == id) {
+                    id_punto_aux.push({
+                    latitud:'{{$punto_control["latitud"]}}',
+                    longitud:'{{$punto_control["longitud"]}}',
+                    descripcion:'{{$punto_control["descripcion"]}}',
+                    radio:'{{$punto_control["radio"]}}',
+                    // Si existen en tus datos, puedes exponerlos aquí:
+                    tipo_mar:'{{$punto_control["tipo_mar"] ?? 1}}',
+                    poligono:`{!! isset($punto_control["poligono"]) ? json_encode($punto_control["poligono"]) : '' !!}`
+                    });
+                }
+                @endforeach
 
-                        @foreach($puntos_control as $punto_control)
-                                punto_control ='{{$punto_control["_id"]}}';
-                              if(punto_control == id)
-                                {
-                                    id_punto_aux.push(
-                                       {
-                                           latitud:'{{$punto_control["latitud"]}}',
-                                           longitud:'{{$punto_control["longitud"]}}',
-                                           descripcion:'{{$punto_control["descripcion"]}}',
-                                           radio:'{{$punto_control["radio"]}}'
-                                       }
-                                    );
-                                }
-                        @endforeach
+                var puntoControlId = 'punto_control_' + id+'_'+id_indice_aux;
 
-                        var puntoControlId = 'punto_control_' + id+'_'+id_indice_aux;
+                var value= JSON.stringify({
+                id:  id,
+                adelanto: adelanto,
+                atraso: atraso,
+                tiempo_llegada: tiempo_llegada,
+                secuencia: ''
+                });
 
-                        var value= JSON.stringify({
-                                id:  id,
-                                adelanto: adelanto,
-                                atraso: atraso,
-                                tiempo_llegada: tiempo_llegada,
-                                secuencia: ''
-                            });
-                            if (id_punto_aux.length != 0) {
-                                var html = '<li class="ui-state-default" id="' + puntoControlId + '">' +
-                                    '<div class="punto-control">' +
-                                    '<input onchange="" type="hidden" name="puntos_control[]" id="puntos_control" value=\'' + value + '\' />' +
-                                    '<span>AT: ' + atraso + '|AD: ' + adelanto + '|T: ' + tiempo_llegada + '|' + id_punto_aux[0].descripcion + '</span><br/>' +
-                                    '<button onclick="viewPuntoControlOnMap(' + id_punto_aux[0].latitud + ', ' + id_punto_aux[0].longitud + ', ' + indice_puntos + ');" type="button" class="btn btn-info btn-sm"><i class="fa fa-eye"></i></button>' +
-                                    '<button onclick="removePuntoControl(\'' + puntoControlId + '\',\'' + indice_puntos + '\');" type="button" class="btn btn-danger btn-sm"><i class="fa fa-power-off"></i></button>' +
-                                    '<button id="set_data_punto" data-toggle="modal" data-target="#modificar_punto" onclick="setDataPuntoControl(\'' + adelanto + '\',\'' + atraso + '\',\'' + puntoControlId + '\',\''+id+'\',\''+tiempo_llegada+'\');" type="button" class="btn btn-default btn-sm"><i class="fa fa-edit"></i></button>' +
-                                    '</div>' +
-                                    '</li>';
-                                $('#sortable').append(html);
-                                verPuntoControl(id_punto_aux[0].latitud, id_punto_aux[0].longitud, id_punto_aux[0].radio);
-                                indice_puntos++;
-                                id_indice_aux++;
-                            }
-                    }
-                    else
-                        alert("Error: Todos los datos ingresados deben ser mayores o iguales a cero.");
+                if (id_punto_aux.length != 0) {
+                var pc = id_punto_aux[0];
+                var html = '<li class="ui-state-default" id="' + puntoControlId + '">' +
+                    '<div class="punto-control">' +
+                    '<input onchange="" type="hidden" name="puntos_control[]" id="puntos_control" value=\'' + value + '\' />' +
+                    '<span>AT: ' + atraso + '|AD: ' + adelanto + '|T: ' + tiempo_llegada + '|' + pc.descripcion + '</span><br/>' +
+                    '<button onclick="viewPuntoControlOnMap(' + 
+                        '\'' + (pc.latitud ?? '') + '\',' + 
+                        '\'' + (pc.longitud ?? '') + '\',' + 
+                        indice_puntos + ',' +
+                        '\'' + (pc.tipo_mar ?? 1) + '\',' +
+                        '`' + (pc.poligono ? pc.poligono : '') + '`' +
+                    ');" type="button" class="btn btn-info btn-sm"><i class="fa fa-eye"></i></button>' +
+                    '<button onclick="removePuntoControl(\'' + puntoControlId + '\',\'' + indice_puntos + '\');" type="button" class="btn btn-danger btn-sm"><i class="fa fa-power-off"></i></button>' +
+                    '<button id="set_data_punto" data-toggle="modal" data-target="#modificar_punto" onclick="setDataPuntoControl(\'' + adelanto + '\',\'' + atraso + '\',\'' + puntoControlId + '\',\''+id+'\',\''+tiempo_llegada+'\');" type="button" class="btn btn-default btn-sm"><i class="fa fa-edit"></i></button>' +
+                    '</div>' +
+                '</li>';
+
+                $('#sortable').append(html);
+                // pintar según tipo
+                verPuntoControl(pc.latitud, pc.longitud, pc.radio, pc.tipo_mar, pc.poligono);
+                indice_puntos++;
+                id_indice_aux++;
+                }
+            } else {
+                alert("Error: Todos los datos ingresados deben ser mayores o iguales a cero.");
+            }
             }
         }
 
-        function getPuntosControlHtml(param_punto)
-        {
+        // ============================
+        // Construcción de la lista desde datos existentes
+        // ============================
+        function getPuntosControlHtml(param_punto){
             var puntoControlId = 'punto_control_' + param_punto.id+'_'+id_indice_aux;
-            // console.log(param_punto);
+
+            // Asegurar defaults si no vienen
+            var tipoMar = (typeof param_punto.tipo_mar === 'undefined' || param_punto.tipo_mar === null) ? 1 : param_punto.tipo_mar;
+            var polig = param_punto.poligono ? param_punto.poligono : '';
+
             var html = '<li class="ui-state-default" id="' + puntoControlId +'">' +
-                    '<div class="punto-control">' +
-                    '<input onchange="" type="hidden" name="puntos_control[]" id="puntos_control" value=\'' + JSON.stringify({id:param_punto.id, adelanto:param_punto.adelanto, atraso:param_punto.atraso,tiempo_llegada:param_punto.tiempo_llegada, secuencia:''}) + '\' />' +
-                    '<span>AT: ' + param_punto.atraso + '|AD: ' + param_punto.adelanto + '|T: ' + param_punto.tiempo_llegada + '|' + param_punto.descripcion + '</span><br/>' +
-                    '<button onclick="viewPuntoControlOnMap(' + param_punto.latitud +', ' + param_punto.longitud + ', ' + indice_puntos + ');" type="button" class="btn btn-info btn-sm"><i class="fa fa-eye"></i></button>' +
-                    '<button onclick="removePuntoControl(\'' + puntoControlId + '\',\'' +indice_puntos+ '\');" type="button" class="btn btn-danger btn-sm"><i class="fa fa-power-off"></i></button>' +
-                    '<button id="set_data_punto" data-toggle="modal" data-target="#modificar_punto" onclick="setDataPuntoControl(\'' + param_punto.adelanto + '\',\'' + param_punto.atraso + '\',\'' + puntoControlId + '\',\''+param_punto.id+'\',\''+param_punto.tiempo_llegada+'\');" type="button" class="btn btn-default btn-sm"><i class="fa fa-edit"></i></button>' +
-                    '</div>' +
-                    '</li>';
+            '<div class="punto-control">' +
+                '<input onchange="" type="hidden" name="puntos_control[]" id="puntos_control" value=\'' + JSON.stringify({
+                id:param_punto.id,
+                adelanto:param_punto.adelanto,
+                atraso:param_punto.atraso,
+                tiempo_llegada:param_punto.tiempo_llegada,
+                secuencia:''
+                }) + '\' />' +
+                '<span>AT: ' + param_punto.atraso + '|AD: ' + param_punto.adelanto + '|T: ' + param_punto.tiempo_llegada + '|' + param_punto.descripcion + '</span><br/>' +
+                '<button onclick="viewPuntoControlOnMap(' + 
+                    '\'' + (param_punto.latitud ?? '') + '\',' + 
+                    '\'' + (param_punto.longitud ?? '') + '\',' + 
+                    indice_puntos + ',' +
+                    '\'' + tipoMar + '\',' +
+                    '`' + polig + '`' +
+                ');" type="button" class="btn btn-info btn-sm"><i class="fa fa-eye"></i></button>' +
+                '<button onclick="removePuntoControl(\'' + puntoControlId + '\',\'' +indice_puntos+ '\');" type="button" class="btn btn-danger btn-sm"><i class="fa fa-power-off"></i></button>' +
+                '<button id="set_data_punto" data-toggle="modal" data-target="#modificar_punto" onclick="setDataPuntoControl(\'' + param_punto.adelanto + '\',\'' + param_punto.atraso + '\',\'' + puntoControlId + '\',\''+param_punto.id+'\',\''+param_punto.tiempo_llegada+'\');" type="button" class="btn btn-default btn-sm"><i class="fa fa-edit"></i></button>' +
+            '</div>' +
+            '</li>';
+
             $('#sortable').append(html);
-            verPuntoControl(param_punto.latitud, param_punto.longitud, param_punto.radio);
+            verPuntoControl(param_punto.latitud, param_punto.longitud, param_punto.radio, tipoMar, polig);
             indice_puntos++;
             id_indice_aux++;
-
         }
 
-        var id_cooperativa=null;
+        // ============================
+        // Eliminar punto (sin cambios)
+        // ============================
+        function removePuntoControl(id,i){
+            $('#' + id).remove();
+            if (circleMap[i]!=null) circleMap[i].setMap(null);
+            if (polygonMap[i]!=null) polygonMap[i].setMap(null);
+        }
 
+        // ============================
+        // Varios (sin cambios)
+        // ============================
+        var id_cooperativa=null;
         @if(isset($cooperativa))
-                id_cooperativa='{{$cooperativa}}';
+            id_cooperativa='{{$cooperativa}}';
         @endif
 
-       /* if('{{$tipo_usuario_valor}}'='1')
-        {
-            llenarUnidades('{{url('/rutas')}}','2',id_cooperativa);
-            $('#div-tipo_ruta_padre').empty();
-            $('#div-tipo_ruta').empty();
-        }
-        else
-        {*/
-            $('#div-unidad').empty();
-            $('#div-tipo_ruta_padre').empty();
-            $('#div-tipo_ruta').empty();
-        //}
+        $('#div-unidad').empty();
+        $('#div-tipo_ruta_padre').empty();
+        $('#div-tipo_ruta').empty();
 
-
-         function getIdCooperativa()
-         {
-             return id_cooperativa;
-         }
+        function getIdCooperativa(){ return id_cooperativa; }
 
         $('#fecha_inicio').datetimepicker();
         $('#fecha_fin').datetimepicker();
         $('#search_modal').on('shown.bs.modal', function (e) {
             google.maps.event.trigger(puntoControlMap, "resize");
+            if (marker && marker.getPosition()) {
             puntoControlMap.setCenter(marker.getPosition());
+            }
         });
         $('#div_cronograma').hide();
         var tipo = null;
@@ -963,154 +1113,120 @@ Crear ruta
         $('#todo_usuario').click(function () {
             var checked = $('#todo_usuario').is(':checked');
             $("#usuario_id").find("option").each(function() {
-                $(this).prop('selected', checked);
-                $('#usuario_id').trigger('chosen:updated');
+            $(this).prop('selected', checked);
+            $('#usuario_id').trigger('chosen:updated');
             });
-            if (!checked)
-                $('#div_usuarios').show();
-            else
-                $('#div_usuarios').hide();
+            if (!checked) $('#div_usuarios').show();
+            else $('#div_usuarios').hide();
         });
 
         @if(isset($ruta) && isset($ruta->todo_usuario))
             @if($ruta->todo_usuario)
-                $('#todo_usuario').prop('checked', true);
-                $('#div_usuarios').hide();
+            $('#todo_usuario').prop('checked', true);
+            $('#div_usuarios').hide();
             @else
-                $('#div_usuarios').show();
+            $('#div_usuarios').show();
             @endif
         @endif
 
-        function llenarUnidades(url, tipo_usuario_valor, id_cooperativa)
-        {
+        function llenarUnidades(url, tipo_usuario_valor, id_cooperativa){
             var cooperativa_id;
 
             if(tipo_usuario_valor=='1')
-                cooperativa_id = document.getElementById('cooperativa_id').value;
+            cooperativa_id = document.getElementById('cooperativa_id').value;
             else
-                cooperativa_id=id_cooperativa;
+            cooperativa_id=id_cooperativa;
 
-            var div_unidad=  $('#div-unidad');
-            div_unidad.empty();
+            var div_unidad=  $('#div-unidad'); div_unidad.empty();
+            var tipo_ruta_padre=  $('#div-tipo_ruta_padre'); tipo_ruta_padre.empty();
+            var tipo_ruta_atm=  $('#div-tipo_ruta_atm'); tipo_ruta_atm.empty();
+            var usuarios=$('#div_usuarios'); usuarios.empty();
+            var tipo_ruta=  $('#div-tipo_ruta'); tipo_ruta.empty();
 
-            var tipo_ruta_padre=  $('#div-tipo_ruta_padre');
-            tipo_ruta_padre.empty();
-
-            var tipo_ruta_atm=  $('#div-tipo_ruta_atm');
-            tipo_ruta_atm.empty();
-
-            var usuarios=$('#div_usuarios');
-            usuarios.empty();
-
-            var tipo_ruta=  $('#div-tipo_ruta');
-            tipo_ruta.empty();
-
-            $.post(url, {
-                cooperativa_id:cooperativa_id,
-                opcion:'getUnidades'
-            }, function( data ) {
-                var coo = data.cooperativa;
-                masc = (coo.mascara == 'S');
-                div_unidad.append(
-                    '<label for="unidad_id">Unidad</label>'+
-                    '<select class="form-control" id="unidad_id" name="unidad_id">'+
-                    ' <option value="" disabled selected hidden>Seleccione...</option>'+
-                    ' </select>'+
-                    ' <span class="help-block" id="span_unidad"></span>'
-                );
-                var select=$('#unidad_id');
-                for (var i = 0, len = data.unidades.length; i < len; i++)
-                    select.append('<option  value=\''+ data.unidades[i]._id + '\'> '+  data.unidades[i].descripcion +'</option>');
+            $.post(url, { cooperativa_id:cooperativa_id, opcion:'getUnidades' }, function( data ) {
+            var coo = data.cooperativa;
+            masc = (coo.mascara == 'S');
+            div_unidad.append(
+                '<label for="unidad_id">Unidad</label>'+
+                '<select class="form-control" id="unidad_id" name="unidad_id">'+
+                ' <option value="" disabled selected hidden>Seleccione...</option>'+
+                ' </select>'+
+                ' <span class="help-block" id="span_unidad"></span>'
+            );
+            var select=$('#unidad_id');
+            for (var i = 0, len = data.unidades.length; i < len; i++)
+                select.append('<option  value=\''+ data.unidades[i]._id + '\'> '+  data.unidades[i].descripcion +'</option>');
             }, "json");
 
-            $.post(url, {
-                cooperativa_id:cooperativa_id,
-                opcion:'getRutasPadres'
-            }, function( data ) {
-                tipo_ruta.append(
-                    '<label for="tipo_ruta">Tipo ruta</label>'+
-                    '<select class="form-control" id="tipo_ruta" name="tipo_ruta"  onchange="verificarruta();">'+
-                    '<option value="" disabled selected hidden>Seleccione...</option>'+
-                    '<option value="I">Individual</option>'+
-                    '<option value="C">Cooperativa</option>'+
-                    '<option value="P">Padre</option>'+
-                    '<option value="H">Hijo</option>'+
-                    ' </select>'+
-                    ' <span class="help-block" id="span_tipo_ruta"></span>'
-                );
-                if (tipo != null)
-                    $('#tipo_ruta').val(tipo);
-                $('#tipo_ruta').trigger('change');
-                tipo_ruta_padre.append(
-                    '<label for="tipo_ruta_padre">Ruta Padre</label>'+
-                    '<select class="form-control" id="tipo_ruta_padre" name="tipo_ruta_padre">'+
-                    '<option value="" disabled selected hidden>Seleccione...</option>'+
-                    ' </select>'+
-                    ' <span class="help-block" id="span_tipo_ruta_padre"></span>'
-                );
-
-                var select=$('#tipo_ruta_padre');
-                for (var i = 0, len = data.rutaspadres.length; i < len; i++)
-                    select.append('<option  value=\''+ data.rutaspadres[i]._id + '\'> '+  data.rutaspadres[i].descripcion +'</option>');
+            $.post(url, { cooperativa_id:cooperativa_id, opcion:'getRutasPadres' }, function( data ) {
+            tipo_ruta.append(
+                '<label for="tipo_ruta">Tipo ruta</label>'+
+                '<select class="form-control" id="tipo_ruta" name="tipo_ruta"  onchange="verificarruta();">'+
+                '<option value="" disabled selected hidden>Seleccione...</option>'+
+                '<option value="I">Individual</option>'+
+                '<option value="C">Cooperativa</option>'+
+                '<option value="P">Padre</option>'+
+                '<option value="H">Hijo</option>'+
+                ' </select>'+
+                ' <span class="help-block" id="span_tipo_ruta"></span>'
+            );
+            if (tipo != null) $('#tipo_ruta').val(tipo);
+            $('#tipo_ruta').trigger('change');
+            tipo_ruta_padre.append(
+                '<label for="tipo_ruta_padre">Ruta Padre</label>'+
+                '<select class="form-control" id="tipo_ruta_padre" name="tipo_ruta_padre">'+
+                '<option value="" disabled selected hidden>Seleccione...</option>'+
+                ' </select>'+
+                ' <span class="help-block" id="span_tipo_ruta_padre"></span>'
+            );
+            var select=$('#tipo_ruta_padre');
+            for (var i = 0, len = data.rutaspadres.length; i < len; i++)
+                select.append('<option  value=\''+ data.rutaspadres[i]._id + '\'> '+  data.rutaspadres[i].descripcion +'</option>');
             }, "json");
 
-            $.post(url, {
-                cooperativa_id:cooperativa_id,
-                opcion:'getRutasATM'
-            }, function( data ) {
-                tipo_ruta_atm.append(
-                    '<label for="tipo_ruta_atm">Ruta ATM</label>'+
-                    '<select class="form-control" id="tipo_ruta_atm" name="tipo_ruta_atm">'+
-                    '<option value="" disabled selected hidden>Seleccione...</option>'+
-                    ' </select>'
-                );
+            $.post(url, { cooperativa_id:cooperativa_id, opcion:'getRutasATM' }, function( data ) {
+            tipo_ruta_atm.append(
+                '<label for="tipo_ruta_atm">Ruta ATM</label>'+
+                '<select class="form-control" id="tipo_ruta_atm" name="tipo_ruta_atm">'+
+                '<option value="" disabled selected hidden>Seleccione...</option>'+
+                ' </select>'
+            );
+            var select=$('#tipo_ruta_atm');
+            for (var i = 0, len = data.rutasatm.length; i < len; i++)
+                select.append('<option  value=\''+ data.rutasatm[i]._id + '\'> '+  data.rutasatm[i].descripcion +'</option>');
+            @if(isset($ruta) && isset($ruta->ruta_atm))
+                var select_tipo_ruta_atm=document.getElementById('tipo_ruta_atm');
+                select_tipo_ruta_atm.value='{{$ruta->ruta_atm}}';
+            @endif
+            }, "json");
 
-                var select=$('#tipo_ruta_atm');
-                for (var i = 0, len = data.rutasatm.length; i < len; i++)
-                    select.append('<option  value=\''+ data.rutasatm[i]._id + '\'> '+  data.rutasatm[i].descripcion +'</option>');
-                
-                
-                @if(isset($ruta) && isset($ruta->ruta_atm))
-                    var select_tipo_ruta_atm=document.getElementById('tipo_ruta_atm');
-                    select_tipo_ruta_atm.value='{{$ruta->ruta_atm}}';
+            $.post(url, { cooperativa_id:cooperativa_id, opcion:'getUserCompartido' }, function( data ) {
+            usuarios.append(
+                '<select class="form-control" data-placeholder="Usuarios Compartido" multiple name="usuarios[]"  id="usuario_id">'+
+                ' </select>'+
+                ' <span class="help-block" id="span_unidad"></span>'
+            );
+            var select=$('#usuario_id');
+            $('#usuario_id').chosen({ width : '100%' });
+            for (var i = 0, len = data.usuarios.length; i < len; i++){
+                select.append('<option  value=\''+ data.usuarios[i]._id + '\'> '+  data.usuarios[i].name +'</option>');
+                $('#usuario_id').trigger('chosen:updated');
+            }
+
+            @if(isset($ruta) && isset($ruta->usuarios_ruta))
+                var usuarios_select=[];
+                @if($ruta->usuarios_ruta != null)
+                @foreach ($ruta->usuarios_ruta as $usuario)
+                    usuarios_select.push('{{ $usuario }}');
+                @endforeach
+                $('#usuario_id').val(usuarios_select).trigger('chosen:updated');
                 @endif
-
-            }, "json");
-            
-            $.post(url, {
-                cooperativa_id:cooperativa_id,
-                opcion:'getUserCompartido'
-            }, function( data ) {
-                usuarios.append(
-                    '<select class="form-control" data-placeholder="Usuarios Compartido" multiple name="usuarios[]"  id="usuario_id">'+
-                    ' </select>'+
-                    ' <span class="help-block" id="span_unidad"></span>'
-                );
-                var select=$('#usuario_id');
-                $('#usuario_id').chosen({
-                    width : '100%'
-                });
-                for (var i = 0, len = data.usuarios.length; i < len; i++){
-                    select.append('<option  value=\''+ data.usuarios[i]._id + '\'> '+  data.usuarios[i].name +'</option>');
-                    $('#usuario_id').trigger('chosen:updated');
-                }
-
-                @if(isset($ruta) && isset($ruta->usuarios_ruta))
-                    var usuarios_select=[];
-                    @if($ruta->usuarios_ruta != null)
-                        @foreach ($ruta->usuarios_ruta as $usuario)
-                            usuarios_select.push('{{ $usuario }}');
-                        @endforeach
-
-                        $('#usuario_id').val(usuarios_select).trigger('chosen:updated');
-                    @endif
-                @endif
-            //  console.log(data.ruta.usuarios_ruta);
-                //$('#ruta_id').val(data.ruta).trigger('chosen:updated');
+            @endif
             },"json");
         }
-
     </script>
+
+    <script src="{{ asset('js/ruta.js') }}"></script>
 
     <script src="https://maps.googleapis.com/maps/api/js?key=&libraries=places,geometry,visualization&callback=initMap"
     async defer></script>
