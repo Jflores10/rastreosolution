@@ -2115,311 +2115,429 @@ $("#velocimetro").myfunc({divFact:10});
                 alert('Comando ejecutado exitosamente.');
             }, 'json');
         });
-
-        $('#ruta').chosen({ witdh : '100%'}).change(function () {
+        $('#ruta').chosen({ width: '100%' }).change(function () {
             $('#progress').modal('show');
             $.get('{{ url("/puntos") }}', {
-                    rutas : $('#ruta').val()
-                } , function (data) {
-                    var puntos = data.puntos;
-                    if (polyline != null)
-                        polyline.setPath([]);
-                    if (polyline2 != null)
-                        polyline2.setPath([]);
-                    var path = [];
-                    for (var i = 0; i < marcadoresRutas.length; i++)
-                        marcadoresRutas[i].setMap(null);
-                    marcadoresRutas = [];
-                    if (puntos === null || puntos === undefined)
-                        puntos = [];
-                    for (var i = 0; i < puntos.length; i++)
-                    {
-                        for (var j = 0; j < puntos[i].length; j++)
-                        {
-                            var html = puntos[i][j].descripcion;
+                rutas: $('#ruta').val()
+            }, function (data) {
+                var puntos = data.puntos;
+                if (polyline != null)
+                    polyline.setPath([]);
+                if (polyline2 != null)
+                    polyline2.setPath([]);
+                var path = [];
+                for (var i = 0; i < marcadoresRutas.length; i++)
+                    marcadoresRutas[i].setMap(null);
+                marcadoresRutas = [];
+                if (puntos === null || puntos === undefined)
+                    puntos = [];
+
+                for (var i = 0; i < puntos.length; i++) {
+                    for (var j = 0; j < puntos[i].length; j++) {
+                        var punto = puntos[i][j];
+                        var markerPosition = null;
+
+                        // 🔹 Si el punto es polígono
+                        if (punto.tipo_mar == 2 && punto.poligono) {
+                            try {
+                                var polyCoords = (typeof punto.poligono === "string")
+                                    ? JSON.parse(punto.poligono)
+                                    : punto.poligono;
+
+                                // Dibuja el polígono
+                                drawPolygonOnMap(j, polyCoords);
+
+                                // Calcula centroide
+                                var sumLat = 0, sumLng = 0, valid = 0;
+                                polyCoords.forEach(function (p) {
+                                    var lat = parseFloat(p.lat),
+                                        lng = parseFloat(p.lng);
+                                    if (!isNaN(lat) && !isNaN(lng)) {
+                                        sumLat += lat;
+                                        sumLng += lng;
+                                        valid++;
+                                    }
+                                });
+                                if (valid > 0) {
+                                    markerPosition = {
+                                        lat: sumLat / valid,
+                                        lng: sumLng / valid
+                                    };
+                                }
+                            } catch (e) {
+                                console.warn("Error procesando polígono:", e);
+                            }
+                        } else {
+                            // 🔸 Punto normal
+                            markerPosition = {
+                                lat: parseFloat(punto.latitud),
+                                lng: parseFloat(punto.longitud)
+                            };
+                        }
+
+                        if (markerPosition) {
                             var icon = {
-                                    url: '{{url("/images/flag.png")}}',
-                                    scale: 1,
-                                    labelOrigin: new google.maps.Point(4, 25)
-                                };
+                                url: '{{url("/images/flag.png")}}',
+                                scaledSize: new google.maps.Size(25, 25),
+                                labelOrigin: new google.maps.Point(4, 25)
+                            };
                             var marker = new google.maps.Marker({
-                                map : map,
-                                position : {
-                                    lat : parseFloat(puntos[i][j].latitud),
-                                    lng : parseFloat(puntos[i][j].longitud)
-                                    },
-                                    icon : icon,
-                                    label : puntos[i][j].descripcion
+                                map: map,
+                                position: markerPosition,
+                                icon: icon,
+                                label: punto.descripcion
                             });
                             marcadoresRutas.push(marker);
                         }
                     }
-                    var rutas = data.rutas;
-                    if (rutas === null || rutas === undefined)
-                        rutas = [];
-                    for (var i = 0; i < rutas.length; i++)
-                    {
-                        var recorrido = rutas[i].recorrido;
-                        for (var j = 0; j < recorrido.length; j++)
-                        {
-                            path.push({
-                                lat : parseFloat(recorrido[j].lat),
-                                lng : parseFloat(recorrido[j].lng)
-                                });
-                        }
-                    }
-                    polyline = new google.maps.Polyline({
-                        path: path,
-                        geodesic: true,
-                        strokeColor: '#2ecc71',
-                        strokeOpacity: 1.0,
-                        strokeWeight: 4
-                        });
-                    polyline2 = new google.maps.Polyline({
-                        path: path,
-                        geodesic: true,
-                        strokeColor: '#fff',
-                        strokeOpacity: 1.0,
-                        strokeWeight: 2
-                        });
-                    
-                        polyline.setMap(map);
-                        polyline2.setMap(map);
+                }
 
-                    rutas_ids = []; 
-                    if(data.rutas!=null) 
-                    {
-                        for(var i=0;i<data.rutas.length;i++) 
+                var rutas = data.rutas;
+                if (rutas === null || rutas === undefined)
+                    rutas = [];
+                for (var i = 0; i < rutas.length; i++) {
+                    var recorrido = rutas[i].recorrido;
+                    for (var j = 0; j < recorrido.length; j++) {
+                        path.push({
+                            lat: parseFloat(recorrido[j].lat),
+                            lng: parseFloat(recorrido[j].lng)
+                        });
+                    }
+                }
+
+                polyline = new google.maps.Polyline({
+                    path: path,
+                    geodesic: true,
+                    strokeColor: '#2ecc71',
+                    strokeOpacity: 1.0,
+                    strokeWeight: 4
+                });
+                polyline2 = new google.maps.Polyline({
+                    path: path,
+                    geodesic: true,
+                    strokeColor: '#fff',
+                    strokeOpacity: 1.0,
+                    strokeWeight: 2
+                });
+
+                polyline.setMap(map);
+                polyline2.setMap(map);
+
+                rutas_ids = [];
+                if (data.rutas != null) {
+                    for (var i = 0; i < data.rutas.length; i++)
                         rutas_ids.push(data.rutas[i]._id);
-                    }
-                    for (var i = 0; i < array_marcador.length; i++)
-                        array_marcador[i].setMap(null);
-                    array_marcador = [];
+                }
+                for (var i = 0; i < array_marcador.length; i++)
+                    array_marcador[i].setMap(null);
+                array_marcador = [];
 
-                    $('#progress').modal('hide');
-                    setUnidadesOnMap();
-
-                }, 'json');
+                $('#progress').modal('hide');
+                setUnidadesOnMap();
+            }, 'json');
         });
 
-        $('#ruta_atm').chosen({ witdh : '100%'}).change(function () {
+
+        // =============================================================
+        // 🔹 AJUSTE #2 — RUTA ATM
+        // =============================================================
+
+        $('#ruta_atm').chosen({ width: '100%' }).change(function () {
             $.get('{{ url("/puntos-atm") }}', {
-                    rutas : $('#ruta_atm').val()
-                } , function (data) {
-                    console.log(data);
-                    var puntos = data.puntos;
-                    if (polyline != null)
-                        polyline.setPath([]);
-                    if (polyline2 != null)
-                        polyline2.setPath([]);
-                    var path = [];
-                    for (var i = 0; i < marcadoresRutas.length; i++)
-                        marcadoresRutas[i].setMap(null);
-                    marcadoresRutas = [];
-                    if (puntos === null || puntos === undefined)
-                        puntos = [];
-                        
-                    for(var a=0; a<circleMap.length ; a++)
-                    {
-                        circleMap[a].setMap(null);
-                    }
-                    circleMap=[];
+                rutas: $('#ruta_atm').val()
+            }, function (data) {
+                console.log(data);
+                var puntos = data.puntos;
+                if (polyline != null)
+                    polyline.setPath([]);
+                if (polyline2 != null)
+                    polyline2.setPath([]);
+                var path = [];
+                for (var i = 0; i < marcadoresRutas.length; i++)
+                    marcadoresRutas[i].setMap(null);
+                marcadoresRutas = [];
+                if (puntos === null || puntos === undefined)
+                    puntos = [];
 
-                    for (var i = 0; i < puntos.length; i++)
-                    {
-                        for (var j = 0; j < puntos[i].length; j++)
-                        {
-                            var html = puntos[i][j].descripcion;
-                            var icon = {
-                                    url: '{{url("/images/flag.png")}}',
-                                    scale: 1,
-                                    labelOrigin: new google.maps.Point(4, 25)
-                                };
-                            var marker = new google.maps.Marker({
-                                map : map,
-                                position : {
-                                    lat : parseFloat(puntos[i][j].latitud),
-                                    lng : parseFloat(puntos[i][j].longitud)
-                                    },
-                                    icon : icon,
-                                    label : puntos[i][j].descripcion
-                            });
+                for (var a = 0; a < circleMap.length; a++) {
+                    circleMap[a].setMap(null);
+                }
+                circleMap = [];
 
-                            circleMap[j]=new google.maps.Circle({
+                for (var i = 0; i < puntos.length; i++) {
+                    for (var j = 0; j < puntos[i].length; j++) {
+                        var punto = puntos[i][j];
+                        var markerPosition = null;
+
+                        if (punto.tipo_mar == 2 && punto.poligono) {
+                            try {
+                                var polyCoords = (typeof punto.poligono === "string")
+                                    ? JSON.parse(punto.poligono)
+                                    : punto.poligono;
+                                drawPolygonOnMap(j, polyCoords);
+
+                                var sumLat = 0, sumLng = 0, valid = 0;
+                                polyCoords.forEach(function (p) {
+                                    var lat = parseFloat(p.lat),
+                                        lng = parseFloat(p.lng);
+                                    if (!isNaN(lat) && !isNaN(lng)) {
+                                        sumLat += lat;
+                                        sumLng += lng;
+                                        valid++;
+                                    }
+                                });
+                                if (valid > 0) {
+                                    markerPosition = {
+                                        lat: sumLat / valid,
+                                        lng: sumLng / valid
+                                    };
+                                }
+                            } catch (e) {
+                                console.warn("Error procesando polígono ATM:", e);
+                            }
+                        } else {
+                            markerPosition = {
+                                lat: parseFloat(punto.latitud),
+                                lng: parseFloat(punto.longitud)
+                            };
+
+                            circleMap[j] = new google.maps.Circle({
                                 strokeColor: '#00942b',
                                 strokeOpacity: 0.8,
                                 strokeWeight: 2,
                                 fillColor: '#50ff88',
                                 fillOpacity: 0.35,
-                                map: map
+                                map: map,
+                                center: markerPosition,
+                                radius: parseFloat(punto.radio)
                             });
-                            circleMap[j].setCenter({lat:parseFloat(puntos[i][j].latitud),
-                                lng:parseFloat(puntos[i][j].longitud)});
-                            circleMap[j].setRadius(parseFloat(puntos[i][j].radio));
+                        }
 
+                        if (markerPosition) {
+                            var icon = {
+                                url: '{{url("/images/flag.png")}}',
+                                scaledSize: new google.maps.Size(25, 25),
+                                labelOrigin: new google.maps.Point(4, 25)
+                            };
+                            var marker = new google.maps.Marker({
+                                map: map,
+                                position: markerPosition,
+                                icon: icon,
+                                label: punto.descripcion
+                            });
                             marcadoresRutas.push(marker);
                         }
                     }
+                }
 
-                    var rutas = data.rutas;
-                    if (rutas === null || rutas === undefined)
-                        rutas = [];
-                    for (var i = 0; i < rutas.length; i++)
-                    {
-                        var recorrido = rutas[i].recorrido;
-                        for (var j = 0; j < recorrido.length; j++)
-                        {
-                            path.push({
-                                lat : parseFloat(recorrido[j].lat),
-                                lng : parseFloat(recorrido[j].lng)
-                                });
-                        }
+                var rutas = data.rutas;
+                if (rutas === null || rutas === undefined)
+                    rutas = [];
+                for (var i = 0; i < rutas.length; i++) {
+                    var recorrido = rutas[i].recorrido;
+                    for (var j = 0; j < recorrido.length; j++) {
+                        path.push({
+                            lat: parseFloat(recorrido[j].lat),
+                            lng: parseFloat(recorrido[j].lng)
+                        });
                     }
-                    polyline = new google.maps.Polyline({
-                        path: path,
-                        geodesic: true,
-                        strokeColor: '#2ecc71',
-                        strokeOpacity: 1.0,
-                        strokeWeight: 4
-                    });
-                    polyline2 = new google.maps.Polyline({
-                        path: path,
-                        geodesic: true,
-                        strokeColor: '#fff',
-                        strokeOpacity: 1.0,
-                        strokeWeight: 2
-                    });
-                
-                    polyline.setMap(map);
-                    polyline2.setMap(map);
+                }
+                polyline = new google.maps.Polyline({
+                    path: path,
+                    geodesic: true,
+                    strokeColor: '#2ecc71',
+                    strokeOpacity: 1.0,
+                    strokeWeight: 4
+                });
+                polyline2 = new google.maps.Polyline({
+                    path: path,
+                    geodesic: true,
+                    strokeColor: '#fff',
+                    strokeOpacity: 1.0,
+                    strokeWeight: 2
+                });
 
-                    for (var i = 0; i < array_marcador.length; i++)
-                        array_marcador[i].setMap(null);
-                    array_marcador = [];
-                        
-                    setUnidadesOnMap();
-                }, 'json');
+                polyline.setMap(map);
+                polyline2.setMap(map);
+
+                for (var i = 0; i < array_marcador.length; i++)
+                    array_marcador[i].setMap(null);
+                array_marcador = [];
+
+                setUnidadesOnMap();
+            }, 'json');
         });
 
-        $('#ruta_general').chosen({ witdh : '100%'}).change(function () {
+
+        // =============================================================
+        // 🔹 AJUSTE #3 — RUTA GENERAL
+        // =============================================================
+
+        $('#ruta_general').chosen({ width: '100%' }).change(function () {
             $('#progress').modal('show');
             $.get('{{ url("/puntos") }}', {
-                    rutas : $('#ruta_general').val()
-                } , function (data) {
-                    for(i=0;i<arrayPoly.length;i++){
-                        arrayPoly[i].setPath([]);
-                        arrayPoly2[i].setPath([]);
-                    }
-                    var puntos = data.puntos;
-                   /* if (polyline_general != null)
-                        polyline_general.setPath([]);
-                    if (polyline2_general != null)
-                        polyline2_general.setPath([]);*/
-                    var path = [];
-                    for (var i = 0; i < marcadoresRutas_general.length; i++)
-                        marcadoresRutas_general[i].setMap(null);
-                    marcadoresRutas_general = [];
-                    if (puntos === null || puntos === undefined){
-                        puntos = [];
-                    }
-                    for (var i = 0; i < puntos.length; i++)
-                    {
-                        for (var j = 0; j < puntos[i].length; j++)
-                        {
-                            var html = puntos[i][j].descripcion;
+                rutas: $('#ruta_general').val()
+            }, function (data) {
+                for (i = 0; i < arrayPoly.length; i++) {
+                    arrayPoly[i].setPath([]);
+                    arrayPoly2[i].setPath([]);
+                }
+                var puntos = data.puntos;
+                var path = [];
+                for (var i = 0; i < marcadoresRutas_general.length; i++)
+                    marcadoresRutas_general[i].setMap(null);
+                marcadoresRutas_general = [];
+                if (puntos === null || puntos === undefined) {
+                    puntos = [];
+                }
+
+                for (var i = 0; i < puntos.length; i++) {
+                    for (var j = 0; j < puntos[i].length; j++) {
+                        var punto = puntos[i][j];
+                        var markerPosition = null;
+
+                        if (punto.tipo_mar == 2 && punto.poligono) {
+                            try {
+                                var polyCoords = (typeof punto.poligono === "string")
+                                    ? JSON.parse(punto.poligono)
+                                    : punto.poligono;
+                                drawPolygonOnMap(j, polyCoords);
+
+                                var sumLat = 0, sumLng = 0, valid = 0;
+                                polyCoords.forEach(function (p) {
+                                    var lat = parseFloat(p.lat),
+                                        lng = parseFloat(p.lng);
+                                    if (!isNaN(lat) && !isNaN(lng)) {
+                                        sumLat += lat;
+                                        sumLng += lng;
+                                        valid++;
+                                    }
+                                });
+                                if (valid > 0) {
+                                    markerPosition = {
+                                        lat: sumLat / valid,
+                                        lng: sumLng / valid
+                                    };
+                                }
+                            } catch (e) {
+                                console.warn("Error procesando polígono general:", e);
+                            }
+                        } else {
+                            markerPosition = {
+                                lat: parseFloat(punto.latitud),
+                                lng: parseFloat(punto.longitud)
+                            };
+                        }
+
+                        if (markerPosition) {
                             var icon = {
-                                    url: '{{url("/images/flag.png")}}',
-                                    scale: 1,
-                                    labelOrigin: new google.maps.Point(4, 25)
-                                };
+                                url: '{{url("/images/flag.png")}}',
+                                scaledSize: new google.maps.Size(25, 25),
+                                labelOrigin: new google.maps.Point(4, 25)
+                            };
                             var marker = new google.maps.Marker({
-                                map : map,
-                                position : {
-                                    lat : parseFloat(puntos[i][j].latitud),
-                                    lng : parseFloat(puntos[i][j].longitud)
-                                    },
-                                    icon : icon,
-                                    label : puntos[i][j].descripcion
+                                map: map,
+                                position: markerPosition,
+                                icon: icon,
+                                label: punto.descripcion
                             });
                             marcadoresRutas_general.push(marker);
                         }
                     }
-                    var rutas = data.rutas;
-                    if (rutas === null || rutas === undefined)
-                        rutas = [];
-                    for (var i = 0; i < rutas.length; i++)
-                    {
-                        path = [];
-                        var recorrido = rutas[i].recorrido;
-                        for (var j = 0; j < recorrido.length; j++)
-                        {
-                            path.push({
-                                lat : parseFloat(recorrido[j].lat),
-                                lng : parseFloat(recorrido[j].lng)
-                                });
-                        }
-                        //console.log(recorrido);
-                        var color="#2ECC70";
-                        if(rutas[i].color == 'A')
-                            color='#0048D8';
-                         if(rutas[i].color == 'V')
-                            color='#2ECC70';     
-                        if(rutas[i].color == 'C')
-                            color='#715050';    
-                        if(rutas[i].color == 'M')
-                            color='#922BA0';    
-                        if(rutas[i].color == 'R')
-                            color='#CC2E2E';    
-                        if(rutas[i].color == 'N')
-                            color='#000000';    
-                            
-                        polyline_general = new google.maps.Polyline({
-                            path: path,
-                            geodesic: true,
-                            strokeColor: color,
-                            strokeOpacity: 1.0,
-                            strokeWeight: 4
-                            });
-                        polyline2_general = new google.maps.Polyline({
-                            path: path,
-                            geodesic: true,
-                            strokeColor: '#fff',
-                            strokeOpacity: 1.0,
-                            strokeWeight: 2
-                            });
-                    
-                        polyline_general.setMap(map);
-                        polyline2_general.setMap(map);
+                }
 
-                        arrayPoly.push(polyline_general);
-                        arrayPoly2.push(polyline2_general);
+                var rutas = data.rutas;
+                if (rutas === null || rutas === undefined)
+                    rutas = [];
+                for (var i = 0; i < rutas.length; i++) {
+                    path = [];
+                    var recorrido = rutas[i].recorrido;
+                    for (var j = 0; j < recorrido.length; j++) {
+                        path.push({
+                            lat: parseFloat(recorrido[j].lat),
+                            lng: parseFloat(recorrido[j].lng)
+                        });
                     }
 
-                    /*var color="#2ecc7";
+                    var color = "#2ECC70";
+                    if (rutas[i].color == 'A') color = '#0048D8';
+                    if (rutas[i].color == 'V') color = '#2ECC70';
+                    if (rutas[i].color == 'C') color = '#715050';
+                    if (rutas[i].color == 'M') color = '#922BA0';
+                    if (rutas[i].color == 'R') color = '#CC2E2E';
+                    if (rutas[i].color == 'N') color = '#000000';
+
                     polyline_general = new google.maps.Polyline({
                         path: path,
                         geodesic: true,
                         strokeColor: color,
                         strokeOpacity: 1.0,
                         strokeWeight: 4
-                        });
+                    });
                     polyline2_general = new google.maps.Polyline({
                         path: path,
                         geodesic: true,
                         strokeColor: '#fff',
                         strokeOpacity: 1.0,
                         strokeWeight: 2
-                        });
-                    
-                        polyline_general.setMap(map);
-                        polyline2_general.setMap(map);*/
+                    });
 
-                    
-                    $('#progress').modal('hide');
+                    polyline_general.setMap(map);
+                    polyline2_general.setMap(map);
 
-                }, 'json');
+                    arrayPoly.push(polyline_general);
+                    arrayPoly2.push(polyline2_general);
+                }
+
+                $('#progress').modal('hide');
+            }, 'json');
         });
+
 	});
+
+    function drawPolygonOnMap(bloque, poligono) {
+        // Si viene como texto JSON
+        if (typeof poligono === "string") {
+            try {
+                poligono = JSON.parse(poligono);
+            } catch (e) {
+                console.log("Error al parsear polígono:", poligono);
+                return;
+            }
+        }
+
+        if (!Array.isArray(poligono)) {
+            console.log("Polígono no es un array:", poligono);
+            return;
+        }
+
+        // Limpiar polígono anterior si existe
+        if (polygon[bloque]) {
+            polygon[bloque].setMap(null);
+        }
+
+        // Convertir coordenadas a float válidas
+        var coords = poligono
+            .map(p => ({ lat: parseFloat(p.lat), lng: parseFloat(p.lng) }))
+            .filter(p => !isNaN(p.lat) && !isNaN(p.lng));
+
+        if (coords.length < 3) {
+            console.log("Polígono requiere al menos 3 puntos válidos:", coords);
+            return;
+        }
+
+        // Dibujar polígono
+        polygon[bloque] = new google.maps.Polygon({
+            paths: coords,
+            strokeColor: "#00942b",
+            strokeOpacity: 0.8,
+            strokeWeight: 2,
+            fillColor: "#50ff88",
+            fillOpacity: 0.25,
+            editable: false,
+            map: map
+        });
+    }
 
 </script>
 <script src="https://developers.google.com/maps/documentation/javascript/examples/markerclusterer/markerclusterer.js">
