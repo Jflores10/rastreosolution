@@ -2115,39 +2115,42 @@ $("#velocimetro").myfunc({divFact:10});
                 alert('Comando ejecutado exitosamente.');
             }, 'json');
         });
-        $('#ruta').chosen({ width: '100%' }).change(function () {
+
+        $('#ruta').chosen({ witdh : '100%'}).change(function () {
             $('#progress').modal('show');
-            $.get('{{ url("/puntos") }}', {
-                rutas: $('#ruta').val()
-            }, function (data) {
+            $.get('{{ url("/puntos") }}', { rutas : $('#ruta').val() }, function (data) {
                 var puntos = data.puntos;
-                if (polyline != null)
-                    polyline.setPath([]);
-                if (polyline2 != null)
-                    polyline2.setPath([]);
-                var path = [];
+
+                // Limpiar rutas y marcadores previos
+                if (polyline != null) polyline.setPath([]);
+                if (polyline2 != null) polyline2.setPath([]);
                 for (var i = 0; i < marcadoresRutas.length; i++)
                     marcadoresRutas[i].setMap(null);
                 marcadoresRutas = [];
-                if (puntos === null || puntos === undefined)
-                    puntos = [];
 
+                if (!puntos) puntos = [];
+                var path = [];
+
+                // 🔸 Dibujar banderas
                 for (var i = 0; i < puntos.length; i++) {
                     for (var j = 0; j < puntos[i].length; j++) {
-                        var punto = puntos[i][j];
-                        var markerPosition = null;
+                        const punto = puntos[i][j];
+                        let markerPosition = null;
 
-                        // 🔹 Si el punto es polígono
-                        if (punto.tipo_mar == 2 && punto.poligono) {
+                        // tipo_mar == 1 → bandera normal
+                        if (punto.tipo_mar == 1 && punto.latitud && punto.longitud) {
+                            markerPosition = {
+                                lat: parseFloat(punto.latitud),
+                                lng: parseFloat(punto.longitud)
+                            };
+                        }
+                        // tipo_mar == 2 → bandera en el centro del polígono
+                        else if (punto.tipo_mar == 2 && punto.poligono) {
                             try {
                                 var polyCoords = (typeof punto.poligono === "string")
                                     ? JSON.parse(punto.poligono)
                                     : punto.poligono;
 
-                                // Dibuja el polígono
-                                drawPolygonOnMap(j, polyCoords);
-
-                                // Calcula centroide
                                 var sumLat = 0, sumLng = 0, valid = 0;
                                 polyCoords.forEach(function (p) {
                                     var lat = parseFloat(p.lat),
@@ -2165,16 +2168,11 @@ $("#velocimetro").myfunc({divFact:10});
                                     };
                                 }
                             } catch (e) {
-                                console.warn("Error procesando polígono:", e);
+                                console.log(" Error al calcular centroide:", e);
                             }
-                        } else {
-                            // 🔸 Punto normal
-                            markerPosition = {
-                                lat: parseFloat(punto.latitud),
-                                lng: parseFloat(punto.longitud)
-                            };
                         }
 
+                        // Crear bandera si hay posición válida
                         if (markerPosition) {
                             var icon = {
                                 url: '{{url("/images/flag.png")}}',
@@ -2192,9 +2190,8 @@ $("#velocimetro").myfunc({divFact:10});
                     }
                 }
 
-                var rutas = data.rutas;
-                if (rutas === null || rutas === undefined)
-                    rutas = [];
+                //  Dibujar rutas
+                var rutas = data.rutas || [];
                 for (var i = 0; i < rutas.length; i++) {
                     var recorrido = rutas[i].recorrido;
                     for (var j = 0; j < recorrido.length; j++) {
@@ -2228,6 +2225,7 @@ $("#velocimetro").myfunc({divFact:10});
                     for (var i = 0; i < data.rutas.length; i++)
                         rutas_ids.push(data.rutas[i]._id);
                 }
+
                 for (var i = 0; i < array_marcador.length; i++)
                     array_marcador[i].setMap(null);
                 array_marcador = [];
@@ -2238,43 +2236,40 @@ $("#velocimetro").myfunc({divFact:10});
         });
 
 
-        // =============================================================
-        // 🔹 AJUSTE #2 — RUTA ATM
-        // =============================================================
-
-        $('#ruta_atm').chosen({ width: '100%' }).change(function () {
-            $.get('{{ url("/puntos-atm") }}', {
-                rutas: $('#ruta_atm').val()
-            }, function (data) {
+        $('#ruta_atm').chosen({ witdh : '100%'}).change(function () {
+            $.get('{{ url("/puntos-atm") }}', { rutas : $('#ruta_atm').val() }, function (data) {
                 console.log(data);
                 var puntos = data.puntos;
-                if (polyline != null)
-                    polyline.setPath([]);
-                if (polyline2 != null)
-                    polyline2.setPath([]);
-                var path = [];
+
+                // Limpiar rutas y marcadores previos
+                if (polyline != null) polyline.setPath([]);
+                if (polyline2 != null) polyline2.setPath([]);
                 for (var i = 0; i < marcadoresRutas.length; i++)
                     marcadoresRutas[i].setMap(null);
                 marcadoresRutas = [];
-                if (puntos === null || puntos === undefined)
-                    puntos = [];
+                var path = [];
 
-                for (var a = 0; a < circleMap.length; a++) {
-                    circleMap[a].setMap(null);
-                }
-                circleMap = [];
+                if (!puntos) puntos = [];
 
+                //  Dibujar banderas
                 for (var i = 0; i < puntos.length; i++) {
                     for (var j = 0; j < puntos[i].length; j++) {
-                        var punto = puntos[i][j];
-                        var markerPosition = null;
+                        const punto = puntos[i][j];
+                        let markerPosition = null;
 
-                        if (punto.tipo_mar == 2 && punto.poligono) {
+                        // tipo_mar == 1 → bandera normal
+                        if (punto.tipo_mar == 1 && punto.latitud && punto.longitud) {
+                            markerPosition = {
+                                lat: parseFloat(punto.latitud),
+                                lng: parseFloat(punto.longitud)
+                            };
+                        }
+                        // tipo_mar == 2 → bandera en el centro del polígono
+                        else if (punto.tipo_mar == 2 && punto.poligono) {
                             try {
                                 var polyCoords = (typeof punto.poligono === "string")
                                     ? JSON.parse(punto.poligono)
                                     : punto.poligono;
-                                drawPolygonOnMap(j, polyCoords);
 
                                 var sumLat = 0, sumLng = 0, valid = 0;
                                 polyCoords.forEach(function (p) {
@@ -2293,26 +2288,11 @@ $("#velocimetro").myfunc({divFact:10});
                                     };
                                 }
                             } catch (e) {
-                                console.warn("Error procesando polígono ATM:", e);
+                                console.log(" Error al calcular centroide:", e);
                             }
-                        } else {
-                            markerPosition = {
-                                lat: parseFloat(punto.latitud),
-                                lng: parseFloat(punto.longitud)
-                            };
-
-                            circleMap[j] = new google.maps.Circle({
-                                strokeColor: '#00942b',
-                                strokeOpacity: 0.8,
-                                strokeWeight: 2,
-                                fillColor: '#50ff88',
-                                fillOpacity: 0.35,
-                                map: map,
-                                center: markerPosition,
-                                radius: parseFloat(punto.radio)
-                            });
                         }
 
+                        // Crear bandera si hay posición válida
                         if (markerPosition) {
                             var icon = {
                                 url: '{{url("/images/flag.png")}}',
@@ -2330,9 +2310,8 @@ $("#velocimetro").myfunc({divFact:10});
                     }
                 }
 
-                var rutas = data.rutas;
-                if (rutas === null || rutas === undefined)
-                    rutas = [];
+                //  Dibujar rutas
+                var rutas = data.rutas || [];
                 for (var i = 0; i < rutas.length; i++) {
                     var recorrido = rutas[i].recorrido;
                     for (var j = 0; j < recorrido.length; j++) {
@@ -2342,6 +2321,7 @@ $("#velocimetro").myfunc({divFact:10});
                         });
                     }
                 }
+
                 polyline = new google.maps.Polyline({
                     path: path,
                     geodesic: true,
@@ -2369,39 +2349,46 @@ $("#velocimetro").myfunc({divFact:10});
         });
 
 
-        // =============================================================
-        // 🔹 AJUSTE #3 — RUTA GENERAL
-        // =============================================================
-
-        $('#ruta_general').chosen({ width: '100%' }).change(function () {
+        $('#ruta_general').chosen({ witdh : '100%'}).change(function () {
             $('#progress').modal('show');
             $.get('{{ url("/puntos") }}', {
-                rutas: $('#ruta_general').val()
+                rutas : $('#ruta_general').val()
             }, function (data) {
+
+                //  Limpiar rutas anteriores
                 for (i = 0; i < arrayPoly.length; i++) {
                     arrayPoly[i].setPath([]);
                     arrayPoly2[i].setPath([]);
                 }
+
                 var puntos = data.puntos;
                 var path = [];
+
+                //  Limpiar marcadores previos
                 for (var i = 0; i < marcadoresRutas_general.length; i++)
                     marcadoresRutas_general[i].setMap(null);
                 marcadoresRutas_general = [];
-                if (puntos === null || puntos === undefined) {
-                    puntos = [];
-                }
+
+                if (!puntos) puntos = [];
 
                 for (var i = 0; i < puntos.length; i++) {
                     for (var j = 0; j < puntos[i].length; j++) {
-                        var punto = puntos[i][j];
-                        var markerPosition = null;
+                        const punto = puntos[i][j];
+                        let markerPosition = null;
 
-                        if (punto.tipo_mar == 2 && punto.poligono) {
+                        //  tipo_mar == 1 → coordenada normal
+                        if (punto.tipo_mar == 1 && punto.latitud && punto.longitud) {
+                            markerPosition = {
+                                lat: parseFloat(punto.latitud),
+                                lng: parseFloat(punto.longitud)
+                            };
+                        }
+                        //  tipo_mar == 2 → centro del polígono
+                        else if (punto.tipo_mar == 2 && punto.poligono) {
                             try {
                                 var polyCoords = (typeof punto.poligono === "string")
                                     ? JSON.parse(punto.poligono)
                                     : punto.poligono;
-                                drawPolygonOnMap(j, polyCoords);
 
                                 var sumLat = 0, sumLng = 0, valid = 0;
                                 polyCoords.forEach(function (p) {
@@ -2420,35 +2407,33 @@ $("#velocimetro").myfunc({divFact:10});
                                     };
                                 }
                             } catch (e) {
-                                console.warn("Error procesando polígono general:", e);
+                                console.log(" Error al calcular centroide:", e);
                             }
-                        } else {
-                            markerPosition = {
-                                lat: parseFloat(punto.latitud),
-                                lng: parseFloat(punto.longitud)
-                            };
                         }
 
+                        //  Crear bandera si hay posición válida
                         if (markerPosition) {
                             var icon = {
                                 url: '{{url("/images/flag.png")}}',
                                 scaledSize: new google.maps.Size(25, 25),
                                 labelOrigin: new google.maps.Point(4, 25)
                             };
+
                             var marker = new google.maps.Marker({
                                 map: map,
                                 position: markerPosition,
                                 icon: icon,
                                 label: punto.descripcion
                             });
+
                             marcadoresRutas_general.push(marker);
                         }
                     }
                 }
 
                 var rutas = data.rutas;
-                if (rutas === null || rutas === undefined)
-                    rutas = [];
+                if (!rutas) rutas = [];
+
                 for (var i = 0; i < rutas.length; i++) {
                     path = [];
                     var recorrido = rutas[i].recorrido;
@@ -2467,14 +2452,15 @@ $("#velocimetro").myfunc({divFact:10});
                     if (rutas[i].color == 'R') color = '#CC2E2E';
                     if (rutas[i].color == 'N') color = '#000000';
 
-                    polyline_general = new google.maps.Polyline({
+                    var polyline_general = new google.maps.Polyline({
                         path: path,
                         geodesic: true,
                         strokeColor: color,
                         strokeOpacity: 1.0,
                         strokeWeight: 4
                     });
-                    polyline2_general = new google.maps.Polyline({
+
+                    var polyline2_general = new google.maps.Polyline({
                         path: path,
                         geodesic: true,
                         strokeColor: '#fff',
@@ -2494,50 +2480,6 @@ $("#velocimetro").myfunc({divFact:10});
         });
 
 	});
-
-    function drawPolygonOnMap(bloque, poligono) {
-        // Si viene como texto JSON
-        if (typeof poligono === "string") {
-            try {
-                poligono = JSON.parse(poligono);
-            } catch (e) {
-                console.log("Error al parsear polígono:", poligono);
-                return;
-            }
-        }
-
-        if (!Array.isArray(poligono)) {
-            console.log("Polígono no es un array:", poligono);
-            return;
-        }
-
-        // Limpiar polígono anterior si existe
-        if (polygon[bloque]) {
-            polygon[bloque].setMap(null);
-        }
-
-        // Convertir coordenadas a float válidas
-        var coords = poligono
-            .map(p => ({ lat: parseFloat(p.lat), lng: parseFloat(p.lng) }))
-            .filter(p => !isNaN(p.lat) && !isNaN(p.lng));
-
-        if (coords.length < 3) {
-            console.log("Polígono requiere al menos 3 puntos válidos:", coords);
-            return;
-        }
-
-        // Dibujar polígono
-        polygon[bloque] = new google.maps.Polygon({
-            paths: coords,
-            strokeColor: "#00942b",
-            strokeOpacity: 0.8,
-            strokeWeight: 2,
-            fillColor: "#50ff88",
-            fillOpacity: 0.25,
-            editable: false,
-            map: map
-        });
-    }
 
 </script>
 <script src="https://developers.google.com/maps/documentation/javascript/examples/markerclusterer/markerclusterer.js">
