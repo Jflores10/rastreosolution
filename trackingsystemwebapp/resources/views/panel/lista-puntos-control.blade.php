@@ -117,6 +117,7 @@ Puntos de control
             <div class="table-responsive">
                 <table class="table">
                     <th></th>
+                    <th>PDI</th>
                     <th>Descripción</th>
                     @if($tipo_usuario_valor=='1')
                         <th>Cooperativa</th>
@@ -132,6 +133,7 @@ Puntos de control
                     @foreach ($puntos_control as $punto_control)
                         <tr class="{{($punto_control->estado=='I')?'danger':''}}">
                             <td><button onclick="editarPuntoControl('{{ url('/puntos-de-control/' . $punto_control->_id) }}','{{$tipo_usuario_valor}}','{{json_encode($punto_control->cooperativa->pto_bloques)}}');" data-toggle="modal" data-target="#form" class="btn btn-primary"><i class="fa fa-edit"></i></button></td>
+                            <td>{{ $punto_control->pdi }}</td>
                             <td>{{ $punto_control->descripcion }}</td>
                             @if($tipo_usuario_valor=='1')
                                 <td>{{ ($punto_control->cooperativa!=null)?$punto_control->cooperativa->descripcion:""}}</td>
