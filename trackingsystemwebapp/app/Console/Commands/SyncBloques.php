@@ -44,8 +44,11 @@ class SyncBloques extends Command
         $horaActual = Carbon::now()->format('H:i');
 
         // Buscar cooperativas cuya hora de actualización coincida
-        $cooperativas = Cooperativa::where('hora_sync', $horaActual)->get();
-
+        $cooperativas = Cooperativa::where('hora_sync', $horaActual)->where('pto_bloques',true)->get();
+        
+        if ($cooperativas->isEmpty()) {
+            return;
+        }
         foreach ($cooperativas as $coop) {
             $this->info("Procesando cooperativa: {$coop->descripcion}");
 
