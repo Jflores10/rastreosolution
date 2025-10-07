@@ -836,31 +836,68 @@ Crear ruta
         }
 
         // Selección visual en la lista (actualiza estilos y centra)
-        function viewPuntoControlOnMap(latitud, longitud, indice, tipo_mar, poligono){
-            var t = (typeof tipo_mar === 'undefined' || tipo_mar === null) ? 1 : parseInt(tipo_mar,10);
-
-            // resaltar círculo si existe
-            for(var i=0 ; i<14 ; i++){
-            if(circleMap[i]!=null){
-                if(i==indice)
-                circleMap[i].setOptions({ strokeColor: '#0000FF', fillColor: '#2E64FE' });
-                else
-                circleMap[i].setOptions({ strokeColor: '#00942b', fillColor: '#50ff88' });
-            }
-            }
+        function viewPuntoControlOnMap(latitud, longitud, indice, tipo_mar, poligono) {
+            var t = (typeof tipo_mar === 'undefined' || tipo_mar === null) ? 1 : parseInt(tipo_mar, 10);
 
             if (t === 2) {
-            // si es polígono, vuelve a centrar en su centroide
-            drawPolygonOnMap(indice, poligono);
-            map.setZoom(16);
-            } else {
-            var lat = safeFloat(latitud), lng = safeFloat(longitud);
-            if (lat !== null && lng !== null) {
-                map.setCenter({lat: lat, lng: lng});
-                map.setZoom(16);
-            }
+                // Es un polígono: centrar en su centroide
+                // Asegurarse de que el polígono venga como array
+                if (typeof poligono === "string" && poligono.trim() !== "") {
+                    try { poligono = JSON.parse(poligono); } 
+                    catch (e) { 
+                        console.log("Polígono inválido:", e); 
+                        return; 
+                    }
+                }
+
+                if (Array.isArray(poligono) && poligono.length >= 3) {
+                    // Dibujar el polígono
+                    drawPolygonOnMap(indice, poligono);
+
+                    // Calcular centroide
+                    let sumLat = 0, sumLng = 0, count = 0;
+                    poligono.forEach(function(p) {
+                        const lat = parseFloat(p.lat);
+                        const lng = parseFloat(p.lng);
+                        if (!isNaN(lat) && !isNaN(lng)) {
+                            sumLat += lat;
+                            sumLng += lng;
+                            count++;
+                        }
+                    });
+
+                    if (count > 0) {
+                        const center = { lat: sumLat / count, lng: sumLng / count };
+                        map.setCenter(center);
+                        map.setZoom(16);
+
+                    
+                    } else {
+                        console.warn(" No se pudo calcular centroide: coordenadas inválidas");
+                    }
+                } else {
+                    console.warn(" Polígono vacío o inválido:", poligono);
+                }
+            } 
+            else {
+                // Tipo punto (círculo normal)
+                for (var i = 0; i < 14; i++) {
+                    if (circleMap[i] != null) {
+                        if (i == indice)
+                            circleMap[i].setOptions({ strokeColor: '#0000FF', fillColor: '#2E64FE' });
+                        else
+                            circleMap[i].setOptions({ strokeColor: '#00942b', fillColor: '#50ff88' });
+                    }
+                }
+
+                var lat = safeFloat(latitud), lng = safeFloat(longitud);
+                if (lat !== null && lng !== null) {
+                    map.setCenter({ lat: lat, lng: lng });
+                    map.setZoom(16);
+                }
             }
         }
+
 
         // ============================
         // Modales de mapas (sin cambios)
@@ -1008,20 +1045,34 @@ Crear ruta
                 if (id_punto_aux.length != 0) {
                 var pc = id_punto_aux[0];
                 var html = '<li class="ui-state-default" id="' + puntoControlId + '">' +
-                    '<div class="punto-control">' +
-                    '<input onchange="" type="hidden" name="puntos_control[]" id="puntos_control" value=\'' + value + '\' />' +
+                '<div class="punto-control">' +
+                    '<input type="hidden" name="puntos_control[]" id="puntos_control" value=\'' + value + '\' />' +
                     '<span>AT: ' + atraso + '|AD: ' + adelanto + '|T: ' + tiempo_llegada + '|' + pc.descripcion + '</span><br/>' +
-                    '<button onclick="viewPuntoControlOnMap(' + 
-                        '\'' + (pc.latitud ?? '') + '\',' + 
-                        '\'' + (pc.longitud ?? '') + '\',' + 
-                        indice_puntos + ',' +
-                        '\'' + (pc.tipo_mar ?? 1) + '\',' +
-                        '`' + (pc.poligono ? pc.poligono : '') + '`' +
-                    ');" type="button" class="btn btn-info btn-sm"><i class="fa fa-eye"></i></button>' +
-                    '<button onclick="removePuntoControl(\'' + puntoControlId + '\',\'' + indice_puntos + '\');" type="button" class="btn btn-danger btn-sm"><i class="fa fa-power-off"></i></button>' +
-                    '<button id="set_data_punto" data-toggle="modal" data-target="#modificar_punto" onclick="setDataPuntoControl(\'' + adelanto + '\',\'' + atraso + '\',\'' + puntoControlId + '\',\''+id+'\',\''+tiempo_llegada+'\');" type="button" class="btn btn-default btn-sm"><i class="fa fa-edit"></i></button>' +
-                    '</div>' +
+
+                    // 🔹 Botón seguro con data-* en lugar de backticks
+                    '<button ' +
+                    'type="button" class="btn btn-info btn-sm" ' +
+                    'data-latitud="' + (pc.latitud ?? '') + '" ' +
+                    'data-longitud="' + (pc.longitud ?? '') + '" ' +
+                    'data-tipo-mar="' + (pc.tipo_mar ?? 1) + '" ' +
+                    'data-poligono=\'' + (pc.poligono ? JSON.stringify(pc.poligono) : "[]") + '\' ' +
+                    'onclick="(function(btn){ ' +
+                        'const lat = btn.dataset.latitud; ' +
+                        'const lng = btn.dataset.longitud; ' +
+                        'const tipo = parseInt(btn.dataset.tipoMar || 1); ' +
+                        'const pol = btn.dataset.poligono ? JSON.parse(btn.dataset.poligono) : []; ' +
+                        'viewPuntoControlOnMap(lat, lng, ' + indice_puntos + ', tipo, pol); ' +
+                    '})(this);">' +
+                        '<i class="fa fa-eye"></i>' +
+                    '</button>' +
+
+                    '<button onclick="removePuntoControl(\'' + puntoControlId + '\', \'' + indice_puntos + '\');" type="button" class="btn btn-danger btn-sm"><i class="fa fa-power-off"></i></button>' +
+                    '<button id="set_data_punto" data-toggle="modal" data-target="#modificar_punto" ' +
+                    'onclick="setDataPuntoControl(\'' + adelanto + '\', \'' + atraso + '\', \'' + puntoControlId + '\', \'' + id + '\', \'' + tiempo_llegada + '\');" ' +
+                    'type="button" class="btn btn-default btn-sm"><i class="fa fa-edit"></i></button>' +
+                '</div>' +
                 '</li>';
+
 
                 $('#sortable').append(html);
                 // pintar según tipo
@@ -1045,27 +1096,41 @@ Crear ruta
             var tipoMar = (typeof param_punto.tipo_mar === 'undefined' || param_punto.tipo_mar === null) ? 1 : param_punto.tipo_mar;
             var polig = param_punto.poligono ? param_punto.poligono : '';
 
-            var html = '<li class="ui-state-default" id="' + puntoControlId +'">' +
+            var html = '<li class="ui-state-default" id="' + puntoControlId + '">' +
             '<div class="punto-control">' +
-                '<input onchange="" type="hidden" name="puntos_control[]" id="puntos_control" value=\'' + JSON.stringify({
-                id:param_punto.id,
-                adelanto:param_punto.adelanto,
-                atraso:param_punto.atraso,
-                tiempo_llegada:param_punto.tiempo_llegada,
-                secuencia:''
+                '<input type="hidden" name="puntos_control[]" id="puntos_control" value=\'' + JSON.stringify({
+                id: param_punto.id,
+                adelanto: param_punto.adelanto,
+                atraso: param_punto.atraso,
+                tiempo_llegada: param_punto.tiempo_llegada,
+                secuencia: ''
                 }) + '\' />' +
                 '<span>AT: ' + param_punto.atraso + '|AD: ' + param_punto.adelanto + '|T: ' + param_punto.tiempo_llegada + '|' + param_punto.descripcion + '</span><br/>' +
-                '<button onclick="viewPuntoControlOnMap(' + 
-                    '\'' + (param_punto.latitud ?? '') + '\',' + 
-                    '\'' + (param_punto.longitud ?? '') + '\',' + 
-                    indice_puntos + ',' +
-                    '\'' + tipoMar + '\',' +
-                    '`' + polig + '`' +
-                ');" type="button" class="btn btn-info btn-sm"><i class="fa fa-eye"></i></button>' +
-                '<button onclick="removePuntoControl(\'' + puntoControlId + '\',\'' +indice_puntos+ '\');" type="button" class="btn btn-danger btn-sm"><i class="fa fa-power-off"></i></button>' +
-                '<button id="set_data_punto" data-toggle="modal" data-target="#modificar_punto" onclick="setDataPuntoControl(\'' + param_punto.adelanto + '\',\'' + param_punto.atraso + '\',\'' + puntoControlId + '\',\''+param_punto.id+'\',\''+param_punto.tiempo_llegada+'\');" type="button" class="btn btn-default btn-sm"><i class="fa fa-edit"></i></button>' +
+
+                // ✅ Botón corregido sin backticks ni comillas anidadas
+                '<button ' +
+                'type="button" class="btn btn-info btn-sm" ' +
+                'data-latitud="' + (param_punto.latitud ?? '') + '" ' +
+                'data-longitud="' + (param_punto.longitud ?? '') + '" ' +
+                'data-tipo-mar="' + tipoMar + '" ' +
+                'data-poligono=\'' + (polig ? JSON.stringify(polig) : "[]") + '\' ' +
+                'onclick="(function(btn){ ' +
+                    'const lat = btn.dataset.latitud; ' +
+                    'const lng = btn.dataset.longitud; ' +
+                    'const tipo = parseInt(btn.dataset.tipoMar || 1); ' +
+                    'const pol = btn.dataset.poligono ? JSON.parse(btn.dataset.poligono) : []; ' +
+                    'viewPuntoControlOnMap(lat, lng, ' + indice_puntos + ', tipo, pol); ' +
+                '})(this);">' +
+                    '<i class="fa fa-eye"></i>' +
+                '</button>' +
+
+                '<button onclick="removePuntoControl(\'' + puntoControlId + '\', \'' + indice_puntos + '\');" type="button" class="btn btn-danger btn-sm"><i class="fa fa-power-off"></i></button>' +
+                '<button id="set_data_punto" data-toggle="modal" data-target="#modificar_punto" ' +
+                'onclick="setDataPuntoControl(\'' + param_punto.adelanto + '\', \'' + param_punto.atraso + '\', \'' + puntoControlId + '\', \'' + param_punto.id + '\', \'' + param_punto.tiempo_llegada + '\');" ' +
+                'type="button" class="btn btn-default btn-sm"><i class="fa fa-edit"></i></button>' +
             '</div>' +
             '</li>';
+
 
             $('#sortable').append(html);
             verPuntoControl(param_punto.latitud, param_punto.longitud, param_punto.radio, tipoMar, polig);
