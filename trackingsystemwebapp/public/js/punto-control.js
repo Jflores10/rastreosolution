@@ -59,7 +59,7 @@ function drawPolygonOnMap(bloque, poligono) {
         });
 
     if (coords.length === 0) {
-        console.warn("⚠️ No hay coordenadas válidas para dibujar el polígono.");
+        console.warn("No hay coordenadas válidas para dibujar el polígono.");
         return;
     }
 
@@ -92,171 +92,120 @@ function drawPolygonOnMap(bloque, poligono) {
 
 
 function editarPuntoControl(url, tipo_usuario_valor, is_bloque = false) {
-    cleanForm2(tipo_usuario_valor,is_bloque);
+    cleanForm2(tipo_usuario_valor, is_bloque);
+
     $.get(url, function (data) {
-        console.log(is_bloque)
-        if (is_bloque === false || is_bloque === "false" || is_bloque == 0) {
-            actual_id = data.punto_control._id;
-            // ---------- BLOQUE 1 ----------
-            $("#pdi").val(data.punto_control.pdi);
-            $("#descripcion").val(data.punto_control.descripcion);
-            if (tipo_usuario_valor == 1) {
-                $("#cooperativa_id").val(data.punto_control.cooperativa_id);
-            }
+        console.log(is_bloque);
 
-            if (data.punto_control.entrada && data.punto_control.salida) {
-                $("#otro").prop("checked", false).trigger("click");
-                $("#entrada").val(data.punto_control.entrada);
-                $("#salida").val(data.punto_control.salida);
-            } else {
-                $("#otro").prop("checked", true).trigger("click");
-            }
+        // Limpiamos eventos anteriores para evitar duplicados
+        $('#form').off('shown.bs.modal').on('shown.bs.modal', function () {
 
-            // Mapa
-            if (data.punto_control.tipo_mar == 2 ) {
-                $("input[name='tipo_mar'][value='2']").prop("checked", true).trigger("change");
-                data.punto_control.poligono.forEach(function (p, idx) {
-                    if (idx < 4) { // solo hasta 4 puntos
-                        $("#lat" + (idx+1)).val(p.lat);
-                        $("#lng" + (idx+1)).val(p.lng);
-                    }
-                });
+            if (is_bloque === false || is_bloque === "false" || is_bloque == 0) {
+                actual_id = data.punto_control._id;
 
-                drawPolygonOnMap(1, data.punto_control.poligono);
-            } else {
-                $("#latitud").val(data.punto_control.latitud);
-                $("#longitud").val(data.punto_control.longitud);
-                $("input[name='tipo_mar'][value='1']").prop("checked", true).trigger("change");
-
-                // Mapa normal con radio
-                let pos = { lat: parseFloat(data.punto_control.latitud), lng: parseFloat(data.punto_control.longitud) };
-                marker[1].setPosition(pos);
-                circle[1].setCenter(pos);
-                map[1].setCenter(pos);
-                circle[1].setRadius(parseFloat(data.punto_control.radio));
-                $("#radio").val(data.punto_control.radio);
-
-            }
-
-        } else {
-            actual_id = data.bloques[0].pdi_padre;
-
-            // Se espera que el backend devuelva data.bloques[0] y data.bloques[1]
-
-            // ---------- BLOQUE 1 ----------
-            if (data.bloques && data.bloques[0]) {
-                $("#pdi").val(data.bloques[0].pdi_padre);
-                $("#descripcion").val(data.bloques[0].descripcion);
-                
-                $("#_id").val(data.bloques[0]._id);
-
-                if (data.bloques[0].tipo_mar == 2 ) {
-                    $("input[name='tipo_mar'][value='2']").prop("checked", true).trigger("change");
-                    if (tipo_usuario_valor == 1) {
-                        $("#cooperativa_id").val(data.bloques[0].cooperativa_id);
-                        $("#cooperativa_id").trigger("change");
-                    }
-
-                    if (data.bloques[0].entrada && data.bloques[0].salida) {
-                        $("#otro").prop("checked", false).trigger("click");
-                        $("#entrada").val(data.bloques[0].entrada);
-                        $("#salida").val(data.bloques[0].salida);
-                    } else {
-                        $("#otro").prop("checked", true).trigger("click");
-                    }
-
-                    data.bloques[0].poligono.forEach(function (p, idx) {
-                        if (idx < 4) {
-                            $("#lat" + (idx+1)).val(p.lat);
-                            $("#lng" + (idx+1)).val(p.lng);
-                        }
-                    });
-                    drawPolygonOnMap(1, data.bloques[0].poligono);
-                } else {
-                    $("#latitud").val(data.bloques[0].latitud);
-                    $("#longitud").val(data.bloques[0].longitud);
-                    $("input[name='tipo_mar'][value='1']").prop("checked", true).trigger("change");
-                    let pos1 = { lat: parseFloat(data.bloques[0].latitud), lng: parseFloat(data.bloques[0].longitud) };
-                    marker[1].setPosition(pos1);
-                    circle[1].setCenter(pos1);
-                    map[1].setCenter(pos1);
-
-                    if (tipo_usuario_valor == 1) {
-                        $("#cooperativa_id").val(data.bloques[0].cooperativa_id);
-                        $("#cooperativa_id").trigger("change");
-                    }
-
-                    if (data.bloques[0].entrada && data.bloques[0].salida) {
-                        $("#otro").prop("checked", false).trigger("click");
-                        $("#entrada").val(data.bloques[0].entrada);
-                        $("#salida").val(data.bloques[0].salida);
-                    } else {
-                        $("#otro").prop("checked", true).trigger("click");
-                    }
-                    $("#radio").val(data.bloques[0].radio);
-                
-                    circle[1].setRadius(parseFloat(data.bloques[0].radio));
+                $("#pdi").val(data.punto_control.pdi);
+                $("#descripcion").val(data.punto_control.descripcion);
+                if (tipo_usuario_valor == 1) {
+                    $("#cooperativa_id").val(data.punto_control.cooperativa_id);
                 }
 
-
-               
-
-            }
-            if (data.bloques && data.bloques[1]) {
-                 // ---------- BLOQUE 2 ----------
-                $("#descripcion1").val(data.bloques[1].descripcion);
-               
-                $("#_id1").val(data.bloques[1]._id);
-
-                 if (data.bloques[1].tipo_mar == 2 ) {
-                    $("input[name='tipo_mar'][value='2']").prop("checked", true).trigger("change");
-                    data.bloques[1].poligono.forEach(function (p, idx) {
-                        if (idx < 4) {
-                            $("#lat" + (idx+1) + "_b2").val(p.lat);
-                            $("#lng" + (idx+1) + "_b2").val(p.lng);
-                        }
-                    });
-                    drawPolygonOnMap(2, data.bloques[1].poligono);
-                    
-                    if (data.bloques[1].entrada && data.bloques[1].salida) {
-                        $("#otro1").prop("checked", false).trigger("click");
-                        $("#entrada1").val(data.bloques[1].entrada);
-                        $("#salida1").val(data.bloques[1].salida);
-                    } else {
-                        $("#otro1").prop("checked", true).trigger("click");
-                    }
-
+                if (data.punto_control.entrada && data.punto_control.salida) {
+                    $("#otro").prop("checked", false).trigger("click");
+                    $("#entrada").val(data.punto_control.entrada);
+                    $("#salida").val(data.punto_control.salida);
                 } else {
-                    $("#latitud1").val(data.bloques[1].latitud);
-                    $("#longitud1").val(data.bloques[1].longitud);
-                    $("input[name='tipo_mar'][value='1']").prop("checked", true).trigger("change");
-
-                    let pos2 = { lat: parseFloat(data.bloques[1].latitud), lng: parseFloat(data.bloques[1].longitud) };
-                    marker[2].setPosition(pos2);
-                    circle[2].setCenter(pos2);
-                    map[2].setCenter(pos2);
-
-                    if (data.bloques[1].entrada && data.bloques[1].salida) {
-                        $("#otro1").prop("checked", false).trigger("click");
-                        $("#entrada1").val(data.bloques[1].entrada);
-                        $("#salida1").val(data.bloques[1].salida);
-                    } else {
-                        $("#otro1").prop("checked", true).trigger("click");
-                    }
-                    $("#radio1").val(data.bloques[1].radio);
-
-                    
-                    circle[2].setRadius(parseFloat(data.bloques[1].radio));
+                    $("#otro").prop("checked", true).trigger("click");
                 }
 
+                if (data.punto_control.tipo_mar == 2) {
+                    $("input[name='tipo_mar'][value='2']").prop("checked", true).trigger("change");
 
-               
-              
+                    data.punto_control.poligono.forEach(function (p, idx) {
+                        if (idx < 4) {
+                            $("#lat" + (idx + 1)).val(p.lat);
+                            $("#lng" + (idx + 1)).val(p.lng);
+                        }
+                    });
+
+                    drawPolygonOnMap(1, data.punto_control.poligono);
+
+                } else {
+                    $("input[name='tipo_mar'][value='1']").prop("checked", true).trigger("change");
+                    let pos = { lat: parseFloat(data.punto_control.latitud), lng: parseFloat(data.punto_control.longitud) };
+
+                    marker[1].setPosition(pos);
+                    circle[1].setCenter(pos);
+                    map[1].setCenter(pos);
+                    circle[1].setRadius(parseFloat(data.punto_control.radio));
+                    $("#radio").val(data.punto_control.radio);
+                }
+
+            } else {
+                // ---------- BLOQUES ----------
+                actual_id = data.bloques[0].pdi_padre;
+
+                if (data.bloques && data.bloques[0]) {
+                    $("#pdi").val(data.bloques[0].pdi_padre);
+                    $("#descripcion").val(data.bloques[0].descripcion);
+                    $("#_id").val(data.bloques[0]._id);
+
+                    if (data.bloques[0].tipo_mar == 2) {
+                        $("input[name='tipo_mar'][value='2']").prop("checked", true).trigger("change");
+
+                        data.bloques[0].poligono.forEach(function (p, idx) {
+                            if (idx < 4) {
+                                $("#lat" + (idx + 1)).val(p.lat);
+                                $("#lng" + (idx + 1)).val(p.lng);
+                            }
+                        });
+
+                        drawPolygonOnMap(1, data.bloques[0].poligono);
+
+                    } else {
+                        $("input[name='tipo_mar'][value='1']").prop("checked", true).trigger("change");
+
+                        let pos1 = { lat: parseFloat(data.bloques[0].latitud), lng: parseFloat(data.bloques[0].longitud) };
+                        marker[1].setPosition(pos1);
+                        circle[1].setCenter(pos1);
+                        map[1].setCenter(pos1);
+                        circle[1].setRadius(parseFloat(data.bloques[0].radio));
+                        $("#radio").val(data.bloques[0].radio);
+                    }
+                }
+
+                if (data.bloques && data.bloques[1]) {
+                    $("#descripcion1").val(data.bloques[1].descripcion);
+                    $("#_id1").val(data.bloques[1]._id);
+
+                    if (data.bloques[1].tipo_mar == 2) {
+                        $("input[name='tipo_mar'][value='2']").prop("checked", true).trigger("change");
+
+                        data.bloques[1].poligono.forEach(function (p, idx) {
+                            if (idx < 4) {
+                                $("#lat" + (idx + 1) + "_b2").val(p.lat);
+                                $("#lng" + (idx + 1) + "_b2").val(p.lng);
+                            }
+                        });
+
+                        drawPolygonOnMap(2, data.bloques[1].poligono);
+
+                    } else {
+                        $("input[name='tipo_mar'][value='1']").prop("checked", true).trigger("change");
+                        let pos2 = { lat: parseFloat(data.bloques[1].latitud), lng: parseFloat(data.bloques[1].longitud) };
+
+                        marker[2].setPosition(pos2);
+                        circle[2].setCenter(pos2);
+                        map[2].setCenter(pos2);
+                        circle[2].setRadius(parseFloat(data.bloques[1].radio));
+                        $("#radio1").val(data.bloques[1].radio);
+                    }
+                }
             }
-           
-        }
+
+        }); // fin del on('shown.bs.modal')
     }, "json");
 }
+
 
 
 
