@@ -539,7 +539,6 @@ Crear ruta
                                 calculo:'{{$punto_control["calculo"]}}',
                                 redondeo:'{{$punto_control["redondeo"]}}',
                                 retorno:'{{$punto_control["retorno"]}}',
-
                                 poligono:`{!! isset($punto["poligono"]) ? json_encode($punto["poligono"]) : '' !!}`
                             });
                     @endforeach
