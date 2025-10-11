@@ -256,42 +256,92 @@ Crear ruta
 </div>
 
 <div class="modal fade" id="modificar_punto" tabindex="-1" role="dialog" aria-labelledby="modalLabel">
-    <div class="modal-dialog" role="document">
+    <div class="modal-dialog " role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
                 <h4 class="modal-title" id="modalLabel">Editar punto de control</h4>
             </div>
             <div class="modal-body">
                 <div class="row">
-                    <div class="col-lg-12 col-md-12 col-sm-12">
-                        <div class="col-lg-4 col-md-4 col-sm-12">
-                            <div class="form-group" id="div-tiempo-llegada-modificacion">
-                                <label for="tiempo-llegada-modificacion">Tiempo de llegada (minutos)</label>
-                                <input name="tiempo-llegada-modificacion" id="tiempo-llegada-modificacion" class="form-control" type="number" />
-                                <span class="help-block" id="span_tiempo_llegada_modificacion"></span>
-                            </div>
-                            <div class="form-group" id="div-atraso-modificacion">
-                                <label for="atraso_modificacion">Multa por atraso</label>
-                                <input name="atraso-modificacion" id="atraso-modificacion" class="form-control" type="number" />
-                                <span class="help-block" id="span_atraso_modificacion"></span>
-                            </div>
-                            <div class="form-group" id="div-adelanto-modificacion">
-                                <label for="adelanto-modificacion">Multa por adelanto</label>
-                                <input name="adelanto-modificacion" id="adelanto-modificacion" class="form-control" type="number" />
-                                <span class="help-block" id="span_adelanto_modificacion"></span>
+                    <!-- Columna izquierda -->
+                    <div class="col-md-6 col-xs-6">
+                        <div class="form-group" id="div-tiempo-llegada-modificacion">
+                            <label for="tiempo-llegada-modificacion">Tiempo de llegada (minutos)</label>
+                            <input type="number" name="tiempo-llegada-modificacion" id="tiempo-llegada-modificacion" class="form-control" />
+                            <span class="help-block" id="span_tiempo_llegada_modificacion"></span>
+                        </div>
+                        <div class="form-group" id="div-atraso-modificacion">
+                            <label for="atraso-modificacion">Multa por atraso</label>
+                            <input type="number" name="atraso-modificacion" id="atraso-modificacion" class="form-control" />
+                            <span class="help-block" id="span_atraso_modificacion"></span>
+                        </div>
+                        <div class="form-group" id="div-adelanto-modificacion">
+                            <label for="adelanto-modificacion">Multa por adelanto</label>
+                            <input type="number" name="adelanto-modificacion" id="adelanto-modificacion" class="form-control" />
+                            <span class="help-block" id="span_adelanto_modificacion"></span>
+                        </div>
+                        <div class="form-group" >
+                            <div class="checkbox">
+                                <label>
+                                    <input type="checkbox" name="retorno" id="retorno" />
+                                    Punto de Retorno
+                                </label>
                             </div>
                         </div>
                     </div>
+
+                    <!-- Columna derecha -->
+                    <div class="col-md-6 col-xs-6">
+                        <fieldset style="border: 1px solid #ddd; padding: 15px; border-radius: 4px;">
+                        <legend style="font-size: 14px; width: auto; margin-bottom: 10px;">Cálculo</legend>
+                        <div class="radio">
+                            <label>
+                            <input type="radio" value="E" id="entrada" name="cal_ptocontrol" checked />
+                            Entrada 
+                            </label>
+                        </div>
+                        <div class="radio">
+                            <label>
+                            <input type="radio" value="S" id="salida" name="cal_ptocontrol" />
+                            Salida 
+                            </label>
+                        </div>
+                        </fieldset>
+
+                        <fieldset style="border: 1px solid #ddd; padding: 15px; border-radius: 4px; margin-top: 15px;">
+                        <legend style="font-size: 14px; width: auto; margin-bottom: 10px;">Redondeo</legend>
+                        <div class="radio">
+                            <label>
+                            <input type="radio" name="redondeo" id="minimo" value="min" checked>
+                                Mínimo
+                            </label>
+                        </div>
+                        <div class="radio">
+                            <label>
+                            <input type="radio" name="redondeo" id="maximo" value="max">
+                                Máximo
+                            </label>
+                        </div>
+                        </fieldset>
+                    </div>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-default" data-dismiss="modal"><i class="fa fa-close"></i> Cerrar</button>
-                <button type="button"  onclick="editarPunto();"  data-dismiss="modal" class="btn btn-primary"><i class="fa fa-play"></i> Aceptar</button>
+
+            <div class="modal-footer text-right">
+                <button type="button" class="btn btn-default" data-dismiss="modal">
+                <i class="fa fa-close"></i> Cerrar
+                </button>
+                <button type="button" onclick="editarPunto();" data-dismiss="modal" class="btn btn-primary">
+                <i class="fa fa-save"></i> Guardar
+                </button>
             </div>
         </div>
     </div>
 </div>
+
 
 <div class="modal fade" id="view" tabindex="-1" role="dialog" aria-labelledby="modalLabel">
   <div class="modal-dialog" role="document">
@@ -486,6 +536,10 @@ Crear ruta
                                 longitud:'{{$punto["longitud"]}}',
                                 radio:'{{$punto["radio"]}}',
                                 tipo_mar:'{{$punto["tipo_mar"]}}',
+                                calculo:'{{$punto_control["calculo"]}}',
+                                redondeo:'{{$punto_control["redondeo"]}}',
+                                retorno:'{{$punto_control["retorno"]}}',
+
                                 poligono:`{!! isset($punto["poligono"]) ? json_encode($punto["poligono"]) : '' !!}`
                             });
                     @endforeach
@@ -705,10 +759,16 @@ Crear ruta
         // ============================
         // Edición del punto (sin cambios)
         // ============================
-        function setDataPuntoControl(adelanto,atraso,puntoControlId,id,tiempo_llegada){
+        function setDataPuntoControl(adelanto,atraso,puntoControlId,id,tiempo_llegada, calculo="E", redondeo="min",retorno="0"){
             document.getElementById('adelanto-modificacion').value=adelanto;
             document.getElementById('atraso-modificacion').value=atraso;
             document.getElementById('tiempo-llegada-modificacion').value=tiempo_llegada;
+
+            $('input[name="cal_ptocontrol"][value="' + calculo + '"]').prop('checked', true);
+            $('input[name="redondeo"][value="' + redondeo + '"]').prop('checked', true);
+            $('#retorno').prop('checked', retorno === '1');
+
+
             actualPuntoControliD=id;
             actualPuntoControlLiId=puntoControlId;
         }
@@ -718,6 +778,10 @@ Crear ruta
             var adelanto=document.getElementById('adelanto-modificacion').value;
             var atraso=document.getElementById('atraso-modificacion').value;
             var tiempo_llegada=document.getElementById('tiempo-llegada-modificacion').value;
+            var calculo=document.querySelector('input[name="cal_ptocontrol"]:checked').value;
+            var redondeo=document.querySelector('input[name="redondeo"]:checked').value;
+            var retorno = $('#retorno').is(':checked') ? 1 : 0;
+
 
             if(adelanto==''||adelanto==null)adelanto='0';
             if(atraso==''||atraso==null)atraso='0';
@@ -725,18 +789,21 @@ Crear ruta
 
             if(parseFloat(tiempo_llegada)>=0  && parseFloat(adelanto)>=0 && parseFloat(atraso)>=0){
                 var value= JSON.stringify({
-                id: actualPuntoControliD,
-                adelanto: adelanto,
-                atraso: atraso,
-                tiempo_llegada:tiempo_llegada,
-                secuencia: ''
+                    id: actualPuntoControliD,
+                    adelanto: adelanto,
+                    atraso: atraso,
+                    tiempo_llegada:tiempo_llegada,
+                    secuencia: '',
+                    calculo:calculo,
+                    redondeo:redondeo,
+                    retorno:retorno
                 });
                 $('#'+actualPuntoControlLiId).find('input[id="puntos_control"]').val(value);
                 let texto = $('#'+actualPuntoControlLiId).find('span').text();
                 let values = texto.split('|');
                 $('#'+actualPuntoControlLiId).find('span').text('AT: ' + atraso + '|AD: + ' + adelanto + '|T: ' + tiempo_llegada + '|' + values[3]);
                 $('#'+actualPuntoControlLiId).find('button[id="set_data_punto"]').attr('onclick',
-                "setDataPuntoControl('"+adelanto+"','"+atraso+"','"+actualPuntoControlLiId+"','"+actualPuntoControliD+"','"+tiempo_llegada+"');");
+                "setDataPuntoControl('"+adelanto+"','"+atraso+"','"+actualPuntoControlLiId+"','"+actualPuntoControliD+"','"+tiempo_llegada+"','"+calculo+"','"+redondeo+"','"+retorno+"');");
             } else {
                 alert("Error: Todos los datos ingresados deben ser mayores o iguales a cero.");
             }
@@ -1039,7 +1106,10 @@ Crear ruta
                 adelanto: adelanto,
                 atraso: atraso,
                 tiempo_llegada: tiempo_llegada,
-                secuencia: ''
+                secuencia: '',
+                calculo:'E',
+                redondeo:'min',
+                retorno:0
                 });
 
                 if (id_punto_aux.length != 0) {
@@ -1090,6 +1160,7 @@ Crear ruta
         // Construcción de la lista desde datos existentes
         // ============================
         function getPuntosControlHtml(param_punto){
+            console.log(param_punto)
             var puntoControlId = 'punto_control_' + param_punto.id+'_'+id_indice_aux;
 
             // Asegurar defaults si no vienen
@@ -1103,7 +1174,11 @@ Crear ruta
                 adelanto: param_punto.adelanto,
                 atraso: param_punto.atraso,
                 tiempo_llegada: param_punto.tiempo_llegada,
-                secuencia: ''
+                secuencia: '',
+                calculo:param_punto.calculo,
+                redondeo:param_punto.redondeo,
+                retorno:param_punto.retorno,
+
                 }) + '\' />' +
                 '<span>AT: ' + param_punto.atraso + '|AD: ' + param_punto.adelanto + '|T: ' + param_punto.tiempo_llegada + '|' + param_punto.descripcion + '</span><br/>' +
 
@@ -1126,7 +1201,7 @@ Crear ruta
 
                 '<button onclick="removePuntoControl(\'' + puntoControlId + '\', \'' + indice_puntos + '\');" type="button" class="btn btn-danger btn-sm"><i class="fa fa-power-off"></i></button>' +
                 '<button id="set_data_punto" data-toggle="modal" data-target="#modificar_punto" ' +
-                'onclick="setDataPuntoControl(\'' + param_punto.adelanto + '\', \'' + param_punto.atraso + '\', \'' + puntoControlId + '\', \'' + param_punto.id + '\', \'' + param_punto.tiempo_llegada + '\');" ' +
+                'onclick="setDataPuntoControl(\'' + param_punto.adelanto + '\', \'' + param_punto.atraso + '\', \'' + puntoControlId + '\', \'' + param_punto.id + '\', \'' + param_punto.tiempo_llegada + '\', \'' + param_punto.calculo + '\', \'' + param_punto.redondeo + '\', \'' + param_punto.retorno + '\');" ' +
                 'type="button" class="btn btn-default btn-sm"><i class="fa fa-edit"></i></button>' +
             '</div>' +
             '</li>';

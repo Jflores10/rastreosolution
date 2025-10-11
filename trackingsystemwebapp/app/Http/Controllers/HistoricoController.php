@@ -21,6 +21,7 @@ use App\PuntoVirtual;
 use GuzzleHttp\Client;
 use App\Bitacora;
 use Excel;
+use App\Helper\FunctionsHelper;
 
 
 class HistoricoController extends Controller
@@ -369,6 +370,7 @@ class HistoricoController extends Controller
             
             foreach($unidades as $unidad)
             {
+                
                 if($unidad["fecha_gps"] != null && $unidad["fecha"] != null)
                 {
 
@@ -380,6 +382,8 @@ class HistoricoController extends Controller
                     $ruta_fecha='';
                     $ruta_conductor='';
                     $ruta_hora_final='';
+                    $punto_retorno=false;
+                    $sentido=false;
 
                     if(isset($ruta_actual)){
                         $ruta=$ruta_actual->ruta->descripcion;
@@ -390,8 +394,13 @@ class HistoricoController extends Controller
                         //RECORRER LOS PUNTO DE CONTROL PARA OBTENER TIEMPO-PUNTO
                         $tiempo_final=0;
                         foreach ($ruta_actual->ruta->puntos_control as $punto) {
-                            $tiempo_final+=$punto['tiempo_llegada'];  
+                            $tiempo_final+=$punto['tiempo_llegada']; 
+                            if($punto['retorno']==="1"){
+                                $punto_retorno = PuntoControl::where("_id",$punto['id'])->first();
+                            }
                         }
+
+
                         //SUMAR MINUTOS A LA HORA DEL DESPACHO
                         $ruta_hora_final = Carbon::parse($ruta_actual->fecha); // conviertes a Carbon
                         $ruta_hora_final->addHours(5); 
@@ -399,7 +408,7 @@ class HistoricoController extends Controller
                         $ruta_hora_final = $ruta_hora_final->format('H:i'); // solo hora:minuto
 
                     }
-                    array_push($rutaunidad,["ruta_actual"=>$ruta,"ruta_fecha"=>$ruta_fecha,"ruta_conductor"=>$ruta_conductor,"ruta_hora_fin"=>$ruta_hora_final]);
+                    array_push($rutaunidad,["ruta_actual"=>$ruta,"ruta_fecha"=>$ruta_fecha,"ruta_conductor"=>$ruta_conductor,"ruta_hora_fin"=>$ruta_hora_final, "punto_retorno"=>$punto_retorno]);
 
                     $f_gps=$unidad["fecha_gps"]->toDateTime();
                     $f_servidor=$unidad["fecha"]->toDateTime();
@@ -428,6 +437,16 @@ class HistoricoController extends Controller
                         date_sub($f_puerta_abierta_trasera, date_interval_create_from_date_string('10 hours'));
                         date_sub($f_puerta_cerrada_trasera, date_interval_create_from_date_string('10 hours'));
                     }
+                    if(isset($ruta_actual)){
+                        $sentido = FunctionsHelper::determinar_sentido_unidad(
+                            $unidad['latitud'],
+                            $unidad['longitud'],
+                            $punto_retorno
+                        );
+                        
+                    }
+                   
+                    $unidad['sentido']=$sentido;
 
 
                     array_push($array,["fecha_servidor"=>$f_servidor, "fecha_gps"=>$f_gps, 'diferencia'=>$diff,

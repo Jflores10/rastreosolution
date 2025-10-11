@@ -83,7 +83,7 @@
                                     <td>{{ (!isset($marcaptorecorrido))? '-' : $marcaptorecorrido->tiempo}}</td>
 
                                 @else
-                                    <td>{{ (!isset($punto_control['marca']))?'-':DateTime::createFromFormat('Y-m-d H:i:s', $punto_control['marca'])->format('H:i') }}</td>
+                                    <td>{{ (!isset($punto_control['marca']))?'-':DateTime::createFromFormat('Y-m-d H:i:s', $punto_control['marca'])->format('H:i:s') }}</td>
                                     <td>{{ (!isset($punto_control['tiempo_atraso']))? '-' . (!isset($punto_control['tiempo_adelanto'])?'':$punto_control['tiempo_adelanto']):'+' . $punto_control['tiempo_atraso'] }}</td>
                                 @endif
                               

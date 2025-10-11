@@ -125,6 +125,7 @@ class RutaController extends Controller
 
     public function edit($id)
     {
+        
     }
 
     public function clonar($id)
@@ -175,40 +176,38 @@ class RutaController extends Controller
         if ($validator->fails())
             return response()->json(['error' => true, 'messages' => $validator->errors()]);
         else {
-            if (sizeof($request->input('array_ruta') > 0)) {
-                $ruta = Ruta::findOrFail($id);
-                $ruta->descripcion = $request->input('descripcion');
-                $ruta->recorrido = $request->input('array_ruta');
-                $ruta->estado_exportacion = 'P';
-                if ($request->input('puntos_control') != null) {
-                    $ruta->puntos_control = $request->input('puntos_control');
-                }
-                $ruta->tipo_ruta = $request->input('tipo_ruta');
-                if ($request->input('tipo_ruta_padre') != null) {
-                    $ruta->ruta_padre = $request->input('tipo_ruta_padre');
-                }
-                if ($request->input('tipo_ruta_atm') != null) {
-                    $ruta->ruta_atm = $request->input('tipo_ruta_atm');
-                }
-                $ruta->cooperativa_id = $request->input('cooperativa_id');
-                $ruta->modificador_id = Auth::user()->_id;
-                $ruta->color = $request->input('color');
-                $ruta->save();
-                $dias = $request->input('dia');
-                $desdes = $request->input('desde');
-                $hastas = $request->input('hasta');
-                $ruta->cronogramas()->delete();
-                if (is_array($dias)) {
-                    for ($i = 0; $i < count($dias); $i++)
-                        $ruta->cronogramas()->create([
-                            'dia' => (int) $dias[$i],
-                            'desde' => new Carbon('2018-01-01 ' . $desdes[$i]),
-                            'hasta' => new Carbon('2018-01-01 ' . $hastas[$i])
-                        ]);
-                }
-                return response()->json(['error' => false, 'ruta' => $ruta]);
-            } else
-                return response()->json(['error' => true, 'messages' => 'Error: No se encontró ninguna ruta.']);
+            $ruta = Ruta::findOrFail($id);
+            $ruta->descripcion = $request->input('descripcion');
+            //$ruta->recorrido = $request->input('array_ruta');
+            $ruta->estado_exportacion = 'P';
+            if ($request->input('puntos_control') != null) {
+                $ruta->puntos_control = $request->input('puntos_control');
+            }
+            $ruta->tipo_ruta = $request->input('tipo_ruta');
+            if ($request->input('tipo_ruta_padre') != null) {
+                $ruta->ruta_padre = $request->input('tipo_ruta_padre');
+            }
+            if ($request->input('tipo_ruta_atm') != null) {
+                $ruta->ruta_atm = $request->input('tipo_ruta_atm');
+            }
+            $ruta->cooperativa_id = $request->input('cooperativa_id');
+            $ruta->modificador_id = Auth::user()->_id;
+            $ruta->color = $request->input('color');
+            $ruta->save();
+            $dias = $request->input('dia');
+            $desdes = $request->input('desde');
+            $hastas = $request->input('hasta');
+            $ruta->cronogramas()->delete();
+            if (is_array($dias)) {
+                for ($i = 0; $i < count($dias); $i++)
+                    $ruta->cronogramas()->create([
+                        'dia' => (int) $dias[$i],
+                        'desde' => new Carbon('2018-01-01 ' . $desdes[$i]),
+                        'hasta' => new Carbon('2018-01-01 ' . $hastas[$i])
+                    ]);
+            }
+            return response()->json(['error' => false, 'ruta' => $ruta]);
+            
         }
     }
 
