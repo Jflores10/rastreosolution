@@ -32,12 +32,12 @@ class RutaController extends Controller
     {
         $user = Auth::user();
         return view('panel.lista-rutas', [
-            'rutas' => Ruta::permitida()->orderBy('descripcion')
+            'rutas' => Ruta::orderBy('descripcion')
                 ->where('estado', 'A')
                 ->paginate(10),
             'cooperativa' => $user->cooperativa_id,
             'tipo_usuario_valor' => $user->tipo_usuario->valor,
-            'cooperativas' => Cooperativa::permitida()->orderBy('descripcion')->where('estado', 'A')->get()
+            'cooperativas' => Cooperativa::orderBy('descripcion')->where('estado', 'A')->get()
         ]);
     }
     public function create()
