@@ -637,15 +637,27 @@ class DespachoController extends Controller
                         }
                     } else {
 
-                        $puntoControlEsperado = Recorrido::orderBy('fecha_gps')->orderBy('fecha_gps', 'desc')->where(
-                            'tipo',
-                            'GTGEO'
-                        )->where('fecha_gps', '>', $fini)
-                            ->where('fecha_gps', '<=', $tiempoEsperado)
-                            ->where('entrada', 1)
-                            ->where('unidad_id', new ObjectID($despacho->unidad_id))
-                            /****SI SE DESEA HACER UN CAMBIO SOBRE PUNTO ENTRADA O SALIDA AGREGAR LOS FILTROS EN TODOS LAS BUSQUEDAD DE RECORRIDOS Y MAS IF */
-                            ->where('pdi', (int) $puntoControlObj->pdi)->first();
+                        if (isset($punto_control['calculo']) && $punto_control['calculo'] == 'E') {
+                            // Entrada
+                            $puntoControlEsperado = Recorrido::orderBy('fecha_gps', 'asc')
+                                ->where('tipo', 'GTGEO')
+                                ->where('fecha_gps', '>=', $fini)
+                                ->where('fecha_gps', '<=', $ffin)
+                                ->where('entrada', 1)
+                                ->where('unidad_id', new ObjectID($despacho->unidad_id))
+                                ->where('pdi', (int)$puntoControlObj->pdi)
+                                ->first();
+                        } else {
+                            // Salida
+                            $puntoControlEsperado = Recorrido::orderBy('fecha_gps', 'asc')
+                                ->where('tipo', 'GTGEO')
+                                ->where('fecha_gps', '>=', $fini)
+                                ->where('fecha_gps', '<=', $ffin)
+                                ->where('entrada', '!=', 1)
+                                ->where('unidad_id', new ObjectID($despacho->unidad_id))
+                                ->where('pdi', (int)$puntoControlObj->pdi)
+                                ->first();
+                        }
                     }
 
                     if (isset($puntoControlEsperado)) {
@@ -857,24 +869,46 @@ class DespachoController extends Controller
                     $tiempo_atraso = null;
                     $tiempo_adelanto = null;
 
+                    // 🔧 AJUSTE: cálculo en minutos totales incluyendo segundos
+                    $totalMin = ($diff->h * 60) + $diff->i + ($diff->s / 60);
+
+                    // 🔧 AJUSTE: aplicar redondeo configurable
+                    // Si la cooperativa tiene modo de redondeo general
+                    if (isset($cooperativa->modo_redondeo)) {
+                        $intervalo = ceil($totalMin);
+                    } else {
+                        // Si no hay modo general, usar la lógica de punto específico si existe
+                        if (isset($puntoControlObj->redondeo)) {
+                            if ($puntoControlObj->redondeo === 'min') {
+                                $intervalo = floor($totalMin);
+                            } elseif ($puntoControlObj->redondeo === 'max') {
+                                $intervalo = ceil($totalMin);
+                            } else {
+                                $intervalo = round($totalMin);
+                            }
+                        } else {
+                            // Si no hay configuración específica, mantener comportamiento original
+                            if ($cooperativa->redondear_tiempos_atraso) {
+                                $intervalo = ceil($totalMin);
+                            } else {
+                                $intervalo = floor($totalMin);
+                            }
+                        }
+                    }
+
+                    // 🔧 AJUSTE: cálculo de multa manteniendo compatibilidad original
                     if ($tiempoEsperado >= $fechaGPS) {
-                        $intervalo = (($diff->i) + ($diff->h * 60)) * -1;
-                        $multa = $multa + (((float)$punto_control["adelanto"]) * $intervalo * -1);
+                        // ADELANTO
+                        $intervaloMin = $intervalo * -1;
+                        $multa += (((float)$punto_control["adelanto"]) * abs($intervaloMin));
                         $tiempo_adelanto = $diff->format('%h:%i:%s');
                     } else if ($tiempoEsperado <= $fechaGPS) {
-                        if ($cooperativa->redondear_tiempos_atraso) {
-                            $segundosDiff = $fechaGPS->getTimestamp() - $tiempoEsperado->getTimestamp();
-                            $intervalo = ceil($segundosDiff / 60);
-                            $multa = $multa + (((float)$punto_control["atraso"]) * $intervalo);
-                            $tiempo_atraso = $diff->format('%h:%i:%s');
-                        }
-                        else {
-                            $intervalo = (($diff->i) + ($diff->h * 60));
-                            $multa = $multa + (((float)$punto_control["atraso"]) * $intervalo);
-                            $tiempo_atraso = $diff->format('%h:%i:%s');
-                        }
+                        // ATRASO
+                        $intervaloMin = $intervalo;
+                        $multa += (((float)$punto_control["atraso"]) * $intervaloMin);
+                        $tiempo_atraso = $diff->format('%h:%i:%s');
                     } else {
-                        $intervalo = '0';
+                        $intervalo = 0;
                     }
 
                     date_sub($fechaGPS, date_interval_create_from_date_string('10 hours'));
@@ -882,7 +916,6 @@ class DespachoController extends Controller
                     $fini = new UTCDateTime(($fini->getTimestamp() * 1000));
 
                     $consulta = $fechaGPS_;
-
                     $fechaLinea = $fechaGPS->format('H:i');
 
                     $item["marca"] = $fechaGPS->format('Y-m-d H:i:s');
@@ -893,7 +926,6 @@ class DespachoController extends Controller
 
                     $index++;
                 }
-
                 $_total_pc++;
                 array_push($array_final, $item);
             }
