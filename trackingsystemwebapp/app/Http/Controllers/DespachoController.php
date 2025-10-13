@@ -496,7 +496,6 @@ class DespachoController extends Controller
         $ultimo_punto = null;
         $index = 0;
         $primerpunto = true;
-
         if (sizeof($recorridos) > 0) {
             foreach ($despacho->puntos_control as $punto_control) {
                 $puntoControlEsperado = null;
@@ -510,7 +509,8 @@ class DespachoController extends Controller
                     "id" => $punto_control["id"], "tiempo_esperado" =>
                     $punto_control["tiempo_esperado"], "adelanto" => $punto_control["adelanto"],
                     "atraso" => $punto_control["atraso"], "marca" => null, 'contador_marca' => null,
-                    'tiempo_atraso' => null, 'tiempo_adelanto' => null, 'intervalo' => null
+                    'tiempo_atraso' => null, 'tiempo_adelanto' => null, 'intervalo' => null,"calculo"=>$punto_control['calculo'],
+                    "redondeo"=>$punto_control['redondeo'],"retorno"=>$punto_control['retorno']
                 ];
 
                 $puntoControlObj = PuntoControl::find($punto_control['id']);
@@ -637,15 +637,28 @@ class DespachoController extends Controller
                         }
                     } else {
 
-                        $puntoControlEsperado = Recorrido::orderBy('fecha_gps')->orderBy('fecha_gps', 'desc')->where(
-                            'tipo',
-                            'GTGEO'
-                        )->where('fecha_gps', '>', $fini)
-                            ->where('fecha_gps', '<=', $tiempoEsperado)
-                            ->where('entrada', 1)
-                            ->where('unidad_id', new ObjectID($despacho->unidad_id))
-                            /****SI SE DESEA HACER UN CAMBIO SOBRE PUNTO ENTRADA O SALIDA AGREGAR LOS FILTROS EN TODOS LAS BUSQUEDAD DE RECORRIDOS Y MAS IF */
-                            ->where('pdi', (int) $puntoControlObj->pdi)->first();
+                        
+                        if (isset($punto_control['calculo']) && $punto_control['calculo'] == 'E') {
+                            // Entrada
+                            $puntoControlEsperado = Recorrido::orderBy('fecha_gps', 'desc')
+                                ->where('tipo', 'GTGEO')
+                                ->where('fecha_gps', '>', $fini)
+                                ->where('fecha_gps', '<=', $tiempoEsperado)
+                                ->where('entrada', 1)
+                                ->where('unidad_id', new ObjectID($despacho->unidad_id))
+                                ->where('pdi', (int)$puntoControlObj->pdi)
+                                ->first();
+                        } else {
+                            // Salida
+                            $puntoControlEsperado = Recorrido::orderBy('fecha_gps', 'desc')
+                                ->where('tipo', 'GTGEO')
+                                ->where('fecha_gps', '>', $fini)
+                                ->where('fecha_gps', '<=', $tiempoEsperado)
+                                ->where('entrada', '!=', 1)
+                                ->where('unidad_id', new ObjectID($despacho->unidad_id))
+                                ->where('pdi', (int)$puntoControlObj->pdi)
+                                ->first();
+                        }
                     }
 
                     if (isset($puntoControlEsperado)) {
@@ -848,7 +861,7 @@ class DespachoController extends Controller
                     $primerpunto = false;
                 }
 
-                if (isset($puntoControlEsperado)) {
+                 if (isset($puntoControlEsperado)) {
                     $fechaGPS = $puntoControlEsperado->fecha_gps->toDateTime();
                     $fechaGPS_ = $puntoControlEsperado->fecha_gps->toDateTime();
 
@@ -857,24 +870,36 @@ class DespachoController extends Controller
                     $tiempo_atraso = null;
                     $tiempo_adelanto = null;
 
+                    $totalMin = ($diff->h * 60) + $diff->i + ($diff->s / 60);
+
+                    if (isset($cooperativa->redondear_tiempos_atraso)) {
+                        $intervalo = ceil($totalMin);
+                    } else {
+                        if (isset($punto_control['redondeo'])) {
+                            if ($punto_control['redondeo'] === 'min') {
+                                $intervalo = floor($totalMin);
+                            } elseif ($punto_control['redondeo'] === 'max') {
+                                $intervalo = ceil($totalMin);
+                            } else {
+                                $intervalo = floor($totalMin);
+                            }
+                        } else {
+                            $intervalo = floor($totalMin);
+                        }
+                    }
+
                     if ($tiempoEsperado >= $fechaGPS) {
-                        $intervalo = (($diff->i) + ($diff->h * 60)) * -1;
-                        $multa = $multa + (((float)$punto_control["adelanto"]) * $intervalo * -1);
+                        // ADELANTO
+                        $intervaloMin = $intervalo * -1;
+                        $multa += (((float)$punto_control["adelanto"]) * abs($intervaloMin));
                         $tiempo_adelanto = $diff->format('%h:%i:%s');
                     } else if ($tiempoEsperado <= $fechaGPS) {
-                        if ($cooperativa->redondear_tiempos_atraso) {
-                            $segundosDiff = $fechaGPS->getTimestamp() - $tiempoEsperado->getTimestamp();
-                            $intervalo = ceil($segundosDiff / 60);
-                            $multa = $multa + (((float)$punto_control["atraso"]) * $intervalo);
-                            $tiempo_atraso = $diff->format('%h:%i:%s');
-                        }
-                        else {
-                            $intervalo = (($diff->i) + ($diff->h * 60));
-                            $multa = $multa + (((float)$punto_control["atraso"]) * $intervalo);
-                            $tiempo_atraso = $diff->format('%h:%i:%s');
-                        }
+                        // ATRASO
+                        $intervaloMin = $intervalo;
+                        $multa += (((float)$punto_control["atraso"]) * $intervaloMin);
+                        $tiempo_atraso = $diff->format('%h:%i:%s');
                     } else {
-                        $intervalo = '0';
+                        $intervalo = 0;
                     }
 
                     date_sub($fechaGPS, date_interval_create_from_date_string('10 hours'));
@@ -882,7 +907,6 @@ class DespachoController extends Controller
                     $fini = new UTCDateTime(($fini->getTimestamp() * 1000));
 
                     $consulta = $fechaGPS_;
-
                     $fechaLinea = $fechaGPS->format('H:i');
 
                     $item["marca"] = $fechaGPS->format('Y-m-d H:i:s');
@@ -1759,7 +1783,10 @@ class DespachoController extends Controller
                     'id' => $punto_control["id"],
                     "tiempo_esperado" => new UTCDateTime(($fecha->getTimestamp()) * 1000),
                     "adelanto" => $punto_control["adelanto"],
-                    "atraso" => $punto_control["atraso"]
+                    "atraso" => $punto_control["atraso"],
+                    "calculo"=>$punto_control["atraso"],
+                    "redondeo"=>$punto_control["redondeo"],
+                    "retorno"=>$punto_control["retorno"],
                 ];
                 array_push($puntos_control, $item);
                 $indice++;
