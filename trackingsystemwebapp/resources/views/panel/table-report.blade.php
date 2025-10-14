@@ -106,7 +106,7 @@
                                             : $intervalo * $adelanto;
                                     }
                                 @endphp
-                                <td>{{ $desc }}</td>
+                                <td>{{ abs($desc) }}</td>
                             @endforeach
                             <td>{{ $despacho->contador_inicial }}</td>
                             <td>{{ $despacho->contador_final }}</td>
