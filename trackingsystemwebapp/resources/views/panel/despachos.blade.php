@@ -941,8 +941,8 @@
                                     .atraso != undefined) ? data.puntos_control[i].atraso : 0;
                                 var adelanto = (data.puntos_control[i].adelanto != null && 
                                 data.puntos_control[i].adelanto != undefined) ? data.puntos_control[i].adelanto : 0;
-                            
-                                tabla.push('<td>' + data.puntos_control[i].intervalo + '</td>');
+                                var tt=(data.puntos_control[i].intervalo>0)?"+"+data.puntos_control[i].intervalo:data.puntos_control[i].intervalo;
+                                tabla.push('<td>' + tt  + '</td>');
                                 if (data.puntos_control[i].intervalo > 0)
                                     anteriorBusAT += data.puntos_control[i].intervalo;
                                 else
@@ -1097,7 +1097,9 @@
                                     .marca != null) {
                                     var horaAnterior = new Date(data.anterior.puntos_control[i].marca);
                                     tabla.push('<td> ' + horaAnterior.format('H:i') + '</td>');
-                                    tabla.push('<td>' + data.anterior.puntos_control[i].intervalo + '</td>');
+                                    var tt=(data.anterior.puntos_control[i].intervalo>0)?"+"+data.anterior.puntos_control[i].intervalo:data.anterior.puntos_control[i].intervalo;
+
+                                    tabla.push('<td>' + tt + '</td>');
                                     if (data.unidad.cooperativa_id == '5829c7407aea9111257dd831') { //NUEVO ECUADOR
                                         var intervalo = (data.anterior.puntos_control[i].intervalo != null && data
                                                 .anterior.puntos_control[i].intervalo != undefined) ? data.anterior
@@ -1297,7 +1299,9 @@
                                 tabla.push('<td> ' + ((i === 0 && data.hasOwnProperty('siguiente')) ? horaAnterior
                                     .format('H:i') : horaAnterior.format('i')) + '</td>');
                                 if (data.anterior.puntos_control[i].marca != null) {
-                                    tabla.push('<td>' + data.anterior.puntos_control[i].intervalo + '</td>');
+                                    var tt=(data.anterior.puntos_control[i].intervalo>0)?"+"+data.anterior.puntos_control[i].intervalo:data.anterior.puntos_control[i].intervalo;
+
+                                    tabla.push('<td>' + tt + '</td>');
                                     if (data.anterior.puntos_control[i].intervalo > 0)
                                         anteriorBusAT += data.anterior.puntos_control[i].intervalo;
                                     else
@@ -1351,7 +1355,9 @@
                             tabla.push('<td> ' + ((i === 0) ? horaUltima.format('H:i') : horaUltima.format('i')) +
                                 '</td>');
                             if (data.siguiente_bus.puntos_control[i].marca != null) {
-                                tabla.push('<td>' + data.siguiente_bus.puntos_control[i].intervalo + '</td>');
+                                var tt=(data.siguiente_bus.puntos_control[i].intervalo>0)?"+"+data.siguiente_bus.puntos_control[i].intervalo:data.siguiente_bus.puntos_control[i].intervalo;
+
+                                tabla.push('<td>' + tt + '</td>');
                                 if (data.siguiente_bus.puntos_control[i].intervalo > 0)
                                     siguienteBusAT += data.siguiente_bus.puntos_control[i].intervalo;
                                 else

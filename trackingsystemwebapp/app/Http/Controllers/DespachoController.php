@@ -24,6 +24,7 @@ use GuzzleHttp\Exception\GuzzleException;
 use GuzzleHttp\Client;
 use App\Bitacora;
 use Excel;
+use App\Helper\FunctionsHelper;
 
 class DespachoController extends Controller
 {
@@ -450,10 +451,17 @@ class DespachoController extends Controller
         ]);
     }
 
-      public function end(Request $request, $id)
+    public function end(Request $request, $id)
     {
+        
         set_time_limit(0);
-        $despacho = Despacho::findOrFail($id); //Obtengo el despacho
+        $despacho = Despacho::findOrFail($id); 
+        $resultado = FunctionsHelper::update_pto_control_despacho($despacho->ruta, $despacho);
+        $despacho->update([
+            'puntos_control' => $resultado['data']->puntos_control
+        ]);
+
+
         $cooperativa = $despacho->unidad->cooperativa;
         $despacho_tmp = $despacho;
         $cooperativa_cortetubo = $despacho->unidad->cooperativa->multa_tubo;
@@ -488,7 +496,6 @@ class DespachoController extends Controller
             ->where('unidad_id', new ObjectID($despacho->unidad_id))
             ->where('fecha_gps', '>=', $fini)
             ->where('fecha_gps', '<=', $ffin)->get(); //Recorridos entre el inicio del despacho y el final esperado del despacho
-
         $array_final = array();
         $array_temp = array();
         $multa = 0.0;
@@ -637,7 +644,7 @@ class DespachoController extends Controller
                         }
                     } else {
 
-                        
+                         
                         if (isset($punto_control['calculo']) && $punto_control['calculo'] == 'E') {
                             // Entrada
                             $puntoControlEsperado = Recorrido::orderBy('fecha_gps', 'desc')
@@ -659,6 +666,8 @@ class DespachoController extends Controller
                                 ->where('pdi', (int)$puntoControlObj->pdi)
                                 ->first();
                         }
+
+                      
                     }
 
                     if (isset($puntoControlEsperado)) {
@@ -708,24 +717,25 @@ class DespachoController extends Controller
                                 $tiempoEsperado = $consulta;
                             }
                         }
-                        $puntoControlEsperado = Recorrido::orderBy('fecha_gps')->where(
-                            'tipo',
-                            'GTGEO'
-                        )->where('fecha_gps', '<=', $ffin)
-                            ->where('fecha_gps', '>=', $tiempoEsperado)
-                            ->where('entrada', 1)
-                            ->where('unidad_id', new ObjectID($despacho->unidad_id))
-                            ->where('pdi', (int) $puntoControlObj->pdi)->first();
 
-                        if (!isset($puntoControlEsperado)) {
-                            $puntoControlEsperado = Recorrido::orderBy('fecha_gps')->where(
-                                'tipo',
-                                'GTGEO'
-                            )->where('fecha_gps', '<=', $ffin)
+                        if (isset($punto_control['calculo']) && $punto_control['calculo'] == 'E') {
+                            // Entrada
+                            $puntoControlEsperado = Recorrido::where('tipo', 'GTGEO')
+                               ->where('fecha_gps', '<=', $ffin)
                                 ->where('fecha_gps', '>=', $tiempoEsperado)
-                                ->where('entrada', 0)
+                                ->where('entrada', 1)
                                 ->where('unidad_id', new ObjectID($despacho->unidad_id))
-                                ->where('pdi', (int) $puntoControlObj->pdi)->first();
+                                ->where('pdi', (int)$puntoControlObj->pdi)
+                                ->first();
+                        } else {
+                            // Salida
+                            $puntoControlEsperado = Recorrido::where('tipo', 'GTGEO')
+                                ->where('fecha_gps', '<=', $ffin)
+                                ->where('fecha_gps', '>=', $tiempoEsperado)
+                                ->where('entrada', '!=', 1)
+                                ->where('unidad_id', new ObjectID($despacho->unidad_id))
+                                ->where('pdi', (int)$puntoControlObj->pdi)
+                                ->first();
                         }
 
                         if (isset($puntoControlEsperado)) {
@@ -733,8 +743,7 @@ class DespachoController extends Controller
                             $fechaLinea = $fechaGPS->format('H:i');
                             $diff = $tiempoEsperado->diff($fechaGPS);
                             $intervalo = $diff->format('%h:%i:%s');
-                            $distancia = (($diff->i) + (($diff->h) * 60));
-
+                            $distancia = ($diff->h * 60) + $diff->i + ($diff->s / 60);
                             if ($primerpunto) {
                                 if ($distancia > $tiempoRango1) {
                                     $puntoControlEsperado = null;
@@ -750,6 +759,7 @@ class DespachoController extends Controller
                                         $intervalo = null;
                                     }
                                 } else {
+                                  
                                     $item_tmp = ["fecha_tmpmen" => null, "fecha_" => null, "fecha_1" => null, "fecha_2" => null, "fecha_11" => null];
                                     if ($total_puntoscontrol != $_total_pc) {
                                         foreach ($despacho_tmp->puntos_control as $punto_control_tmp) {
@@ -825,7 +835,7 @@ class DespachoController extends Controller
                                                         ->where('pdi', (int) $puntoControlObj_tmp->pdi)->first();
 
                                                     // $item_tmp["fecha_"] = $fechaGPS;
-
+ 
                                                     if (isset($puntoControlEsperado_tmp)) {
                                                         $fechaGPS_tmp = $puntoControlEsperado_tmp->fecha_gps->toDateTime();
                                                         $item_tmp["fecha_tmpmen"] = $fechaGPS_tmp;

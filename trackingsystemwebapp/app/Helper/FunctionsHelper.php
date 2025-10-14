@@ -151,9 +151,54 @@ class FunctionsHelper
         // Mantener el mismo estado
         return $sentidoAnterior;
     }
+    public static function update_pto_control_despacho($ruta, $despacho)
+    {
+        // Convertir puntos_control a array si no lo es
+        $puntos_control = is_array($despacho->puntos_control)
+            ? $despacho->puntos_control
+            : (array) $despacho->puntos_control;
+
+        $punto_control_ruta = is_array($ruta->puntos_control)
+            ? $ruta->puntos_control
+            : (array) $ruta->puntos_control;
+
+        if (empty($puntos_control) || empty($punto_control_ruta)) {
+            return ['data' => $despacho];
+        }
+
+        // Crear índice por ID desde la ruta
+        $rutasPorId = [];
+        foreach ($punto_control_ruta as $puntoRuta) {
+            $idRuta = isset($puntoRuta['id']) ? $puntoRuta['id'] : null;
+            if ($idRuta) {
+                $rutasPorId[$idRuta] = $puntoRuta;
+            }
+        }
+
+        // Actualizar los campos de los puntos del despacho
+        foreach ($puntos_control as &$puntoDespacho) {
+            $idDespacho = isset($puntoDespacho['id']) ? $puntoDespacho['id'] : null;
+
+            if ($idDespacho && isset($rutasPorId[$idDespacho])) {
+                $puntoRuta = $rutasPorId[$idDespacho];
+                $camposActualizar = ['calculo', 'redondeo', 'retorno', 'adelanto', 'atraso'];
+
+                foreach ($camposActualizar as $campo) {
+                    if (isset($puntoRuta[$campo])) {
+                        $puntoDespacho[$campo] = $puntoRuta[$campo];
+                    }
+                }
+            }
+        }
 
 
-     static function haversine_distance($lat1, $lon1, $lat2, $lon2)
+        // Actualizar el objeto despacho
+        $despacho->puntos_control = $puntos_control;
+        return ['data' => $despacho];
+    }
+
+
+    static function haversine_distance($lat1, $lon1, $lat2, $lon2)
     {
         $earthRadius = 6371000; // metros
         $dLat = deg2rad($lat2 - $lat1);
