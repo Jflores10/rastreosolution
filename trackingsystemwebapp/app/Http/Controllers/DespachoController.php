@@ -882,7 +882,7 @@ class DespachoController extends Controller
 
                     $totalMin = ($diff->h * 60) + $diff->i + ($diff->s / 60);
 
-                    if (isset($cooperativa->redondear_tiempos_atraso)) {
+                    if (isset($cooperativa->redondear_tiempos_atraso) && $cooperativa->redondear_tiempos_atraso) {
                         $intervalo = ceil($totalMin);
                     } else {
                         if (isset($punto_control['redondeo'])) {
