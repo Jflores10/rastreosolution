@@ -901,6 +901,7 @@ class DespachoController extends Controller
                     if ($tiempoEsperado >= $fechaGPS) {
                         // ADELANTO
                         $intervaloMin = $intervalo * -1;
+                        $intervalo=$intervaloMin;
                         $multa += (((float)$punto_control["adelanto"]) * abs($intervaloMin));
                         $tiempo_adelanto = $diff->format('%h:%i:%s');
                     } else if ($tiempoEsperado <= $fechaGPS) {
