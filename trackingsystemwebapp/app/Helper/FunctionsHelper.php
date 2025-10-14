@@ -105,52 +105,71 @@ class FunctionsHelper
         ];
     }
 
-    public static function determinar_sentido_unidad($lat, $lng, $puntoRetorno, $sentidoAnterior = 'i')
+    public static function determinar_sentido_unidad($lat, $lng, $puntoRetorno, $sentidoAnterior = 'i', $puntoInicio = null)
     {
+        // ====================================================
         //  Validaciones básicas
+        // ====================================================
         if (!$lat || !$lng || !$puntoRetorno || empty($puntoRetorno->tipo_mar)) {
             return $sentidoAnterior;
         }
 
-        // Si ya está en retorno, no se cambia más
-        if ($sentidoAnterior === 'r') {
-            return 'r';
+        // ====================================================
+        //  Verificar si ya está en regreso y llegó al punto de inicio
+        // ====================================================
+        if ($sentidoAnterior === 'r' && $puntoInicio) {
+            $estaEnInicio = false;
+
+            // Si el punto de inicio es radial
+            if ($puntoInicio->tipo_mar === 1) {
+                if (isset($puntoInicio->latitud, $puntoInicio->longitud, $puntoInicio->radio)) {
+                    $distInicio = self::haversine_distance($lat, $lng, $puntoInicio->latitud, $puntoInicio->longitud);
+                    if ($distInicio <= $puntoInicio->radio) {
+                        $estaEnInicio = true;
+                    }
+                }
+            }
+            // Si el punto de inicio es poligonal
+            elseif ($puntoInicio->tipo_mar === 2 && !empty($puntoInicio->poligono)) {
+                $estaEnInicio = self::point_in_polygon($lat, $lng, $puntoInicio->poligono);
+            }
+
+            // Si ya llegó al punto de inicio → vuelve a IDA
+            if ($estaEnInicio) {
+                return 'i';
+            }
         }
 
+        // ====================================================
+        //  Verificar si llega al punto de retorno
+        // ====================================================
         $estaDentro = false;
 
-        // ====================================================
-        //  CÁLCULO SI EL PUNTO ES RADIAL
-        // ====================================================
+        // Punto radial
         if ($puntoRetorno->tipo_mar === 1) {
-            if (!isset($puntoRetorno->latitud) || !isset($puntoRetorno->longitud) || !isset($puntoRetorno->radio)) {
-                return $sentidoAnterior;
-            }
-
-            $distancia = self::haversine_distance($lat, $lng, $puntoRetorno->latitud, $puntoRetorno->longitud);
-
-            if ($distancia <= $puntoRetorno->radio) {
-                $estaDentro = true;
+            if (isset($puntoRetorno->latitud, $puntoRetorno->longitud, $puntoRetorno->radio)) {
+                $distancia = self::haversine_distance($lat, $lng, $puntoRetorno->latitud, $puntoRetorno->longitud);
+                if ($distancia <= $puntoRetorno->radio) {
+                    $estaDentro = true;
+                }
             }
         }
-
-        // ====================================================
-        //  CÁLCULO SI EL PUNTO ES POLIGONAL
-        // ====================================================
+        // Punto poligonal
         elseif ($puntoRetorno->tipo_mar === 2 && !empty($puntoRetorno->poligono)) {
             $estaDentro = self::point_in_polygon($lat, $lng, $puntoRetorno->poligono);
         }
 
         // ====================================================
-        //  LÓGICA DE CAMBIO DE SENTIDO
+        //  Lógica de cambio de sentido
         // ====================================================
         if ($estaDentro && $sentidoAnterior === 'i') {
-            return 'r'; // Cambia a retorno
+            return 'r'; // Cambia a regreso
         }
 
-        // Mantener el mismo estado
+        // Mantener sentido actual
         return $sentidoAnterior;
     }
+
     public static function update_pto_control_despacho($ruta, $despacho)
     {
         // Convertir puntos_control a array si no lo es

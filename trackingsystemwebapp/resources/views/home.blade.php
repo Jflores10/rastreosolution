@@ -1793,6 +1793,18 @@ $("#velocimetro").myfunc({divFact:10});
                 var gId = 'i' + data.unidades[i]._id; 
                 var bId = 'i' + data.unidades[i]._id; 
                 console.log(data.unidades[i].climatizada);
+
+                sentido='';
+
+                if(data.unidades[i].sentido){
+                    if(data.unidades[i].sentido=='i'){
+                        sentido='<i class="fa fa-arrow-circle-right" style="color:green"></i>&nbsp&nbsp';
+                    }
+                    else if(data.unidades[i].sentido=='r'){
+                        sentido='<i class="fa fa-arrow-circle-left" style="color:#001672"></i>&nbsp&nbsp';
+                    }
+                }
+
                 switch(estado)
                 {
                     case 'D':
@@ -1802,7 +1814,7 @@ $("#velocimetro").myfunc({divFact:10});
                                 '<li class="list-group-item" id=\''+ data.unidades[i]._id + '\'>'+
                                     ((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                                     ((data.unidades[i].rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
-                                '<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1,\''+data.unidades[i].sentido+'\');" class="fa fa-bus" style="color:#F44336"></i>&nbsp&nbsp'+ 
+                                sentido+'<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1,\''+data.unidades[i].sentido+'\');" class="fa fa-bus" style="color:#F44336"></i>&nbsp&nbsp'+ 
                                 data.unidades[i].descripcion+'&nbsp&nbsp('+fecha_gps+' | '+ data.unidades[i].velocidad_actual+' km/h)'+'&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#F44336"></i>&nbsp&nbsp'+voltaje+'v'
                                 +'&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#F44336"></i>&nbsp&nbsp'+data.unidades[i].contador_total+" | "+data.unidades[i].contador_diario
                                 +'&nbsp&nbsp&nbsp'+((data.unidades[i].is_atm !== "undefined")?((data.unidades[i].is_atm===0)?'<i class="fa fa-globe" style="color:#00AA88"></i>':((data.unidades[i].is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'<i class="fa fa-globe" style="color:#00AA88"></i>')):'<i class="fa fa-globe" style="color:#00AA88"></i>')
@@ -1864,7 +1876,7 @@ $("#velocimetro").myfunc({divFact:10});
                                 '<li class="list-group-item" id=\''+ data.unidades[i]._id + '\'>'+
                                     ((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                                     ((data.unidades[i].rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
-                                '<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1,\''+data.unidades[i].sentido+'\');" class="fa fa-bus" style="color:#00AA88"></i>&nbsp&nbsp'+ data.unidades[i].descripcion
+                                sentido+'<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1,\''+data.unidades[i].sentido+'\');" class="fa fa-bus" style="color:#00AA88"></i>&nbsp&nbsp'+ data.unidades[i].descripcion
                                 +'&nbsp&nbsp('+fecha_gps+' | '+ data.unidades[i].velocidad_actual+' km/h)'+'&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#00AA88"></i>&nbsp&nbsp'+voltaje+'v'+'&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#00AA88"></i>&nbsp&nbsp'
                                 +data.unidades[i].contador_total+" | "+data.unidades[i].contador_diario
                                 +'&nbsp&nbsp&nbsp'+((data.unidades[i].is_atm !== "undefined")?((data.unidades[i].is_atm===0)?'<i class="fa fa-globe" style="color:#00AA88"></i>':((data.unidades[i].is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'<i class="fa fa-globe" style="color:#00AA88"></i>')):'<i class="fa fa-globe" style="color:#00AA88"></i>')
@@ -1894,22 +1906,13 @@ $("#velocimetro").myfunc({divFact:10});
                     default:
                         
                         unidad_no++;
-                        sentido='';
-
-                        if(data.unidades[i].sentido){
-                            if(data.unidades[i].sentido=='i'){
-                                sentido='<i class="fa fa-arrow-circle-right" style="color:green"></i>&nbsp&nbsp';
-                            }
-                            else if(data.unidades[i].sentido=='r'){
-                                sentido='<i class="fa fa-arrow-circle-left" style="color:#001672"></i>&nbsp&nbsp';
-                            }
-                        }
+                      
                         
                         ul.append(
                                 '<li class="list-group-item" id=\'' + data.unidades[i]._id + '\'>' +
                                 ((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                                 ((data.unidades[i].rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
-                                sentido+'<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1,\''+data.unidades[i].sentido+'\');" class="fa fa-bus" style="color:#990073"></i>&nbsp&nbsp' + data.unidades[i].descripcion 
+                                '<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1,\''+data.unidades[i].sentido+'\');" class="fa fa-bus" style="color:#990073"></i>&nbsp&nbsp' + data.unidades[i].descripcion 
                                 + '&nbsp&nbsp(' + fecha_gps + ' | ' + data.unidades[i].velocidad_actual + ' km/h)' + '&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#990073"></i>&nbsp&nbsp' + voltaje + 'v' + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#990073"></i>&nbsp&nbsp' + data.unidades[i].contador_total 
                                 + " | " + data.unidades[i].contador_diario
                                 +'&nbsp&nbsp&nbsp'+((data.unidades[i].is_atm !== "undefined")?((data.unidades[i].is_atm===0)?'<i class="fa fa-globe" style="color:#00AA88"></i>':((data.unidades[i].is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'<i class="fa fa-globe" style="color:#00AA88"></i>')):'<i class="fa fa-globe" style="color:#00AA88"></i>')
@@ -1945,7 +1948,7 @@ $("#velocimetro").myfunc({divFact:10});
                     currentLi.currentFechagps = currentFechagps;
                     currentLi.currentFecha = currentFecha;
                     currentLi.onclick = function () {
-                        selectUnidad(this.currentU,this.currentFechagps,this.currentFecha,1,this.currentU.sentido );
+                        selectUnidad(this.currentU,this.currentFechagps,this.currentFecha,1,this.currentU.sentido);
                         //velocimetro_change(data.unidades[i].velocidad_actual);
                     };
                 }

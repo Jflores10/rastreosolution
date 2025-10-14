@@ -383,6 +383,7 @@ class HistoricoController extends Controller
                     $ruta_conductor='';
                     $ruta_hora_final='';
                     $punto_retorno=false;
+                    $punto_inicio=false;
                     $sentido=false;
 
                     if(isset($ruta_actual)){
@@ -397,6 +398,9 @@ class HistoricoController extends Controller
                             $tiempo_final+=$punto['tiempo_llegada']; 
                             if($punto['retorno']==="1"){
                                 $punto_retorno = PuntoControl::where("_id",$punto['id'])->first();
+                            }
+                            if($punto['secuencia']==="1"){
+                                $punto_inicio = PuntoControl::where("_id",$punto['id'])->first();
                             }
                         }
 
@@ -441,13 +445,17 @@ class HistoricoController extends Controller
                         $sentido = FunctionsHelper::determinar_sentido_unidad(
                             $unidad['latitud'],
                             $unidad['longitud'],
-                            $punto_retorno
+                            $punto_retorno,
+                            $unidad['sentido'],
+                            $punto_inicio
                         );
                         
+                    } 
+                    if ($sentido && $unidad['sentido'] != $sentido) {
+                       $unidad->update(['sentido' => $sentido]);
                     }
-                   
-                    $unidad['sentido']=$sentido;
 
+                    $unidad['sentido']=$sentido;
 
                     array_push($array,["fecha_servidor"=>$f_servidor, "fecha_gps"=>$f_gps, 'diferencia'=>$diff,
                     'fecha_puerta_abierta'=>$f_puerta_abierta,'fecha_puerta_cerrada'=>$f_puerta_cerrada,
