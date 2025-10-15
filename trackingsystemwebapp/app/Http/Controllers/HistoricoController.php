@@ -397,10 +397,10 @@ class HistoricoController extends Controller
                         foreach ($ruta_actual->ruta->puntos_control as $punto) {
                             $tiempo_final+=$punto['tiempo_llegada']; 
                             if($punto['retorno']==="1"){
-                                $punto_retorno = PuntoControl::where("_id",$punto['id'])->first();
+                                $punto_retorno = PuntoControl::where("_id",new ObjectID($punto['id']))->first();
                             }
                             if($punto['secuencia']==="1"){
-                                $punto_inicio = PuntoControl::where("_id",$punto['id'])->first();
+                                $punto_inicio = PuntoControl::where("_id",new ObjectID($punto['id']))->first();
                             }
                         }
 
@@ -442,11 +442,12 @@ class HistoricoController extends Controller
                         date_sub($f_puerta_cerrada_trasera, date_interval_create_from_date_string('10 hours'));
                     }
                     if(isset($ruta_actual)){
+                        $sentidoActual = $unidad['sentido'] ?? 'i';
                         $sentido = FunctionsHelper::determinar_sentido_unidad(
                             $unidad['latitud'],
                             $unidad['longitud'],
                             $punto_retorno,
-                            $unidad['sentido'],
+                            $sentidoActual,
                             $punto_inicio
                         );
                         

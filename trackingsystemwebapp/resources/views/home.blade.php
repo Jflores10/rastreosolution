@@ -1798,10 +1798,10 @@ $("#velocimetro").myfunc({divFact:10});
 
                 if(data.unidades[i].sentido){
                     if(data.unidades[i].sentido=='i'){
-                        sentido='<i class="fa fa-arrow-circle-right" style="color:green"></i>&nbsp&nbsp';
+                        sentido='<i class="fa fa-arrow-circle-right" title="IDA" style="color:green"></i>&nbsp&nbsp';
                     }
                     else if(data.unidades[i].sentido=='r'){
-                        sentido='<i class="fa fa-arrow-circle-left" style="color:#001672"></i>&nbsp&nbsp';
+                        sentido='<i class="fa fa-arrow-circle-left" title="RETORNO" style="color:#001672"></i>&nbsp&nbsp';
                     }
                 }
 
