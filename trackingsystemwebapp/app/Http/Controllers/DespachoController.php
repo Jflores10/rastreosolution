@@ -1818,6 +1818,9 @@ class DespachoController extends Controller
                 'modificador_id' => Auth::user()->_id,
                 'estado_exportacion' => 'P'
             ]);
+
+            $unidad->update(['sentido' => "i"]);
+
             return $despacho;
         } else
             return null;

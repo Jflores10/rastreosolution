@@ -441,6 +441,7 @@ class HistoricoController extends Controller
                         date_sub($f_puerta_abierta_trasera, date_interval_create_from_date_string('10 hours'));
                         date_sub($f_puerta_cerrada_trasera, date_interval_create_from_date_string('10 hours'));
                     }
+                    
                     if(isset($ruta_actual)){
                         $sentidoActual = $unidad['sentido'] ?? 'i';
                         $sentido = FunctionsHelper::determinar_sentido_unidad(
@@ -452,12 +453,13 @@ class HistoricoController extends Controller
                         );
                         
                     } 
+                    
                     if ($sentido && $unidad['sentido'] != $sentido) {
                        $unidad->update(['sentido' => $sentido]);
                     }
 
-                    $unidad['sentido']=$sentido;
 
+                    $unidad['sentido']=$sentido;
                     array_push($array,["fecha_servidor"=>$f_servidor, "fecha_gps"=>$f_gps, 'diferencia'=>$diff,
                     'fecha_puerta_abierta'=>$f_puerta_abierta,'fecha_puerta_cerrada'=>$f_puerta_cerrada,
                     'fecha_puerta_abierta_trasera'=>$f_puerta_abierta_trasera,'fecha_puerta_cerrada_trasera'=>$f_puerta_cerrada_trasera]);

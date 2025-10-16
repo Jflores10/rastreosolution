@@ -1036,6 +1036,7 @@ $("#velocimetro").myfunc({divFact:10});
         };
         var icono_flecha;
         var ii,jj;
+        var colorFlecha='red';
 
         map.addListener('zoom_changed', function() {
             if(map.getZoom() <=13 ) 
@@ -1047,16 +1048,23 @@ $("#velocimetro").myfunc({divFact:10});
                 {
                     for(ii=0;ii<array_marcador.length;ii++)
                         {
+                                
+                            if (array_marcador[ii].sentido === 'i' || array_marcador[ii].sentido === 'r') {
+                                colorFlecha = (array_marcador[ii].sentido === 'r') ? '#0022AB' : '#00AA88';
+                            }
+
                             for(jj=0;jj<array_marcador_angulos.length;jj++)
                             {
                                 if(array_marcador_angulos[jj].indice==ii)
                                 {
                                     icono_flecha= {
                                         path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
-                                            scale: 2,
-                                            strokeColor: 'red',
-                                            strokeOpacity: 2.0,
-                                            strokeWeight: 4,
+                                            scale: 3,
+                                            fillColor: colorFlecha, 
+                                            fillOpacity: 1.0,   
+                                            strokeColor: '#000000',  
+                                            strokeOpacity: 1.0,
+                                            strokeWeight: 1.0,
                                             rotation:array_marcador_angulos[jj].rotacion,
                                             labelOrigin: new google.maps.Point(1, 10)
                                     }
@@ -1985,7 +1993,7 @@ $("#velocimetro").myfunc({divFact:10});
                     array_marcador[i].setMap(null);
                 }
                 
-                if(map.getZoom()<=13 && !sentido)
+                if(map.getZoom()<=13 )
                     icon = {
                         url: '{{url("/images/autobu.png")}}',
                         scale: 1,
@@ -1994,10 +2002,12 @@ $("#velocimetro").myfunc({divFact:10});
                 else
                     icon = {
                         path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
-                        scale: 2,
-                        strokeColor: colorFlecha,
-                        strokeOpacity: 2.0,
-                        strokeWeight: 4,
+                        scale: 3,
+                        fillColor: colorFlecha, 
+                        fillOpacity: 1.0,   
+                        strokeColor: '#000000',  
+                        strokeOpacity: 1.0,
+                        strokeWeight: 1.0,
                         rotation:angulo,
                         labelOrigin: new google.maps.Point(1, 10)
                     };
@@ -2010,6 +2020,8 @@ $("#velocimetro").myfunc({divFact:10});
                     title : id,
                     animation : google.maps.Animation.DROP
                 });
+                mk.sentido = sentido;         
+                
                 array_marcador.push(mk);
 
                 console.log('se puso el marcador');
@@ -2046,10 +2058,12 @@ $("#velocimetro").myfunc({divFact:10});
             else
                 icon = {
                     path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
-                    scale: 2,
-                    strokeColor: colorFlecha,
-                    strokeOpacity: 2.0,
-                    strokeWeight: 4,
+                    scale: 3,
+                    fillColor: colorFlecha, 
+                    fillOpacity: 1.0,   
+                    strokeColor: '#000000',  
+                    strokeOpacity: 1.0,
+                    strokeWeight: 1.0,
                     rotation:angulo,
                     labelOrigin: new google.maps.Point(1, 10)
                 };
