@@ -12,7 +12,7 @@ use Illuminate\Console\Command;
 use MongoDB\BSON\ObjectID;
 use App\SchedulerLog;
 use MongoDB\BSON\UTCDateTime;
-
+use App\TipoUsuario;
 
 class FinalizarDespachosDia extends Command
 {
