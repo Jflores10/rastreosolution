@@ -1109,7 +1109,7 @@ $("#velocimetro").myfunc({divFact:10});
 
     setInterval(verifyGoogleMSG,100,null);
 
-    function setMarcadorUnidad(unidad,fecha_gps_,fecha_servidor,_is, sentido=false)
+    function setMarcadorUnidad(unidad,fecha_gps_,fecha_servidor,_is)
     {
         var estado;
         switch(unidad.estado_movil)
@@ -1173,7 +1173,7 @@ $("#velocimetro").myfunc({divFact:10});
 	                unidad.angulo,
                     (unidad.orden != null)?unidad.descripcion + '(' + unidad.orden + ')':unidad.descripcion,
                     unidad.velocidad_actual,
-                    sentido
+                    unidad.sentido
             );
         else if (unidad.latitud == undefined && unidad.longitud == undefined) 
             alert('Esta unidad no tiene coordenadas registradas.');
@@ -1215,14 +1215,13 @@ $("#velocimetro").myfunc({divFact:10});
     var unidadRecorridos = [];
     var currentUnidad = null;
 
-    function selectUnidad(u,fecha_gps_,fecha_servidor,_is, sentido=false)
+    function selectUnidad(u,fecha_gps_,fecha_servidor,_is)
     {
-        console.log(sentido)
         currentUnidad = u._id;
         zoomUnidad=true;
         zoomUnidadID=u._id;
         velocimetro_change(u.velocidad_actual);
-        setMarcadorUnidad(u,fecha_gps_,fecha_servidor,_is, sentido);
+        setMarcadorUnidad(u,fecha_gps_,fecha_servidor,_is);
     }
 
     function selectUnidad_GEOCODE(latitud,longitud)
@@ -1814,7 +1813,7 @@ $("#velocimetro").myfunc({divFact:10});
                                 '<li class="list-group-item" id=\''+ data.unidades[i]._id + '\'>'+
                                     ((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                                     ((data.unidades[i].rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
-                                sentido+'<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1,\''+data.unidades[i].sentido+'\');" class="fa fa-bus" style="color:#F44336"></i>&nbsp&nbsp'+ 
+                                sentido+'<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1);" class="fa fa-bus" style="color:#F44336"></i>&nbsp&nbsp'+ 
                                 data.unidades[i].descripcion+'&nbsp&nbsp('+fecha_gps+' | '+ data.unidades[i].velocidad_actual+' km/h)'+'&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#F44336"></i>&nbsp&nbsp'+voltaje+'v'
                                 +'&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#F44336"></i>&nbsp&nbsp'+data.unidades[i].contador_total+" | "+data.unidades[i].contador_diario
                                 +'&nbsp&nbsp&nbsp'+((data.unidades[i].is_atm !== "undefined")?((data.unidades[i].is_atm===0)?'<i class="fa fa-globe" style="color:#00AA88"></i>':((data.unidades[i].is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'<i class="fa fa-globe" style="color:#00AA88"></i>')):'<i class="fa fa-globe" style="color:#00AA88"></i>')
@@ -1845,7 +1844,7 @@ $("#velocimetro").myfunc({divFact:10});
                                 '<li class="list-group-item" id=\''+ data.unidades[i]._id + '\'>'+
                                     ((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                                     ((data.unidades[i].rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
-                                '<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1,\''+data.unidades[i].sentido+'\');" class="fa fa-bus" style="color:#f49a16"></i>&nbsp&nbsp'+ data.unidades[i].descripcion
+                                '<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1);" class="fa fa-bus" style="color:#f49a16"></i>&nbsp&nbsp'+ data.unidades[i].descripcion
                                 +'&nbsp&nbsp('+fecha_gps+' | '+ data.unidades[i].velocidad_actual+' km/h)'+'&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#f49a16"></i>&nbsp&nbsp'+voltaje+'v'
                                 +'&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#f49a16"></i>&nbsp&nbsp'+data.unidades[i].contador_total+" | "+data.unidades[i].contador_diario
                                 +'&nbsp&nbsp&nbsp'+((data.unidades[i].is_atm !== "undefined")?((data.unidades[i].is_atm===0)?'<i class="fa fa-globe" style="color:#00AA88"></i>':((data.unidades[i].is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'<i class="fa fa-globe" style="color:#00AA88"></i>')):'<i class="fa fa-globe" style="color:#00AA88"></i>')
@@ -1876,7 +1875,7 @@ $("#velocimetro").myfunc({divFact:10});
                                 '<li class="list-group-item" id=\''+ data.unidades[i]._id + '\'>'+
                                     ((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                                     ((data.unidades[i].rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
-                                sentido+'<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1,\''+data.unidades[i].sentido+'\');" class="fa fa-bus" style="color:#00AA88"></i>&nbsp&nbsp'+ data.unidades[i].descripcion
+                                sentido+'<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1);" class="fa fa-bus" style="color:#00AA88"></i>&nbsp&nbsp'+ data.unidades[i].descripcion
                                 +'&nbsp&nbsp('+fecha_gps+' | '+ data.unidades[i].velocidad_actual+' km/h)'+'&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#00AA88"></i>&nbsp&nbsp'+voltaje+'v'+'&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#00AA88"></i>&nbsp&nbsp'
                                 +data.unidades[i].contador_total+" | "+data.unidades[i].contador_diario
                                 +'&nbsp&nbsp&nbsp'+((data.unidades[i].is_atm !== "undefined")?((data.unidades[i].is_atm===0)?'<i class="fa fa-globe" style="color:#00AA88"></i>':((data.unidades[i].is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'<i class="fa fa-globe" style="color:#00AA88"></i>')):'<i class="fa fa-globe" style="color:#00AA88"></i>')
@@ -1912,7 +1911,7 @@ $("#velocimetro").myfunc({divFact:10});
                                 '<li class="list-group-item" id=\'' + data.unidades[i]._id + '\'>' +
                                 ((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                                 ((data.unidades[i].rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
-                                '<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1,\''+data.unidades[i].sentido+'\');" class="fa fa-bus" style="color:#990073"></i>&nbsp&nbsp' + data.unidades[i].descripcion 
+                                '<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1);" class="fa fa-bus" style="color:#990073"></i>&nbsp&nbsp' + data.unidades[i].descripcion 
                                 + '&nbsp&nbsp(' + fecha_gps + ' | ' + data.unidades[i].velocidad_actual + ' km/h)' + '&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#990073"></i>&nbsp&nbsp' + voltaje + 'v' + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#990073"></i>&nbsp&nbsp' + data.unidades[i].contador_total 
                                 + " | " + data.unidades[i].contador_diario
                                 +'&nbsp&nbsp&nbsp'+((data.unidades[i].is_atm !== "undefined")?((data.unidades[i].is_atm===0)?'<i class="fa fa-globe" style="color:#00AA88"></i>':((data.unidades[i].is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'<i class="fa fa-globe" style="color:#00AA88"></i>')):'<i class="fa fa-globe" style="color:#00AA88"></i>')
@@ -1948,7 +1947,7 @@ $("#velocimetro").myfunc({divFact:10});
                     currentLi.currentFechagps = currentFechagps;
                     currentLi.currentFecha = currentFecha;
                     currentLi.onclick = function () {
-                        selectUnidad(this.currentU,this.currentFechagps,this.currentFecha,1,this.currentU.sentido);
+                        selectUnidad(this.currentU,this.currentFechagps,this.currentFecha,1);
                         //velocimetro_change(data.unidades[i].velocidad_actual);
                     };
                 }
@@ -1970,176 +1969,134 @@ $("#velocimetro").myfunc({divFact:10});
 	}
 
 
-    function addMarker(html, latitude, longitude, id, angulo, placa, velocidad, sentido=false) {
+ function addMarker(html, latitude, longitude, id, angulo, placa,velocidad, sentido = false)
+    {
         var icon;
         var mk;
-        console.log(sentido)
-        const posicion = { lat: parseFloat(latitude), lng: parseFloat(longitude) };
-        const colorSecundario = (sentido === 'r') ? '#001672' : 'green';
-        if (zoomUnidad) {
-            if (id == zoomUnidadID) {
-                // Elimina marcadores anteriores
-                for (var i = 0; i < array_marcador.length; i++) {
+        var colorFlecha='red';
+        if (sentido === 'i' || sentido === 'r') {
+            colorFlecha = (sentido === 'r') ? '#0022AB' : '#1FA463';
+        }
+        if (zoomUnidad)
+        {
+            if(id == zoomUnidadID){
+                for(var i=0;i<array_marcador.length;i++)
+                {
                     array_marcador[i].setMap(null);
                 }
-
-                // --- Definir icono principal ---
-                if (map.getZoom() <= 13) {
+                
+                if(map.getZoom()<=13 && !sentido)
                     icon = {
-                        url: '{{ url("/images/autobu.png") }}',
+                        url: '{{url("/images/autobu.png")}}',
                         scale: 1,
                         labelOrigin: new google.maps.Point(4, 25)
                     };
-                } else {
+                else
                     icon = {
                         path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
                         scale: 2,
-                        strokeColor: 'red',
-                        strokeOpacity: 1.0,
+                        strokeColor: colorFlecha,
+                        strokeOpacity: 2.0,
                         strokeWeight: 4,
-                        rotation: angulo,
+                        rotation:angulo,
                         labelOrigin: new google.maps.Point(1, 10)
                     };
 
-                    
-                }
-
-               
-
-                // --- Crear el marcador principal ---
-                mk = new google.maps.Marker({
-                    position: posicion,
-                    map: map,
-                    icon: icon,
-                    label: { text: placa },
-                    title: id,
-                    animation: google.maps.Animation.DROP
+               mk = new google.maps.Marker({
+                    position : { lat: parseFloat(latitude), lng : parseFloat(longitude) },
+                    map : map,
+                    icon:icon,
+                    label : {text : placa},
+                    title : id,
+                    animation : google.maps.Animation.DROP
                 });
                 array_marcador.push(mk);
 
-                console.log('Se puso el marcador');
+                console.log('se puso el marcador');
 
-                // --- Configurar InfoWindow ---
                 google.maps.event.clearInstanceListeners(mk);
-                var indice_actual = array_marcador.length - 1;
-                array_marcador_angulos[indice_actual] = { rotacion: angulo, indice: indice_actual };
-
+                var indice_actual=array_marcador.length-1;
+                array_marcador_angulos[indice_actual]={rotacion:angulo,indice:indice_actual};
                 var infoWindow = new google.maps.InfoWindow({
-                    content: html
+                    content : html
                 });
-
+            
                 mk.addListener('click', function () {
                     infoWindow.open(map, mk);
                     velocimetro_change(velocidad);
                 });
-
-                if(sentido=='i' || sentido=='r'){
-                    const posVerde = google.maps.geometry.spherical.computeOffset(posicion, 5, angulo);
-                    new google.maps.Marker({
-                        position: posVerde,
-                        map: map,
-                        icon: {
-                            path: google.maps.SymbolPath.CIRCLE,
-                            scale: 1.5,
-                            strokeColor: colorSecundario,
-                            strokeOpacity: 1.0,
-                            strokeWeight: 3,
-                            rotation: angulo
-                        },
-                        clickable: false // No interferir con clics
-                    });
-                }
-                // --- Centrar si corresponde ---
-                if (currentUnidad != null) {
+                if (currentUnidad != null)
+                {
                     map.setCenter(mk.getPosition());
                     map.setZoom(20);
-                    currentUnidad = null;
+                    currentUnidad=null;
                 }
-
                 return mk;
+                
             }
-        } else {
-            mk = getMarkerById(id);
+        }else{
 
-            // --- Definir icono ---
-            if (map.getZoom() <= 13) {
+            mk = getMarkerById(id);
+            if(map.getZoom()<=13)
                 icon = {
-                    url: '{{ url("/images/autobu.png") }}',
+                    url: '{{url("/images/autobu.png")}}',
                     scale: 1,
                     labelOrigin: new google.maps.Point(4, 25)
                 };
-            } else {
+            else
                 icon = {
                     path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
                     scale: 2,
-                    strokeColor: 'red',
-                    strokeOpacity: 1.0,
+                    strokeColor: colorFlecha,
+                    strokeOpacity: 2.0,
                     strokeWeight: 4,
-                    rotation: angulo,
+                    rotation:angulo,
                     labelOrigin: new google.maps.Point(1, 10)
                 };
-
-              
-            }
-
-            // --- Si el marcador ya existe, actualizar ---
-            if (mk != null) {
-                mk.setPosition(posicion);
+            if (mk != null)
+            {
+                mk.setPosition({ lat: parseFloat(latitude), lng: parseFloat(longitude)});
                 mk.setIcon(icon);
                 mk.setMap(map);
-            } else {
+            }
+            else 
+            {
                 mk = new google.maps.Marker({
-                    position: posicion,
-                    map: map,
-                    icon: icon,
-                    label: { text: placa },
-                    title: id,
-                    animation: google.maps.Animation.DROP
+                    position : { lat: parseFloat(latitude), lng : parseFloat(longitude) },
+                    map : map,
+                    icon:icon,
+                    label : {text : placa},
+                    title : id,
+                    animation : google.maps.Animation.DROP
                 });
                 array_marcador.push(mk);
             }
 
-            // --- Configurar eventos ---
             google.maps.event.clearInstanceListeners(mk);
-            var indice_actual = array_marcador.length - 1;
-            array_marcador_angulos[indice_actual] = { rotacion: angulo, indice: indice_actual };
-
+            var indice_actual=array_marcador.length-1;
+            array_marcador_angulos[indice_actual]={rotacion:angulo,indice:indice_actual};
             var infoWindow = new google.maps.InfoWindow({
-                content: html
+                content : html
             });
-
+        
             mk.addListener('click', function () {
                 infoWindow.open(map, mk);
                 velocimetro_change(velocidad);
             });
-
-
-            if(sentido=='i' || sentido=='r'){
-                const posVerde = google.maps.geometry.spherical.computeOffset(posicion, 5, angulo);
-                new google.maps.Marker({
-                    position: posVerde,
-                    map: map,
-                    icon: {
-                        path: google.maps.SymbolPath.CIRCLE,
-                        scale: 1.5,
-                        strokeColor: colorSecundario,
-                        strokeOpacity: 1.0,
-                        strokeWeight: 3,
-                        rotation: angulo
-                    },
-                    clickable: false // No interferir con clics
-                });
-            }
-
-            if (currentUnidad != null) {
+            if (currentUnidad != null)
+            {
                 map.setCenter(mk.getPosition());
                 map.setZoom(20);
-                currentUnidad = null;
+                currentUnidad=null;
             }
-
             return mk;
         }
+        
+       
     }
+
+
+
 
 
     $('#fecha_inicio').datetimepicker();
