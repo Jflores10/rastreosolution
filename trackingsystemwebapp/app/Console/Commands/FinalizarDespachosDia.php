@@ -13,6 +13,8 @@ use MongoDB\BSON\ObjectID;
 use App\SchedulerLog;
 use MongoDB\BSON\UTCDateTime;
 use App\TipoUsuario;
+use App\User;
+use Illuminate\Support\Facades\Auth;
 
 class FinalizarDespachosDia extends Command
 {
