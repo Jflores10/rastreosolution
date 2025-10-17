@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Validator;
 use MongoDB\BSON\UTCDateTime;
 use Illuminate\Support\Facades\Cache;
 use App\Helper\FunctionsHelper;
+use MongoDB\BSON\ObjectID;
 
 class RecorridoController extends Controller
 {
