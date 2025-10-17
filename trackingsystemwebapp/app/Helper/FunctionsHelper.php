@@ -185,21 +185,24 @@ class FunctionsHelper
             return ['data' => $despacho];
         }
 
-        // Crear índice por ID desde la ruta
+        // Crear índice por ID + índice desde la ruta
         $rutasPorId = [];
-        foreach ($punto_control_ruta as $puntoRuta) {
+        foreach ($punto_control_ruta as $index => $puntoRuta) {
             $idRuta = isset($puntoRuta['id']) ? $puntoRuta['id'] : null;
             if ($idRuta) {
-                $rutasPorId[$idRuta] = $puntoRuta;
+                // Clave única: id + índice
+                $clave = $idRuta . '-' . $index;
+                $rutasPorId[$clave] = $puntoRuta;
             }
         }
 
         // Actualizar los campos de los puntos del despacho
-        foreach ($puntos_control as &$puntoDespacho) {
+        foreach ($puntos_control as $index => &$puntoDespacho) {
             $idDespacho = isset($puntoDespacho['id']) ? $puntoDespacho['id'] : null;
+            $claveDespacho = $idDespacho . '-' . $index;
 
-            if ($idDespacho && isset($rutasPorId[$idDespacho])) {
-                $puntoRuta = $rutasPorId[$idDespacho];
+            if ($idDespacho && isset($rutasPorId[$claveDespacho])) {
+                $puntoRuta = $rutasPorId[$claveDespacho];
                 $camposActualizar = ['calculo', 'redondeo', 'retorno', 'adelanto', 'atraso'];
 
                 foreach ($camposActualizar as $campo) {
@@ -210,11 +213,11 @@ class FunctionsHelper
             }
         }
 
-
         // Actualizar el objeto despacho
         $despacho->puntos_control = $puntos_control;
         return ['data' => $despacho];
     }
+
 
 
     static function haversine_distance($lat1, $lon1, $lat2, $lon2)
