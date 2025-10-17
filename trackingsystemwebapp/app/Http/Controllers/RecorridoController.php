@@ -13,6 +13,8 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use MongoDB\BSON\UTCDateTime;
 use Illuminate\Support\Facades\Cache;
+use App\Helper\FunctionsHelper;
+
 class RecorridoController extends Controller
 {
 
@@ -138,6 +140,66 @@ class RecorridoController extends Controller
                     \Log::info("Cambio detectado: Unidad={$unidad->_id}, Punto={$punto->_id}, Distancia={$distancia}m, Estado: {$estadoAnterior} => {$nuevoEstado}");
                 }
             }
+        }
+    }
+
+    public function update_sentido(Request $request)
+    {
+        $data = $request->only(['latitud', 'longitud', 'imei']);
+
+        // Validación de datos
+        $validator = Validator::make($data, [
+            'latitud'  => 'required|numeric',
+            'longitud' => 'required|numeric',
+            'imei'     => 'required|string'
+        ]);
+
+        if ($validator->fails()) {
+            return;
+        }
+
+        $lat = $data['latitud'];
+        $lon = $data['longitud'];
+        $imei = $data['imei'];
+
+        // Buscar la unidad
+        $unidad = Unidad::where('imei', $imei)->first();
+        if (!$unidad) {
+            return;
+        }
+        $desde = Carbon::createFromFormat('Y-m-d H:i:s', date('Y-m-d 00:00:00'));
+        $hasta = Carbon::createFromFormat('Y-m-d H:i:s', date('Y-m-d 23:59:59'));
+        $punto_retorno=false;
+        $punto_inicio=false;
+        $sentido=false;
+
+        $ruta_actual=Despacho::orderBy('fecha', 'asc')->where('estado','P')->where('unidad_id',$unidad['_id'])
+            ->where('fecha','>=',$desde)
+            ->where('fecha','<=',$hasta)->first();
+        if(!$ruta_actual){
+            return;
+        }
+
+        foreach ($ruta_actual->ruta->puntos_control as $punto) {
+            if($punto['retorno']==="1"){
+                $punto_retorno = PuntoControl::where("_id",new ObjectID($punto['id']))->first();
+            }
+            if($punto['secuencia']==="1"){
+                $punto_inicio = PuntoControl::where("_id",new ObjectID($punto['id']))->first();
+            }
+        }
+
+        $sentidoActual = $unidad['sentido'] ?? 'i';
+        $sentido = FunctionsHelper::determinar_sentido_unidad(
+            $unidad['latitud'],
+            $unidad['longitud'],
+            $punto_retorno,
+            $sentidoActual,
+            $punto_inicio
+        );
+               
+        if ($sentido && $unidad['sentido'] != $sentido) {
+            $unidad->update(['sentido' => $sentido]);
         }
     }
 

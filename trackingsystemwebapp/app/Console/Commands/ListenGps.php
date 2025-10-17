@@ -53,7 +53,7 @@ class ListenGps extends Command
 
 
                 // Llamada a la lógica de tu controller
-                app(\App\Http\Controllers\RecorridoController::class)->notify(
+                app(\App\Http\Controllers\RecorridoController::class)->update_sentido(
                     new Request($data)
                 );
             });
