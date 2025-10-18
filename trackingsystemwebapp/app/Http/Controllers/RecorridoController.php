@@ -178,6 +178,7 @@ class RecorridoController extends Controller
             ->where('fecha','>=',$desde)
             ->where('fecha','<=',$hasta)->first();
         if(!$ruta_actual){
+            $unidad->update(['sentido' => null]); 
             return;
         }
 
