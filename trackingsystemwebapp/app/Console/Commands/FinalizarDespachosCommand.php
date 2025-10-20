@@ -96,6 +96,7 @@ class FinalizarDespachosCommand extends Command
                 }
 
                 foreach ($despachos as $despacho) {
+                    $this->info("Empezando finalizacion...");
                     try {
                         $puntos = $despacho->puntos_control ?? [];
                         if (empty($puntos)) continue;
@@ -116,13 +117,13 @@ class FinalizarDespachosCommand extends Command
                                 if (isset($data['error']) && $data['error'] === false) {
                                     $this->info(" Despacho {$despacho->_id} finalizado correctamente.");
                                 } else {
-                                    $this->warn(" Error al finalizar despacho {$despacho->_id}");
+                                    $this->info(" Error al finalizar despacho {$despacho->_id}");
                                 }
                             } 
                         }
 
                     } catch (\Throwable $e) {
-                        $this->error(" Error procesando despacho {$despacho->_id}: " . $e->getMessage());
+                        $this->info(" Error procesando despacho {$despacho->_id}: " . $e->getMessage());
                       
                     }
                 }
