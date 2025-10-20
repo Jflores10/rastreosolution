@@ -33,6 +33,7 @@ class HomeController extends Controller
     
     public function en_linea($ruta)
     {
+        
         set_time_limit(0);
         $rutas_depur=array();
 
@@ -44,6 +45,8 @@ class HomeController extends Controller
             foreach($ruta_hijas as $hijas)
                 array_push($rutas_depur,$hijas->_id);
         }
+
+
 
         $puntosControlCollection = new Collection();
         foreach ($objRuta->puntos_control as $puntoControl)
@@ -69,7 +72,6 @@ class HomeController extends Controller
       // $despacho = Despacho::findOrFail("5a5e68212243df794f047144");
         date_sub($desde, date_interval_create_from_date_string('5 hours'));
         date_sub($hasta, date_interval_create_from_date_string('6 hours'));        
-
         
         return view('panel.table-en-linea', ['puntosControl' => $puntosControlCollection, 
        'ruta' => $objRuta, 'despachos' => $despachos, 'desde' => $desde, 'desde' => $hasta]);
@@ -282,15 +284,27 @@ class HomeController extends Controller
                 $ruta='';
                 $ruta_fecha='';
                 $ruta_conductor='';
+                $ruta_hora_final='';
 
                 if(isset($ruta_actual)){
+                    
                     $ruta=$ruta_actual->ruta->descripcion;
                     $ruta_fecha=$ruta_actual->fecha;
                     date_add($ruta_fecha, date_interval_create_from_date_string('5 hours'));
                     $ruta_fecha=$ruta_fecha->format('H:i');
                     $ruta_conductor=$ruta_actual->conductor->nombre;
+                    
+                    $tiempo_final=0;
+                    foreach ($ruta_actual->ruta->puntos_control as $punto) {
+                        $tiempo_final+=$punto['tiempo_llegada']; 
+                    }
+                    //SUMAR MINUTOS A LA HORA DEL DESPACHO
+                    $ruta_hora_final = Carbon::parse($ruta_actual->fecha); // conviertes a Carbon
+                    $ruta_hora_final->addHours(5); 
+                    $ruta_hora_final->addMinutes($tiempo_final); 
+                    $ruta_hora_final = $ruta_hora_final->format('H:i'); // solo hora:minuto
                 }
-                array_push($rutaunidad,["ruta_actual"=>$ruta,"ruta_fecha"=>$ruta_fecha,"ruta_conductor"=>$ruta_conductor]);
+                array_push($rutaunidad,["ruta_actual"=>$ruta,"ruta_fecha"=>$ruta_fecha,"ruta_conductor"=>$ruta_conductor,"ruta_hora_fin"=>$ruta_hora_final]);
 
                 $f_gps=$unidad["fecha_gps"]->toDateTime();
                 $f_servidor=$unidad["fecha"]->toDateTime();
@@ -318,7 +332,7 @@ class HomeController extends Controller
                 array_push($array,["fecha_servidor"=>null, "fecha_gps"=>null, 'diferencia'=>null,
                 'fecha_puerta_abierta'=>null,'fecha_puerta_cerrada'=>null]);
 
-                array_push($rutaunidad,["ruta_actual"=>'',"ruta_fecha"=>'',"ruta_conductor"=>'']);
+                array_push($rutaunidad,["ruta_actual"=>'',"ruta_fecha"=>'',"ruta_conductor"=>'',"ruta_hora_fin"=>'']);
             }
 
             if($unidad["alerta_velocidad_fecha"] != null){

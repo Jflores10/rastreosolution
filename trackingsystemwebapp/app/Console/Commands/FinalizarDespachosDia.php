@@ -15,6 +15,8 @@ use MongoDB\BSON\UTCDateTime;
 use App\TipoUsuario;
 use App\User;
 use Illuminate\Support\Facades\Auth;
+use App\Cooperativa;
+use App\Unidad;
 
 class FinalizarDespachosDia extends Command
 {
@@ -55,70 +57,89 @@ class FinalizarDespachosDia extends Command
     public function handle()
     {
         
-       try {
+        try {
             $hoy_desde = Carbon::createFromFormat('Y-m-d H:i:s', date('Y-m-d 00:00:00'));
             $hoy_hasta = Carbon::createFromFormat('Y-m-d H:i:s', date('Y-m-d 23:59:59'));
             date_sub($hoy_desde, date_interval_create_from_date_string('5 hours'));
             date_sub($hoy_hasta, date_interval_create_from_date_string('5 hours'));
 
-            $despachos = Despacho::with('ruta')
-                ->where('estado', 'P')
-                ->where('fecha', '>=', $hoy_desde)
-                ->where('fecha', '<=', $hoy_hasta)
+            $cooperativas = Cooperativa::where('finalizacion_automatica', true)
+                ->where('estado', 'A')
                 ->get();
 
-            $this->info(' Despachos a procesar: ' . $despachos->count());
-
-            if ($despachos->isEmpty()) {
-                $this->info(' No hay despachos pendientes.');
+            if ($cooperativas->isEmpty()) {
                 return;
             }
 
-            // 🔹 Autenticar usuario tipo distribuidor para ejecutar el proceso
             $distributorType = TipoUsuario::where('valor', '1')->firstOrFail();
             $user = User::where('tipo_usuario_id', $distributorType->_id)->firstOrFail();
             Auth::onceUsingId($user->_id);
 
-            // 🔹 Instanciar el controlador y crear un Request falso
             $ctrl = app()->make(\App\Http\Controllers\DespachoController::class);
             $fakeRequest = \Illuminate\Http\Request::create('/', 'GET', []);
 
-            // 🔹 Procesar cada despacho
-            foreach ($despachos as $despacho) {
-                $this->info(" Finalizando despacho: {$despacho->_id}");
+            foreach ($cooperativas as $cooperativa) {
 
-                try {
-                    $response = $ctrl->end($fakeRequest, $despacho->_id);
-                    $data = $response->getData(true);
+                // Obtener unidades activas de la cooperativa
+                $unidades = Unidad::where('cooperativa_id', $cooperativa->_id)
+                    ->where('estado', 'A')
+                    ->get();
 
-                    if (isset($data['error']) && $data['error'] === false) {
-                        $this->info(" Despacho {$despacho->_id} finalizado correctamente.");
-                    } else {
-                        $this->warn(" Error al finalizar despacho {$despacho->_id}");
+                if ($unidades->isEmpty()) {
+                    continue;
+                }
+
+                // Obtener despachos pendientes del día actual
+                $despachos = Despacho::with('ruta')
+                    ->whereIn('unidad_id', $unidades->pluck('_id'))
+                    ->where('estado', 'P')
+                    ->where('fecha', '>=', $hoy_desde)
+                    ->where('fecha', '<=', $hoy_hasta)
+                    ->get();
+
+                $this->info("  Despachos pendientes: " . $despachos->count());
+
+                if ($despachos->isEmpty()) {
+                    continue;
+                }
+
+                foreach ($despachos as $despacho) {
+                    $this->info("  Finalizando despacho: {$despacho->_id}");
+
+                    try {
+                        $response = $ctrl->end($fakeRequest, $despacho->_id);
+                        $data = $response->getData(true);
+
+                        if (isset($data['error']) && $data['error'] === false) {
+                            $this->info(" Despacho {$despacho->_id} finalizado correctamente.");
+                        } else {
+                            $this->warn(" Error al finalizar despacho {$despacho->_id}");
+                        }
+
+                    } catch (\Throwable $e) {
+                        $this->error(" Error procesando despacho {$despacho->_id}: " . $e->getMessage());
+                        \App\Models\LOGATMDESPACHOS::create([
+                            'mensaje' => "TASK DESPACHO FIN SERVER ({$cooperativa->nombre}): " . $e->getMessage(),
+                            'fecha' => Carbon::now(),
+                            'localizacion' => 'DespachoController@end'
+                        ]);
                     }
-
-                } catch (\Throwable $e) {
-                    $this->error(" Error procesando despacho {$despacho->_id}: " . $e->getMessage());
-                    \App\Models\LOGATMDESPACHOS::create([
-                        'mensaje' => "TASK DESPACHO FIN SERVER : " . $e->getMessage(),
-                        'fecha' => Carbon::now(),
-                        'localizacion' => 'DespachoController@end'
-                    ]);
                 }
             }
 
-            $this->info(" Finalización automática completada.");
+            $this->info("Finalización automática completada.");
 
         } catch (\Exception $ex) {
             $errorMessage = $ex->getMessage();
-            $this->error(" Error general: " . $errorMessage);
+            $this->error("Error general: " . $errorMessage);
 
             \App\Models\LOGATMDESPACHOS::create([
-                'mensaje' => "TASK DESPACHO FIN SERVER GENERAL : " . $errorMessage,
+                'mensaje' => "TASK DESPACHO FIN SERVER GENERAL: " . $errorMessage,
                 'fecha' => Carbon::now(),
                 'localizacion' => 'Command handle()'
             ]);
         }
+
 
     }
 

@@ -45,11 +45,11 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule)
     {
-        $schedule->command('command:atm')->withoutOverlapping();
+        //$schedule->command('command:atm')->withoutOverlapping();
         $schedule->command('ts:finalizar-despachos')->everyFiveMinutes()->withoutOverlapping();
-        $schedule->command('ts:update-gps-address')->hourly()->withoutOverlapping();
-        $schedule->command('ts:clear-tramas-logs')->daily()->withoutOverlapping();
-        $schedule->command('bloques:sync')->everyMinute();
+        //$schedule->command('ts:update-gps-address')->hourly()->withoutOverlapping();
+        //$schedule->command('ts:clear-tramas-logs')->daily()->withoutOverlapping();
+        //$schedule->command('bloques:sync')->everyMinute();
     }
 
     /**

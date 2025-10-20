@@ -396,12 +396,14 @@ class HistoricoController extends Controller
                         $tiempo_final=0;
                         foreach ($ruta_actual->ruta->puntos_control as $punto) {
                             $tiempo_final+=$punto['tiempo_llegada']; 
+                            /*
                             if($punto['retorno']==="1"){
                                 $punto_retorno = PuntoControl::where("_id",new ObjectID($punto['id']))->first();
                             }
                             if($punto['secuencia']==="1"){
                                 $punto_inicio = PuntoControl::where("_id",new ObjectID($punto['id']))->first();
                             }
+                                */
                         }
 
 
@@ -412,7 +414,7 @@ class HistoricoController extends Controller
                         $ruta_hora_final = $ruta_hora_final->format('H:i'); // solo hora:minuto
 
                     }
-                    array_push($rutaunidad,["ruta_actual"=>$ruta,"ruta_fecha"=>$ruta_fecha,"ruta_conductor"=>$ruta_conductor,"ruta_hora_fin"=>$ruta_hora_final, "punto_retorno"=>$punto_retorno]);
+                    array_push($rutaunidad,["ruta_actual"=>$ruta,"ruta_fecha"=>$ruta_fecha,"ruta_conductor"=>$ruta_conductor,"ruta_hora_fin"=>$ruta_hora_final]);
 
                     $f_gps=$unidad["fecha_gps"]->toDateTime();
                     $f_servidor=$unidad["fecha"]->toDateTime();
