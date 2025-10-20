@@ -163,7 +163,7 @@ Cooperativas
                 </div>
                 <div class="checkbox">
                     <label for="despachos_job">
-                        <input type="checkbox" id="despachos_job" name="despachos_job" value="S"/> Despachos terminar día
+                        <input type="checkbox" id="despachos_job" name="despachos_job" value="S"/> Finalizar despachos por vuelta
                     </label>
                 </div>
               </div>
@@ -191,7 +191,7 @@ Cooperativas
               <div class="form-group">
                   <div class="checkbox">
                     <label>
-                        <input type="checkbox" name="finalizacion_automatica" id="finalizacion_automatica" /> Finalización automática de despachos
+                        <input type="checkbox" name="finalizacion_automatica" id="finalizacion_automatica" /> Finalizar despachos fin de día
                     </label>
                   </div>
               </div>
