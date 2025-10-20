@@ -96,7 +96,6 @@ class FinalizarDespachosCommand extends Command
                 }
 
                 foreach ($despachos as $despacho) {
-                    $this->info("Empezando finalizacion...");
                     try {
                         $puntos = $despacho->puntos_control ?? [];
                         if (empty($puntos)) continue;
@@ -104,7 +103,9 @@ class FinalizarDespachosCommand extends Command
                         $ultimo = end($puntos);
 
                         if (!empty($ultimo['tiempo_esperado'])) {
-                            $fechaMarca = Carbon::parse($ultimo['tiempo_esperado']);
+                            $fechaMarca = Carbon::instance($ultimo['tiempo_esperado']->toDateTime());
+
+                            $this->info($fechaMarca);
                             $ahora = Carbon::now();
 
                             $fechaLimite = $fechaMarca->copy()->addMinutes(10);
