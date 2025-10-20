@@ -102,14 +102,14 @@ class FinalizarDespachosCommand extends Command
 
                         $ultimo = end($puntos);
 
-                        if (!empty($ultimo['marca'])) {
-                            $fechaMarca = Carbon::parse($ultimo['marca']);
+                        if (!empty($ultimo['tiempo_esperado'])) {
+                            $fechaMarca = Carbon::parse($ultimo['tiempo_esperado']);
                             $ahora = Carbon::now();
 
                             $fechaLimite = $fechaMarca->copy()->addMinutes(10);
 
                             if ($ahora->greaterThanOrEqualTo($fechaLimite)) {
-                                $this->info("⏱ Finalizando despacho {$despacho->_id} (marca: {$fechaMarca}, límite: {$fechaLimite})");
+                                $this->info("Finalizando despacho {$despacho->_id} (esperado: {$fechaMarca}, límite: {$fechaLimite})");
                                 $response = $ctrl->end($fakeRequest, $despacho->_id);
                                 $data = $response->getData(true);
 
