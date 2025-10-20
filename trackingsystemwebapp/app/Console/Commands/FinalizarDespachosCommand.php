@@ -123,11 +123,7 @@ class FinalizarDespachosCommand extends Command
 
                     } catch (\Throwable $e) {
                         $this->error(" Error procesando despacho {$despacho->_id}: " . $e->getMessage());
-                        \App\Models\LOGATMDESPACHOS::create([
-                            'mensaje' => "TASK DESPACHO FIN 10MIN: " . $e->getMessage(),
-                            'fecha' => Carbon::now(),
-                            'localizacion' => 'DespachoController@end'
-                        ]);
+                      
                     }
                 }
             }
@@ -138,11 +134,6 @@ class FinalizarDespachosCommand extends Command
             $errorMessage = $ex->getMessage();
             $this->error("Error general: " . $errorMessage);
 
-            \App\Models\LOGATMDESPACHOS::create([
-                'mensaje' => "TASK DESPACHO FIN GENERAL: " . $errorMessage,
-                'fecha' => Carbon::now(),
-                'localizacion' => 'Command handle()'
-            ]);
         }
 
     }
