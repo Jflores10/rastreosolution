@@ -56,7 +56,6 @@ class FinalizarDespachosCommand extends Command
             date_sub($hoy_desde, date_interval_create_from_date_string('5 hours'));
             date_sub($hoy_hasta, date_interval_create_from_date_string('5 hours'));
 
-            
             $cooperativas = Cooperativa::where('despachos_job', 'S')
                 ->where('estado', 'A')
                 ->get();
@@ -90,7 +89,6 @@ class FinalizarDespachosCommand extends Command
                     ->where('fecha', '<=', $hoy_hasta)
                     ->get();
 
-
                 if ($despachos->isEmpty()) {
                     continue;
                 }
@@ -101,17 +99,15 @@ class FinalizarDespachosCommand extends Command
                         if (empty($puntos)) continue;
 
                         $ultimo = end($puntos);
-
                         if (!empty($ultimo['tiempo_esperado'])) {
-                            $fechaMarca = Carbon::instance($ultimo['tiempo_esperado']->toDateTime());
-
-                            $this->info($fechaMarca);
-                            $ahora = Carbon::now();
-
-                            $fechaLimite = $fechaMarca->copy()->addMinutes(10);
-
+                            $tiempoEsperado = Carbon::instance($ultimo['tiempo_esperado']->toDateTime())
+                            ->addHours(5) // este ajuste lo estás aplicando en tu código
+                            ->setTimezone('America/Guayaquil');
+                            $fechaLimite = $tiempoEsperado->copy()->addMinutes(10);
+                            $ahora = Carbon::now('America/Guayaquil');
+                            
                             if ($ahora->greaterThanOrEqualTo($fechaLimite)) {
-                                $this->info("Finalizando despacho {$despacho->_id} (esperado: {$fechaMarca}, límite: {$fechaLimite})");
+                                $this->info("Finalizando despacho {$despacho->_id} (esperado: {$tiempoEsperado}, límite: {$fechaLimite})");
                                 $response = $ctrl->end($fakeRequest, $despacho->_id);
                                 $data = $response->getData(true);
 
