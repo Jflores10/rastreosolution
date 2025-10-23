@@ -157,6 +157,102 @@ function hexToBitPosition(hexString) {
   return position;
 }
 
+// === FUNCIÓN PARA ACTUALIZAR SENTIDO ===
+
+function actualizarSentidoUnidad(dbTrackingSystem, unidad, pdiActual, entrada) {
+  if (entrada !== 1) return; // Solo procesar entrada
+
+  const hoyDesde = moment().startOf('day').toDate();
+  const hoyHasta = moment().endOf('day').toDate();
+
+  // === Buscar despacho activo de la unidad ===
+  dbTrackingSystem.collection('despachos').aggregate([
+    {
+      $match: {
+        unidad_id: unidad._id,
+        estado: 'P',
+        fecha: { $gte: hoyDesde, $lte: hoyHasta }
+      }
+    },
+    {
+      $lookup: {
+        from: 'rutas',
+        localField: 'ruta_id',
+        foreignField: '_id',
+        as: 'ruta'
+      }
+    }
+  ]).toArray(function (err, despachos) {
+    if (err) {
+      console.error(' Error buscando despacho:', err);
+      return;
+    }
+
+    if (!despachos.length || !despachos[0].ruta.length) return;
+
+    const puntosRuta = despachos[0].ruta[0].puntos_control || [];
+    const puntoInicio = puntosRuta.find(p => p.secuencia === '1');
+    const puntoRetorno = puntosRuta.find(p => p.retorno === '1');
+    if (!puntoInicio || !puntoRetorno) return;
+
+    // === Buscar los pdi reales desde la colección punto_controls ===
+    const ids = [];
+    if (puntoInicio.id) ids.push(ObjectId(puntoInicio.id));
+    if (puntoRetorno.id) ids.push(ObjectId(puntoRetorno.id));
+
+    dbTrackingSystem.collection('punto_controls')
+      .find({ _id: { $in: ids } })
+      .toArray(function (err, puntosReal) {
+        if (err) {
+          console.error(' Error buscando punto_controls:', err);
+          return;
+        }
+
+        if (!puntosReal.length) return;
+
+        const pdiInicio = puntosReal.find(p => p._id.equals(ObjectId(puntoInicio.id)))?.pdi;
+        const pdiRetorno = puntosReal.find(p => p._id.equals(ObjectId(puntoRetorno.id)))?.pdi;
+
+        let nuevoSentido = null;
+
+        // Comparar contra los PDI reales
+        if (pdiRetorno && parseInt(pdiRetorno) === parseInt(pdiActual)) {
+          nuevoSentido = 'r';
+        }
+        if (pdiInicio && parseInt(pdiInicio) === parseInt(pdiActual)) {
+          nuevoSentido = 'i';
+        }
+
+        if (nuevoSentido && unidad.sentido !== nuevoSentido) {
+          dbTrackingSystem.collection('unidads').updateOne(
+            { _id: unidad._id },
+            { $set: { sentido: nuevoSentido } },
+            function (err) {
+              if (err) {
+                console.error(' Error actualizando sentido:', err);
+              } else {
+                console.log(`Unidad ${unidad.imei} cambió a sentido ${nuevoSentido === 'i' ? 'IDA' : 'RETORNO'}`);
+
+                // (Opcional) guardar historial
+                dbTrackingSystem.collection('historial_sentido').insertOne({
+                  unidad_id: unidad._id,
+                  imei: unidad.imei,
+                  nuevo_sentido: nuevoSentido,
+                  pdi: pdiActual,
+                  fecha: new Date()
+                }, function (err2) {
+                  if (err2) console.error('Error guardando historial_sentido:', err2);
+                });
+              }
+            }
+          );
+        }
+      });
+  });
+}
+
+
+
 
 /*
   Get the time needed to restart the counter
@@ -845,6 +941,13 @@ function onClientConnected(socket) {
                             contador_diario: document.contador_diario,
                             contador_total: document.contador_total,
                             js: true
+                         }, function (err, result) {
+                            if (err) {
+                                console.log('Error insertando recorrido:', err);
+                            } else {
+                                //  Llamar función para actualizar sentido automáticamente
+                                actualizarSentidoUnidad(dbTrackingSystem, document, pdi, entrada);
+                            }
                         });
                     }
                 });
@@ -936,8 +1039,13 @@ function onClientConnected(socket) {
                             contador_total: document.contador_total,
                             js: true
                         }, function (err, result) {
-                            if (err)
+                            if (err) {
                                 console.log(err);
+                            } else {
+                                // sLlamada a la función después de insertar el recorrido
+                                actualizarSentidoUnidad(dbTrackingSystem, document, pdi, inout);
+                            }
+
                         });
                     }
                 });
