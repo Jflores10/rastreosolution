@@ -43,7 +43,7 @@ var MongoClient = require('mongodb').MongoClient, dbTrackingSystem = null;//Load
 
 var socketArray = [];//Declaring socket array for all default clients
 var logsAdmin = [];
-
+const { ObjectId } = require('mongodb'); 
 const WebSocket = require("ws");
 const ws = new WebSocket("ws://127.0.0.1:6001");
 
