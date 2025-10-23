@@ -165,7 +165,6 @@ function actualizarSentidoUnidad(dbTrackingSystem, unidad, pdiActual, entrada) {
   const hoyDesde = moment().startOf('day').toDate();
   const hoyHasta = moment().endOf('day').toDate();
 
-  // === Buscar despacho activo de la unidad ===
   dbTrackingSystem.collection('despachos').aggregate([
     {
       $match: {
@@ -184,38 +183,61 @@ function actualizarSentidoUnidad(dbTrackingSystem, unidad, pdiActual, entrada) {
     }
   ]).toArray(function (err, despachos) {
     if (err) {
-      console.error(' Error buscando despacho:', err);
+      console.error('❌ Error buscando despacho:', err);
       return;
     }
 
-    if (!despachos.length || !despachos[0].ruta.length) return;
+    if (!despachos.length || !despachos[0].ruta.length) {
+      console.warn('⚠️ No se encontró despacho o ruta activa para unidad', unidad.imei);
+      return;
+    }
 
     const puntosRuta = despachos[0].ruta[0].puntos_control || [];
     const puntoInicio = puntosRuta.find(p => p.secuencia === '1');
     const puntoRetorno = puntosRuta.find(p => p.retorno === '1');
-    if (!puntoInicio || !puntoRetorno) return;
 
-    // === Buscar los pdi reales desde la colección punto_controls ===
+    if (!puntoInicio || !puntoRetorno) {
+      console.warn('⚠️ Ruta sin punto inicio o retorno para unidad', unidad.imei);
+      return;
+    }
+
+    // Validar IDs antes de convertirlos
     const ids = [];
-    if (puntoInicio.id) ids.push(ObjectId(puntoInicio.id));
-    if (puntoRetorno.id) ids.push(ObjectId(puntoRetorno.id));
+    try {
+      if (puntoInicio.id) ids.push(ObjectId(puntoInicio.id));
+      if (puntoRetorno.id) ids.push(ObjectId(puntoRetorno.id));
+    } catch (e) {
+      console.error('❌ Error convirtiendo IDs a ObjectId:', e);
+      return;
+    }
 
     dbTrackingSystem.collection('punto_controls')
       .find({ _id: { $in: ids } })
       .toArray(function (err, puntosReal) {
         if (err) {
-          console.error(' Error buscando punto_controls:', err);
+          console.error('❌ Error buscando punto_controls:', err);
           return;
         }
 
-        if (!puntosReal.length) return;
+        if (!Array.isArray(puntosReal) || !puntosReal.length) {
+          console.warn('⚠️ No se encontraron punto_controls reales para la ruta');
+          return;
+        }
 
-        const pdiInicio = puntosReal.find(p => p._id.equals(ObjectId(puntoInicio.id)))?.pdi;
-        const pdiRetorno = puntosReal.find(p => p._id.equals(ObjectId(puntoRetorno.id)))?.pdi;
+        let pdiInicio = null;
+        let pdiRetorno = null;
+
+        try {
+          const ptoIni = puntosReal.find(p => p._id.equals(ObjectId(puntoInicio.id)));
+          const ptoRet = puntosReal.find(p => p._id.equals(ObjectId(puntoRetorno.id)));
+          pdiInicio = ptoIni ? ptoIni.pdi : null;
+          pdiRetorno = ptoRet ? ptoRet.pdi : null;
+        } catch (e) {
+          console.error('❌ Error evaluando puntosReal:', e);
+          return;
+        }
 
         let nuevoSentido = null;
-
-        // Comparar contra los PDI reales
         if (pdiRetorno && parseInt(pdiRetorno) === parseInt(pdiActual)) {
           nuevoSentido = 'r';
         }
@@ -229,11 +251,10 @@ function actualizarSentidoUnidad(dbTrackingSystem, unidad, pdiActual, entrada) {
             { $set: { sentido: nuevoSentido } },
             function (err) {
               if (err) {
-                console.error(' Error actualizando sentido:', err);
+                console.error('❌ Error actualizando sentido:', err);
               } else {
-                console.log(`Unidad ${unidad.imei} cambió a sentido ${nuevoSentido === 'i' ? 'IDA' : 'RETORNO'}`);
+                console.log(`✅ Unidad ${unidad.imei} cambió a sentido ${nuevoSentido === 'i' ? 'IDA' : 'RETORNO'}`);
 
-                // (Opcional) guardar historial
                 dbTrackingSystem.collection('historial_sentido').insertOne({
                   unidad_id: unidad._id,
                   imei: unidad.imei,
@@ -241,7 +262,7 @@ function actualizarSentidoUnidad(dbTrackingSystem, unidad, pdiActual, entrada) {
                   pdi: pdiActual,
                   fecha: new Date()
                 }, function (err2) {
-                  if (err2) console.error('Error guardando historial_sentido:', err2);
+                  if (err2) console.error('❌ Error guardando historial_sentido:', err2);
                 });
               }
             }
