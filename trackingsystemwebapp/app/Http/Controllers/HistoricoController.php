@@ -918,9 +918,30 @@ class HistoricoController extends Controller
                 $ini = new UTCDateTime(($ini->getTimestamp()) * 1000);
                 $fin = new UTCDateTime(($fin->getTimestamp()) * 1000);
 
+                
+                $despacho_id=$request->input('despacho_id');
+                if(isset($despacho_id)){
+                    $despacho = Despacho::where('_id', new ObjectID($despacho_id))->first();
+                    if($despacho){
+                        $puntos = $despacho->puntos_control ?? [];
+                        if (!empty($puntos)){
+                            $ultimo = end($puntos);
+                            if (!empty($ultimo['marca'])) {
+                                $marca=$ultimo['marca'];  
+                                $fin = new Carbon($marca);
+                                date_add($fin, date_interval_create_from_date_string('5 hours'));
+                                $fin = new UTCDateTime(($fin->getTimestamp()) * 1000); 
+                            }
+                        }
+                    }
+
+                }
+                   
+
                 $cursor= Recorrido::where("unidad_id", new ObjectID($request->input('unidad_id')))
                     ->where('fecha_gps','>=',$ini)
                     ->where('fecha_gps','<=',$fin);
+                
 
                 $ev = $request->input('evento');
                 if ($ev != 'T')
@@ -952,6 +973,7 @@ class HistoricoController extends Controller
 						'contador_diario'=>$documento["contador_diario"],
 						'contador_total'=>$documento["contador_total"],
 						'estado_movil'=>$documento["estado_movil"]
+
                     ]);
                 }
                 return response()->json(['error' => false, 'recorrido' => $recorrido]);

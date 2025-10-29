@@ -461,7 +461,7 @@ Reportes
                     tabla.push('<td style="border: 1px solid #000000; text-align: left;">' + data[i].multas[j].unidad + '</td>');
                     tabla.push('<td style="border: 1px solid #000000; text-align: left;">' + data[i].multas[j].conductor.split(' ')[0] +" "+ data[i].multas[j].conductor.split(' ')[1] + '</td>');
                     tabla.push('<td style="border: 1px solid #000000; text-align: left;">' + data[i].multas[j].salida + '</td>');
-                    tabla.push('<td style="border: 1px solid #000000; text-align: left;">' + data[i].multas[j].multa + '</td>');
+                    tabla.push('<td style="border: 1px solid #000000; text-align: left;">' + toFloat(data[i].multas[j].multa).toFixed(2)  + '</td>');
                     tabla.push('</tr>');
                     multa = multa + data[i].multas[j].multa;
                 }

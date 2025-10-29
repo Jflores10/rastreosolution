@@ -158,17 +158,19 @@ function hexToBitPosition(hexString) {
 }
 
 // === FUNCIÓN PARA ACTUALIZAR SENTIDO ===
-
+// === FUNCIÓN PARA ACTUALIZAR SENTIDO ===
 function actualizarSentidoUnidad(dbTrackingSystem, unidad, pdiActual, entrada) {
   if (entrada !== 1) return; // Solo procesar entrada
 
-  const hoyDesde = moment().startOf('day').toDate();
-  const hoyHasta = moment().endOf('day').toDate();
+  const tz = 'America/Guayaquil';
+  const fechaBase = moment().tz(tz).format('YYYY-MM-DD');
+  const hoyDesde = moment.tz(`${fechaBase} 00:00:00`, 'YYYY-MM-DD HH:mm:ss', tz).toDate();
+  const hoyHasta = moment.tz(`${fechaBase} 23:59:59`, 'YYYY-MM-DD HH:mm:ss', tz).toDate();
 
   dbTrackingSystem.collection('despachos').aggregate([
     {
       $match: {
-        unidad_id: unidad._id,
+        unidad_id: unidad._id.toString(),
         estado: 'P',
         fecha: { $gte: hoyDesde, $lte: hoyHasta }
       }
@@ -187,27 +189,38 @@ function actualizarSentidoUnidad(dbTrackingSystem, unidad, pdiActual, entrada) {
       return;
     }
 
-    if (!despachos.length || !despachos[0].ruta.length) {
-      console.warn('⚠️ No se encontró despacho o ruta activa para unidad', unidad.imei);
+    // === No hay despachos activos → resetear sentido ===
+    if (!Array.isArray(despachos) || despachos.length === 0) {
+      dbTrackingSystem.collection('unidads').updateOne(
+        { _id: unidad._id },
+        { $set: { sentido: null } }
+      );
+      console.warn('⚠️ No se encontró despacho activo para unidad', unidad._id);
       return;
     }
 
-    const puntosRuta = despachos[0].ruta[0].puntos_control || [];
-    const puntoInicio = puntosRuta.find(p => p.secuencia === '1');
+
+
+    if (!despachos[0].puntos_control || !Array.isArray(despachos[0].puntos_control) || despachos[0].puntos_control.length === 0) {
+      console.warn('⚠️ Despacho sin ruta activa para unidad', unidad._id);
+      return;
+    }
+
+    const puntosRuta = despachos[0].puntos_control || [];
+
     const puntoRetorno = puntosRuta.find(p => p.retorno === '1');
 
-    if (!puntoInicio || !puntoRetorno) {
-      console.warn('⚠️ Ruta sin punto inicio o retorno para unidad', unidad.imei);
+    if (!puntoRetorno) {
+      console.warn('⚠️ Ruta sin punto de retorno para unidad', unidad.imei);
       return;
     }
 
-    // Validar IDs antes de convertirlos
+    // === Buscar punto real ===
     const ids = [];
     try {
-      if (puntoInicio.id) ids.push(ObjectId(puntoInicio.id));
       if (puntoRetorno.id) ids.push(ObjectId(puntoRetorno.id));
     } catch (e) {
-      console.error('❌ Error convirtiendo IDs a ObjectId:', e);
+      console.error('❌ Error convirtiendo IDs:', e);
       return;
     }
 
@@ -219,33 +232,29 @@ function actualizarSentidoUnidad(dbTrackingSystem, unidad, pdiActual, entrada) {
           return;
         }
 
-        if (!Array.isArray(puntosReal) || !puntosReal.length) {
-          console.warn('⚠️ No se encontraron punto_controls reales para la ruta');
+        if (!Array.isArray(puntosReal) || puntosReal.length === 0) {
+          console.warn('⚠️ No se encontraron puntos reales para la ruta');
           return;
         }
 
-        let pdiInicio = null;
-        let pdiRetorno = null;
+        const ptoRet = puntosReal.find(p => p._id.equals(ObjectId(puntoRetorno.id)));
+        const pdiRetorno = ptoRet ? ptoRet.pdi : null;
 
-        try {
-          const ptoIni = puntosReal.find(p => p._id.equals(ObjectId(puntoInicio.id)));
-          const ptoRet = puntosReal.find(p => p._id.equals(ObjectId(puntoRetorno.id)));
-          pdiInicio = ptoIni ? ptoIni.pdi : null;
-          pdiRetorno = ptoRet ? ptoRet.pdi : null;
-        } catch (e) {
-          console.error('❌ Error evaluando puntosReal:', e);
-          return;
-        }
+        // === Determinar nuevo sentido ===
+        let nuevoSentido = unidad.sentido || 'i'; // Mantiene el sentido actual por defecto
 
-        let nuevoSentido = null;
+        // Solo cambia a retorno si el punto coincide
         if (pdiRetorno && parseInt(pdiRetorno) === parseInt(pdiActual)) {
           nuevoSentido = 'r';
         }
-        if (pdiInicio && parseInt(pdiInicio) === parseInt(pdiActual)) {
-          nuevoSentido = 'i';
+
+        // Evitar que vuelva a "i" si ya está en retorno
+        if (unidad.sentido === 'r' && nuevoSentido === 'i') {
+          console.log(`⏸ Unidad ${unidad.imei} mantiene sentido RETORNO`);
+          return;
         }
 
-        if (nuevoSentido && unidad.sentido !== nuevoSentido) {
+        if (nuevoSentido !== unidad.sentido) {
           dbTrackingSystem.collection('unidads').updateOne(
             { _id: unidad._id },
             { $set: { sentido: nuevoSentido } },
@@ -254,15 +263,12 @@ function actualizarSentidoUnidad(dbTrackingSystem, unidad, pdiActual, entrada) {
                 console.error('❌ Error actualizando sentido:', err);
               } else {
                 console.log(`✅ Unidad ${unidad.imei} cambió a sentido ${nuevoSentido === 'i' ? 'IDA' : 'RETORNO'}`);
-
                 dbTrackingSystem.collection('historial_sentido').insertOne({
                   unidad_id: unidad._id,
                   imei: unidad.imei,
                   nuevo_sentido: nuevoSentido,
                   pdi: pdiActual,
                   fecha: new Date()
-                }, function (err2) {
-                  if (err2) console.error('❌ Error guardando historial_sentido:', err2);
                 });
               }
             }
@@ -271,7 +277,6 @@ function actualizarSentidoUnidad(dbTrackingSystem, unidad, pdiActual, entrada) {
       });
   });
 }
-
 
 
 

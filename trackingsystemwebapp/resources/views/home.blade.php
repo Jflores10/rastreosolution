@@ -6,6 +6,10 @@
         width : 100%;
         height : 700px;
     }
+    .modal-open #velocimetro-container {
+        display: none !important;
+    }
+    
     #div-unidad li i { cursor: pointer; }
     #div-unidad li img { cursor: pointer; }
     #address {
@@ -32,6 +36,16 @@
         .jsPanel .jsPanel-content{
             font-size: 15px;
 }
+
+</style>
+<style>
+footer {
+  background: #f8f8f8;
+  border-top: 1px solid #ddd;
+  padding: 5.7px 20px;
+  position: relative;
+  bottom: 0;
+}
 </style>
 @endsection
 @section('title')
@@ -41,137 +55,129 @@ Dashboard
 <link href="css/speedometer.css" rel="stylesheet" type="text/css" />
 <div class="clearfix"></div>
 <!-- -->
-<div class="row">
-     <div class="col-md-12 col-sm-12 col-xs-12">
-        <div class="x_panel">
-            <div class="x_content">
-                <div class="col-md-12 col-sm-12 col-xs-12">
-                    <div class="col-md-12 col-sm-12 col-xs-12">
-                        <div class="col-lg-4 col-md-4 col-sm-6">
-                            <div class="col-lg-12 col-md-12 col-sm-12">
-                                <div class="col-lg-12 col-md-12 col-sm-12">
-                                        <form name="form_coop" method="GET" action="{{ url('/homeUniCoop') }}" id="form_coop">
-                                            {{ csrf_field() }}
-                                            <div class="form-group" id="div-cooperativa">
-                                                <label>Cooperativa</label>
-                                                <select type="submit" class="form-control" name="cooperativa" id="cooperativa" onchange="this.form.submit();">
-                                                    @if(Auth::user()->tipo_usuario->valor==1)
-                                                    <option value="" disabled selected hidden>Seleccione...</option>
-                                                    @endif
-                                                    @foreach ($cooperativas as $cooperativa)
-                                                        <option data-bloques="{{ json_encode($cooperativa->pto_bloques)}}" value="{{ $cooperativa->_id }}">{{ $cooperativa->descripcion }}</option>
-                                                    @endforeach
-                                                </select>
-                                            </div>
-                                            @if(Auth::user()->tipo_usuario->valor!=1)
-                                                <i id="i_cooperativa" class="fa fa-globe" style="color:#2a62bc"></i>
-                                                <label> {{ $cooperativa->descripcion }} </label>
-                                            @endif
-                                        </form>
-                                        <div class="form-group">
-                                            <div class="input-group">
-                                                <input type="text" name="consulta" id="consulta" class="form-control" onkeypress="return runScript(event)" placeholder="Buscar unidad"/>
-                                                <span class="input-group-btn">
-                                                <button class="btn btn-primary" type="button" onclick="searchUnidad(true);" /><i class="fa fa-search"></i></button>
-                                                </span>
-                                            </div>
-                                        </div>
-                                </div>
-                                <div class="col-lg-12 col-md-12 col-sm-12">
-                                    <label>Cantidad: </label><span id="cantidad">0</span>&nbsp&nbsp
-                                    <i class="fa fa-bus" style="color:#00AA88"></i>&nbsp:&nbsp<span id="cantidad_movimiento">0</span>&nbsp&nbsp
-                                    <i class="fa fa-bus" style="color:#F44336"></i>&nbsp:&nbsp<span id="cantidad_stop">0</span>&nbsp&nbsp
-                                    <i class="fa fa-bus" style="color:#f49a16"></i>&nbsp:&nbsp<span id="cantidad_e">0</span>&nbsp&nbsp
-                                    <i class="fa fa-bus" style="color:#990073"></i>&nbsp:&nbsp<span id="cantidad_no">0</span>&nbsp&nbsp
-                                    
-                                    <span class="label label-primary" id="txtBloque"></span>
+<div class="row" style="margin:0;">
+  <div class="col-md-12">
+    <div class="x_panel" style="padding:5px;">
+      <div class="x_content" style="padding:0;">
+        <div class="row" style="margin:0;">
+          
+          <!-- Panel lateral (buscador y lista de unidades) -->
+          <div class="col-lg-3 col-md-4 col-sm-12" style="padding:5px; max-height:80vh;">
+            <form name="form_coop" method="GET" action="{{ url('/homeUniCoop') }}" id="form_coop">
+              {{ csrf_field() }}
+              <div class="form-group" id="div-cooperativa">
+                <label>Cooperativa</label>
+                <select class="form-control" name="cooperativa" id="cooperativa" onchange="this.form.submit();">
+                  @if(Auth::user()->tipo_usuario->valor==1)
+                    <option value="" disabled selected hidden>Seleccione...</option>
+                  @endif
+                  @foreach ($cooperativas as $cooperativa)
+                    <option data-bloques="{{ json_encode($cooperativa->pto_bloques)}}" value="{{ $cooperativa->_id }}">
+                      {{ $cooperativa->descripcion }}
+                    </option>
+                  @endforeach
+                </select>
+              </div>
+              @if(Auth::user()->tipo_usuario->valor!=1)
+                <i id="i_cooperativa" class="fa fa-globe" style="color:#2a62bc"></i>
+                <label>{{ $cooperativa->descripcion }}</label>
+              @endif
+            </form>
 
-                                    @if(Auth::user()->tipo_usuario->valor == 1)
-                                        &nbsp&nbsp&nbsp&nbsp<button class="btn btn-info btn-link btn-sm" type="button" onclick="verLogsTramas();"><i class="fa fa-table"></i><span>&nbsp&nbspVer tramas</span></button>
-                                    @endif 
-                                </div>
-
-                                    <div class="col-lg-12 col-md-12 col-sm-12" id="div-mensaje">
-                                    </div>
-                                    <div class="col-lg-12 col-md-12 col-sm-12" id="div-unidad" style="height:47em;overflow: auto;">
-                                        <ul class="list-group" id="ul_unidades">
-                                        </ul>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-lg-8 col-md-8 col-sm-12">
-                                <div class="col-lg-12 col-md-12 col-sm-12">
-                                    <div class="col-lg-1 col-md-1 col-sm-12">
-                                        <button class="btn btn-info btn-xs" type="button" onclick="$('#progress').modal('show');playClick();"/><i class="fa fa-play"></i></button>
-                                    </div>
-                                    <div class="col-lg-1 col-md-1 col-sm-12">
-                                        <button class="btn btn-info btn-xs" type="button" onclick="pauseClick();"/><i class="fa fa-pause"></i></button>
-                                    </div>
-                                    <div class="col-lg-1 col-md-1 col-sm-12">
-                                        <button class="btn btn-info btn-xs" type="button" onclick="stopClick();" /><i class="fa fa-stop"></i></button>
-                                    </div>
-                                    <div class="col-lg-1 col-md-1 col-sm-12">
-                                        <button class="btn btn-info btn-xs" type="button" onclick="eraseClick();" /><i class="fa fa-eraser"></i></button>
-                                    </div>
-                                    <div class="col-lg-1 col-md-1 col-sm-12">
-                                        <button class="btn btn-info btn-xs" onclick="setOpciones();"  type="button" data-toggle="modal" data-target="#form" type="button"><i class="fa fa-cog"></i></button>
-                                    </div>
-                                    <div class="col-lg-1 col-md-1 col-sm-12">
-                                        <button class="btn btn-info btn-xs" type="button" onclick="eraseClick();cargarTodasLasUnidades();" /><i class="fa fa-spinner"></i></button>
-                                    </div>
-                                    @if(Auth::user()->tipo_usuario->valor!=4)
-                                        <div class="col-lg-1 col-md-1 col-sm-12">
-                                            <button class="btn btn-info btn-xs" type="button" onclick="consultarEnLinea();" /><i class="fa fa-eye"></i></button>
-                                        </div>
-                                    @endif
-                                    <div class="col-lg-5 col-md-5 col-sm-12">
-                                        <select class="form-control" multiple data-placeholder="Ruta Unidad" name="ruta" id="ruta">
-                                            @if (isset($rutas))
-                                                @foreach ($rutas as $ruta)
-                                                    <option value="{{ $ruta->_id }}">{{ $ruta->descripcion }}</option>
-                                                @endforeach
-                                            @endif
-                                        </select>
-                                       
-                                         <!-- Ruta ATM -->
-                                        @if (isset($atm) && $atm =='S')
-                                            <div>
-                                                <label>Ruta ATM</label>
-                                                <select class="form-control control-panel__route" multiple data-placeholder="Ruta" name="ruta_atm" id="ruta_atm">
-                                                    @if (isset($rutas_atm))
-                                                        @foreach ($rutas_atm as $ruta)
-                                                            <option value="{{ $ruta->_id }}">{{ $ruta->descripcion }}</option>
-                                                        @endforeach
-                                                    @endif
-                                                </select>
-                                            </div>
-                                        @endif
-                                    </div>
-                                    <div class="col-lg-5 col-md-5 col-sm-12">
-                                        <select class="form-control" multiple data-placeholder="Rutas General" name="ruta_general" id="ruta_general">
-                                            @if (isset($rutas))
-                                                @foreach ($rutas as $ruta)
-                                                    <option value="{{ $ruta->_id }}">{{ $ruta->descripcion }}</option>
-                                                @endforeach
-                                            @endif
-                                        </select>
-                                    </div>
-                                </div>
-                                <br><br><br>
-                                <input class="form-control" type="text" placeholder="Escriba una referencia..." id="address" name="address"/>
-                                <div id="map"></div>
-                                <div style='margin-top: -150px;'>
-                                    <input id="velocimetro" style='display:none;'  />
-                                    <br>
-                                </div>
-                            </div>
-                        </div>
-                        <label id="lbl_hora_mapa" style="text-size:14px;color:white;background:black;"></label>
-                    </div>
-                </div>                
+            <div class="form-group">
+              <div class="input-group">
+                <input type="text" name="consulta" id="consulta" class="form-control" onkeypress="return runScript(event)" placeholder="Buscar unidad">
+                <span class="input-group-btn">
+                  <button class="btn btn-primary" type="button" onclick="searchUnidad(true);">
+                    <i class="fa fa-search"></i>
+                  </button>
+                </span>
+              </div>
             </div>
+
+            <div>
+              <label>Cantidad:</label> <span id="cantidad">0</span>&nbsp;
+              <i class="fa fa-bus" style="color:#00AA88"></i>:<span id="cantidad_movimiento">0</span>&nbsp;
+              <i class="fa fa-bus" style="color:#F44336"></i>:<span id="cantidad_stop">0</span>&nbsp;
+              <i class="fa fa-bus" style="color:#f49a16"></i>:<span id="cantidad_e">0</span>&nbsp;
+              <i class="fa fa-bus" style="color:#990073"></i>:<span id="cantidad_no">0</span>&nbsp;
+              <span class="label label-primary" id="txtBloque"></span>
+              @if(Auth::user()->tipo_usuario->valor == 1)
+                <button class="btn btn-info btn-xs" type="button" onclick="verLogsTramas();" style="margin-left:5px;">
+                  <i class="fa fa-table"></i> Ver tramas
+                </button>
+              @endif
+            </div>
+
+            <div id="div-mensaje" class="mt-2"></div>
+
+            <div id="div-unidad" style="height:56vh; overflow-y:auto; margin-top:10px;">
+              <ul class="list-group" id="ul_unidades"></ul>
+            </div>
+          </div>
+
+          <!-- Panel principal (mapa) -->
+          <div class="col-lg-9 col-md-8 col-sm-12" style="padding:20px;">
+            <div class="row" style="margin-bottom:5px;">
+              <div class="col-md-3">
+                <select class="form-control" multiple data-placeholder="Ruta Unidad" name="ruta" id="ruta">
+                  @if (isset($rutas))
+                    @foreach ($rutas as $ruta)
+                      <option value="{{ $ruta->_id }}">{{ $ruta->descripcion }}</option>
+                    @endforeach
+                  @endif
+                </select>
+              </div>
+              <div class="col-md-3">
+                <select class="form-control" multiple data-placeholder="Rutas General" name="ruta_general" id="ruta_general">
+                  @if (isset($rutas))
+                    @foreach ($rutas as $ruta)
+                      <option value="{{ $ruta->_id }}">{{ $ruta->descripcion }}</option>
+                    @endforeach
+                  @endif
+                </select>
+              </div>
+              <div class="col-md-6 text-right">
+                <div class="btn-group " role="group" >
+                    <button class="btn btn-info" type="button" onclick="$('#progress').modal('show');playClick();"><i class="fa fa-play"></i></button>
+                    <button class="btn btn-info" type="button" onclick="pauseClick();"><i class="fa fa-pause"></i></button>
+                    <button class="btn btn-info" type="button" onclick="stopClick();"><i class="fa fa-stop"></i></button>
+                    <button class="btn btn-info" type="button" onclick="eraseClick();"><i class="fa fa-eraser"></i></button>
+                    <button class="btn btn-info" onclick="setOpciones();" data-toggle="modal" data-target="#form"><i class="fa fa-cog"></i></button>
+                    <button class="btn btn-info" type="button" onclick="eraseClick();cargarTodasLasUnidades();"><i class="fa fa-spinner"></i></button>
+                    @if(Auth::user()->tipo_usuario->valor!=4)
+                    <button class="btn btn-info" type="button" onclick="consultarEnLinea();"><i class="fa fa-eye"></i></button>
+                    @endif
+                </div>
+              </div>
+            </div>
+            <input class="form-control" type="text" placeholder="Escriba una referencia..." id="address" name="address" style="margin-bottom:8px;" />
+            <!-- MAPA -->
+            <div id="map" style="width:100%; height:calc(93vh - 184px); border:1px solid #ccc; position:relative; z-index:1;"></div>
+
+            <!-- OVERLAY -->
+            <div id="map-overlay" 
+                style="position:absolute; top:0; left:0; width:100%; height:calc(100vh - 180px); pointer-events:none; z-index:9999;">
+
+            <label id="lbl_hora_mapa" 
+                style="position:absolute; top:70px; right:10px; font-size:13px; 
+                        color:white; background:rgba(0,0,0,0.7); ">
+            </label>
+
+            <!-- Velocímetro (abajo izquierda) -->
+            <div id="velocimetro-container"
+                style="position:absolute; bottom:77px; left:20px; width:160px; height:160px; 
+                        display:flex; align-items:center; justify-content:center; z-index:10000;">
+                <canvas id="velocimetro" width="160" height="160" style="pointer-events:none;"></canvas>
+            </div>
+
+            </div>
+            
+          </div>
         </div>
-     </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 
@@ -408,7 +414,7 @@ Dashboard
     }
 
     var nuevasNotificaciones = 0;
-    var panelAbierto = true;
+    var panelAbierto = false;
     var panelNotificaciones = jsPanel.create({
         theme : 'primary',
         headerTitle : 'NOTIFICACIONES',
@@ -421,6 +427,7 @@ Dashboard
             maximize : 'remove'
         }
     });
+    panelNotificaciones.minimize();
     document.addEventListener('jspanelminimized', function (event) {
         panelAbierto = false;
     });
@@ -1821,10 +1828,10 @@ $("#velocimetro").myfunc({divFact:10});
                                 '<li class="list-group-item" id=\''+ data.unidades[i]._id + '\'>'+
                                     ((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                                     ((data.unidades[i].rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
-                                sentido+'<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1);" class="fa fa-bus" style="color:#F44336"></i>&nbsp&nbsp'+ 
-                                data.unidades[i].descripcion+'&nbsp&nbsp('+fecha_gps+' | '+ data.unidades[i].velocidad_actual+' km/h)'+'&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#F44336"></i>&nbsp&nbsp'+voltaje+'v'
-                                +'&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#F44336"></i>&nbsp&nbsp'+data.unidades[i].contador_total+" | "+data.unidades[i].contador_diario
-                                +'&nbsp&nbsp&nbsp'+((data.unidades[i].is_atm !== "undefined")?((data.unidades[i].is_atm===0)?'<i class="fa fa-globe" style="color:#00AA88"></i>':((data.unidades[i].is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'<i class="fa fa-globe" style="color:#00AA88"></i>')):'<i class="fa fa-globe" style="color:#00AA88"></i>')
+                                sentido+'<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1);" class="fa fa-bus" style="color:#F44336"></i>&nbsp'+ 
+                                data.unidades[i].descripcion+'&nbsp&nbsp('+fecha_gps+' | <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp'+  Math.round(data.unidades[i].velocidad_actual)+')'+'&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#F44336"></i>&nbsp'+voltaje
+                                +'&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#F44336"></i>&nbsp'+data.unidades[i].contador_total+" | "+data.unidades[i].contador_diario
+                                +'&nbsp&nbsp&nbsp'+((data.unidades[i].is_atm !== "undefined")?((data.unidades[i].is_atm===0)?'':((data.unidades[i].is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'')):'')
                                 +'&nbsp&nbsp&nbsp|&nbsp&nbsp'
                                 @if(true)
                                     +((data.unidades[i].puerta !== 'undefined')?((data.unidades[i].puerta==='PUERTA ABIERTA (DELANTERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta:
@@ -1852,10 +1859,10 @@ $("#velocimetro").myfunc({divFact:10});
                                 '<li class="list-group-item" id=\''+ data.unidades[i]._id + '\'>'+
                                     ((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                                     ((data.unidades[i].rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
-                                '<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1);" class="fa fa-bus" style="color:#f49a16"></i>&nbsp&nbsp'+ data.unidades[i].descripcion
-                                +'&nbsp&nbsp('+fecha_gps+' | '+ data.unidades[i].velocidad_actual+' km/h)'+'&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#f49a16"></i>&nbsp&nbsp'+voltaje+'v'
-                                +'&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#f49a16"></i>&nbsp&nbsp'+data.unidades[i].contador_total+" | "+data.unidades[i].contador_diario
-                                +'&nbsp&nbsp&nbsp'+((data.unidades[i].is_atm !== "undefined")?((data.unidades[i].is_atm===0)?'<i class="fa fa-globe" style="color:#00AA88"></i>':((data.unidades[i].is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'<i class="fa fa-globe" style="color:#00AA88"></i>')):'<i class="fa fa-globe" style="color:#00AA88"></i>')
+                                '<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1);" class="fa fa-bus" style="color:#f49a16"></i>&nbsp'+ data.unidades[i].descripcion
+                                +'&nbsp&nbsp('+fecha_gps+' | <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp'+ Math.round(data.unidades[i].velocidad_actual)+')'+'&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#f49a16"></i>&nbsp'+voltaje
+                                +'&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#f49a16"></i>&nbsp'+data.unidades[i].contador_total+" | "+data.unidades[i].contador_diario
+                                +'&nbsp&nbsp&nbsp'+((data.unidades[i].is_atm !== "undefined")?((data.unidades[i].is_atm===0)?'':((data.unidades[i].is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'')):'')
                                 +'&nbsp&nbsp&nbsp|&nbsp&nbsp'
                                 @if(true)
                                     +((data.unidades[i].puerta !== 'undefined')?((data.unidades[i].puerta==='PUERTA ABIERTA (DELANTERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta:
@@ -1883,10 +1890,10 @@ $("#velocimetro").myfunc({divFact:10});
                                 '<li class="list-group-item" id=\''+ data.unidades[i]._id + '\'>'+
                                     ((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                                     ((data.unidades[i].rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
-                                sentido+'<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1);" class="fa fa-bus" style="color:#00AA88"></i>&nbsp&nbsp'+ data.unidades[i].descripcion
-                                +'&nbsp&nbsp('+fecha_gps+' | '+ data.unidades[i].velocidad_actual+' km/h)'+'&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#00AA88"></i>&nbsp&nbsp'+voltaje+'v'+'&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#00AA88"></i>&nbsp&nbsp'
+                                sentido+'<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1);" class="fa fa-bus" style="color:#00AA88"></i>&nbsp'+ data.unidades[i].descripcion
+                                +'&nbsp&nbsp('+fecha_gps+' | <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp'+ Math.round(data.unidades[i].velocidad_actual)+')'+'&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#00AA88"></i>&nbsp'+voltaje+'&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#00AA88"></i>&nbsp'
                                 +data.unidades[i].contador_total+" | "+data.unidades[i].contador_diario
-                                +'&nbsp&nbsp&nbsp'+((data.unidades[i].is_atm !== "undefined")?((data.unidades[i].is_atm===0)?'<i class="fa fa-globe" style="color:#00AA88"></i>':((data.unidades[i].is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'<i class="fa fa-globe" style="color:#00AA88"></i>')):'<i class="fa fa-globe" style="color:#00AA88"></i>')
+                                +'&nbsp&nbsp&nbsp'+((data.unidades[i].is_atm !== "undefined")?((data.unidades[i].is_atm===0)?'':((data.unidades[i].is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'')):'')
                                 +'&nbsp&nbsp&nbsp|&nbsp&nbsp'
                                 @if(true)
                                     +((data.unidades[i].puerta !== 'undefined')?((data.unidades[i].puerta==='PUERTA ABIERTA (DELANTERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta:
@@ -1919,10 +1926,10 @@ $("#velocimetro").myfunc({divFact:10});
                                 '<li class="list-group-item" id=\'' + data.unidades[i]._id + '\'>' +
                                 ((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                                 ((data.unidades[i].rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
-                                '<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1);" class="fa fa-bus" style="color:#990073"></i>&nbsp&nbsp' + data.unidades[i].descripcion 
-                                + '&nbsp&nbsp(' + fecha_gps + ' | ' + data.unidades[i].velocidad_actual + ' km/h)' + '&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#990073"></i>&nbsp&nbsp' + voltaje + 'v' + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#990073"></i>&nbsp&nbsp' + data.unidades[i].contador_total 
+                                '<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1);" class="fa fa-bus" style="color:#990073"></i>&nbsp' + data.unidades[i].descripcion 
+                                + '&nbsp&nbsp(' + fecha_gps + ' | <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(data.unidades[i].velocidad_actual) + ')' + '&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#990073"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#990073"></i>&nbsp' + data.unidades[i].contador_total 
                                 + " | " + data.unidades[i].contador_diario
-                                +'&nbsp&nbsp&nbsp'+((data.unidades[i].is_atm !== "undefined")?((data.unidades[i].is_atm===0)?'<i class="fa fa-globe" style="color:#00AA88"></i>':((data.unidades[i].is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'<i class="fa fa-globe" style="color:#00AA88"></i>')):'<i class="fa fa-globe" style="color:#00AA88"></i>')
+                                +'&nbsp&nbsp&nbsp'+((data.unidades[i].is_atm !== "undefined")?((data.unidades[i].is_atm===0)?'':((data.unidades[i].is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'')):'')
                                 +'&nbsp&nbsp&nbsp|&nbsp&nbsp'
                                 @if(true)
                                     +((data.unidades[i].puerta !== 'undefined')?((data.unidades[i].puerta==='PUERTA ABIERTA (DELANTERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta:

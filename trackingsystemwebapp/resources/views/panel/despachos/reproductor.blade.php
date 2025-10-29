@@ -25,7 +25,7 @@ Reproductor de Despacho
         padding: 0;
         position: absolute;
         top: 18px;
-        right: 18px;
+        right: 40px;
         width: 180px;
         text-align: center;
         border: none;
@@ -190,7 +190,9 @@ Reproductor de Despacho
             zoom: 13,
             mapTypeId: "OSM",
             mapTypeControl: true,
-            streetViewControl: true});
+            streetViewControl: true,
+            
+        });
         map.mapTypes.set("OSM", new google.maps.ImageMapType({
             getTileUrl: function(coord, zoom) {
                 var tilesPerGlobe = 1 << zoom;
@@ -646,6 +648,8 @@ Reproductor de Despacho
     function getHistoricoUnidad()
     {
         var unidad_id = '{{ $despacho->unidad_id }}';
+        var despacho_id = '{{ $despacho->_id }}';
+
         var opcion_fecha = 'P';
         var fecha_inicio = '{{ $despacho->display_fecha_asignacion->format("Y-m-d H:i") }}';
         var fecha_fin = '{{ $despacho->display_fecha_salida? $despacho->display_fecha_salida->format("Y-m-d H:i") : date($despacho->display_fecha_asignacion->format("Y-m-d") . " 23:59") }}';
@@ -656,6 +660,7 @@ Reproductor de Despacho
 
         var param={
             unidad_id:unidad_id,
+            despacho_id:despacho_id,
             fecha_inicio:fecha_inicio,
             fecha_fin:fecha_fin,
             evento:evento,
