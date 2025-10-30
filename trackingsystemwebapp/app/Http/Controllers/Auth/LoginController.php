@@ -52,7 +52,7 @@ class LoginController extends Controller
         $user = User::where('email', 'like', $request->input('email'))->with('tipo_usuario')->first();      
         if (isset($user) && Auth::attempt(['email' => $user->email, 'password' => $request->input('password')])) {
             if( $user->tipo_usuario->valor != '1'){
-                if(isset($user->ip) && $user->ip != null  && $user->ip != ''){
+                if(isset($user->ip) && $user->ip != null  && $user->ip != '' && $user->activar_ips){
                     $ips=explode(";", $user->ip);
                     $autorizado='NO';
                     foreach($ips as $ip){

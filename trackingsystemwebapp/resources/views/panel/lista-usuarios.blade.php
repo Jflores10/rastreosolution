@@ -191,11 +191,30 @@
                                 <label for="correo">E-mail</label>
                                 <input type="email" name="correo" id="correo" class="form-control" placeholder="Opcional"/>
                             </div>
-                            <div id="div_ip" class="form-group">
-                                <label for="ip" class="col-sm-2 control-label">IPs</label>
-                                <input name="ip" id="ip" class="form-control" type="text" />
-                                <label for="ip_sep" >Separar las ips por ';'</label>
+                            <div id="div_ip" class="form-group" style="position:relative; margin-bottom:5px;">
+                                <label for="ip">IPs</label>
+
+                                <!-- Checkbox + Activar alineados a la derecha -->
+                                <div style="position:absolute; right:5px; top:0; font-weight:normal; font-size:12px;">
+                                    <label for="activar_ip" style="margin:0; font-weight:normal;">
+                                        <input type="checkbox" id="activar_ip" name="activar_ip" style="margin-right:3px;">
+                                        Activar?
+                                    </label>
+                                </div>
                             </div>
+
+                            <div class="form-group" style="margin-top:-8px;">
+                                <input name="ip" id="ip" class="form-control" type="text" />
+                                <label for="ip_sep">Separar las ips por ';'</label>
+                            </div>
+
+
+                            <div class="form-group">
+                                <input name="ip" id="ip" class="form-control" type="text" />
+                                <label for="ip_sep">Separar las ips por ';'</label>
+                            </div>
+
+
                             <div class="form-group">
                                 <label for="operadora">Operadora</label>
                                 <select name="operadora" id="operadora" class="form-control">
@@ -228,6 +247,14 @@
     <script src="{{ asset('js/usuario.js') }}"></script>
 
     <script>
+        $(document).ready(function () {
+
+            $('#activar_ip').on('change', function () {
+                $('#ip').prop('readonly', !this.checked);
+            });
+
+        });
+
 
         var id_cooperativa=null;
         var unidades_pertenecientes=null;

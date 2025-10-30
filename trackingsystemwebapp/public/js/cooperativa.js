@@ -18,7 +18,7 @@ function editarCooperativa(url)
     let redondear_tiempos_atraso = document.getElementById('redondear_tiempos_atraso');
     let pto_bloques = document.getElementById('pto_bloques');
     let distancia_haversine = document.getElementById('distancia_haversine');
-    
+    let trafico = document.getElementById('trafico');
     let dia_inicial = document.getElementById('dia_inicial');
     let hora_sync = document.getElementById('hora_sync');
 
@@ -38,6 +38,8 @@ function editarCooperativa(url)
         redondear_tiempos_atraso.checked = data.redondear_tiempos_atraso??false;
         pto_bloques.checked = data.pto_bloques??false;
         distancia_haversine.checked = data.distancia_haversine??false;
+        trafico.checked = data.trafico??false;
+
 
         dia_inicial.value = data.dia_inicial;
         hora_sync.value = data.hora_sync;
@@ -69,6 +71,8 @@ function crearCooperativa(url)
     let redondear_tiempos_atraso = document.getElementById('redondear_tiempos_atraso');
     let pto_bloques = document.getElementById('pto_bloques');
     let distancia_haversine = document.getElementById('distancia_haversine');
+    let trafico = document.getElementById('trafico');
+
 
     let dia_inicial = document.getElementById('dia_inicial');
     let hora_sync = document.getElementById('hora_sync');
@@ -94,6 +98,8 @@ function crearCooperativa(url)
         redondear_tiempos_atraso: redondear_tiempos_atraso.checked,
         pto_bloques: pto_bloques.checked,
         distancia_haversine: distancia_haversine.checked,
+        trafico: trafico.checked,
+
         dia_inicial: dia_inicial.value,
         hora_sync: hora_sync.value
 
@@ -131,7 +137,7 @@ function actualizarCooperativa(url)
     let redondear_tiempos_atraso = document.getElementById('redondear_tiempos_atraso');
     let pto_bloques = document.getElementById('pto_bloques');
     let distancia_haversine = document.getElementById('distancia_haversine');
-
+    let trafico = document.getElementById('trafico');
 
     let dia_inicial = document.getElementById('dia_inicial');
     let hora_sync = document.getElementById('hora_sync');
@@ -156,6 +162,8 @@ function actualizarCooperativa(url)
         redondear_tiempos_atraso: redondear_tiempos_atraso.checked,
         pto_bloques: pto_bloques.checked,
         distancia_haversine: distancia_haversine.checked,
+        trafico: trafico.checked,
+
 
         dia_inicial: dia_inicial.value,
         hora_sync: hora_sync.value

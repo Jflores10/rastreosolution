@@ -89,7 +89,7 @@ class UsuarioController extends Controller
         if($user->email==$request->input('email'))
             $validator = Validator::make($request->all(), [
                 'name' => 'required|max:150',
-                'password' => 'required|min:6|confirmed',
+                'password' => 'min:6|confirmed',
                 'tipo_usuario_id' => 'required',
                 'cooperativa_id' => 'nullable',
                 'email' => 'required',
@@ -99,7 +99,7 @@ class UsuarioController extends Controller
         else
             $validator = Validator::make($request->all(), [
                 'name' => 'required|max:150',
-                'password' => 'required|min:6|confirmed',
+                'password' => 'min:6|confirmed',
                 'tipo_usuario_id' => 'required',
                 'cooperativa_id' => 'nullable|exists:cooperativas,_id',
                 'email' => 'required|unique:users',
@@ -111,7 +111,10 @@ class UsuarioController extends Controller
         else
         {
             $user->name = $request->input('name');
-            $user->password =  bcrypt($request->input('password'));
+            $passw=$request->input('password');
+            if(isset($passw) && $passw!=''){
+                $user->password =  bcrypt($passw);
+            }
             $user->email = $request->input('email');
             $user->tipo_usuario_id = $request->input('tipo_usuario_id');
             $user->unidades_pertenecientes = $request->input('unidades_pertenecientes');
@@ -121,6 +124,8 @@ class UsuarioController extends Controller
             $user->operadora = $request->input('operadora');
             $user->telefono = $request->input('telefono');
             $user->ip = $request->input('ip');
+            $user->activar_ips = $request->input('activar_ips') ? true : false;
+
             $user->save();
             return response()->json(['error' => false, 'user' => $user]);
         }

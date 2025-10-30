@@ -39,6 +39,8 @@
 
 </style>
 <style>
+
+
 footer {
   background: #f8f8f8;
   border-top: 1px solid #ddd;
@@ -72,7 +74,7 @@ Dashboard
                     <option value="" disabled selected hidden>Seleccione...</option>
                   @endif
                   @foreach ($cooperativas as $cooperativa)
-                    <option data-bloques="{{ json_encode($cooperativa->pto_bloques)}}" value="{{ $cooperativa->_id }}">
+                    <option data-bloques="{{ json_encode($cooperativa->pto_bloques)}}" data-trafico="{{ json_encode($cooperativa->trafico)}}" value="{{ $cooperativa->_id }}">
                       {{ $cooperativa->descripcion }}
                     </option>
                   @endforeach
@@ -928,47 +930,180 @@ $("#velocimetro").myfunc({divFact:10});
 
     var guayaquil = {lat: -2.1775151734461176, lng: -79.91094589233398};
 
-    function initMap() {
-        // map = new google.maps.Map(document.getElementById('map'), {
-        //     center: guayaquil,
-        //     scrollwheel: true,
-        //     zoom: 13
-        // });
 
+
+
+    function initMap() {
+        // === Mapa base de Google (ROADMAP) ===
         map = new google.maps.Map(document.getElementById('map'), {
             center: guayaquil,
             scrollwheel: true,
             zoom: 13,
-            mapTypeId: "OSM",
+            mapTypeId: google.maps.MapTypeId.ROADMAP, 
             mapTypeControl: true,
-            streetViewControl: true});
+            streetViewControl: true
+        });
+        map.setMapTypeId("OSM");
 
+        // === Agregar OpenStreetMap como tipo adicional ===
         map.mapTypes.set("OSM", new google.maps.ImageMapType({
             getTileUrl: function(coord, zoom) {
                 var tilesPerGlobe = 1 << zoom;
                 var x = coord.x % tilesPerGlobe;
-                if (x < 0) {
-                    x = tilesPerGlobe+x;}
-                return "http://tile.openstreetmap.org/" + zoom + "/" + x + "/" + coord.y + ".png";
+                if (x < 0) x = tilesPerGlobe + x;
+                return "https://tile.openstreetmap.org/" + zoom + "/" + x + "/" + coord.y + ".png";
             },
             tileSize: new google.maps.Size(256, 256),
             name: "OpenStreetMap",
-            maxZoom: 18
+            maxZoom: 19
         }));
-        var address = document.getElementById('address');
+
+        map.setOptions({
+            mapTypeControlOptions: {
+                mapTypeIds: [
+                    google.maps.MapTypeId.ROADMAP,
+                    google.maps.MapTypeId.SATELLITE,
+                    google.maps.MapTypeId.HYBRID,
+                    "OSM"
+                ]
+            }
+        });
+
+        //TRAFICO
+        var trafficLayer = new google.maps.TrafficLayer();
+        var trafficVisible = false;
+
+        var trafficControlDiv = document.createElement("div");
+        trafficControlDiv.style.margin = "10px";
+        trafficControlDiv.style.display = "none"; // Oculto por defecto
+
+        var trafficButton = document.createElement("div");
+        trafficButton.innerHTML = `
+            <div style="
+                display:flex;
+                align-items:center;
+                gap:6px;
+                background:#ffffff;
+                color:#202124;
+                padding:10px 14px;
+                border-radius:12px;
+                box-shadow:0 4px 10px rgba(0,0,0,0.15);
+                cursor:pointer;
+                font-family:'Roboto', Arial, sans-serif;
+                font-size:13px;
+                font-weight:600;
+                transition:all .25s ease;
+                border:1px solid #dadce0;
+            ">
+                <span id="trafficIcon">🚦</span>
+                <span id="trafficText">Ver tráfico</span>
+            </div>
+        `;
+        var btn = trafficButton.firstElementChild;
+
+        btn.onmouseover = () => { btn.style.boxShadow = "0 6px 14px rgba(0,0,0,0.25)"; btn.style.transform="translateY(-2px)"; };
+        btn.onmouseout = () => { btn.style.boxShadow = "0 4px 10px rgba(0,0,0,0.15)"; btn.style.transform="translateY(0)"; };
+
+        btn.onclick = () => {
+            trafficVisible = !trafficVisible;
+            var icon = document.getElementById("trafficIcon");
+            var text = document.getElementById("trafficText");
+
+            if (trafficVisible) {
+                map.setMapTypeId(google.maps.MapTypeId.ROADMAP);
+                trafficLayer.setMap(map);
+                const trafficOnSVG = `
+                <svg width="18" height="18" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                <!-- Marco activo -->
+                <rect width="48" height="48" rx="10" fill="#e0f2f1" stroke="#00838f" stroke-width="3"/>
+
+                <!-- Fondo gris ciudad -->
+                <rect x="4" y="4" width="40" height="40" rx="8" fill="#b0bec5"/>
+
+                <!-- Calle horizontal gris -->
+                <rect x="4" y="21" width="40" height="6" rx="3" fill="#eceff1"/>
+
+                <!-- Calle vertical gris -->
+                <rect x="21" y="4" width="6" height="40" rx="3" fill="#eceff1"/>
+
+                <!-- Verde -->
+                <rect x="22" y="4" width="4" height="15" rx="2" fill="#00c853"/>
+
+                <!-- Amarillo -->
+                <rect x="22" y="19" width="4" height="10" rx="2" fill="#ffea00"/>
+
+                <!-- Rojo -->
+                <rect x="22" y="29" width="4" height="15" rx="2" fill="#d50000"/>
+                </svg>
+                `;
+                icon.innerHTML  = trafficOnSVG;   
+                text.textContent = "Vista tráfico";
+                btn.style.background = "#fce8e6";
+                btn.style.color = "#d93025";
+                btn.style.border = "3px solid #f28b82";
+                
+            } else {
+                trafficLayer.setMap(null);
+                map.setMapTypeId("OSM");
+
+                icon.textContent = "🚦";
+                text.textContent = "Ver tráfico";
+                btn.style.background = "#ffffff";
+                btn.style.color = "#202124";
+                btn.style.border = "1px solid #dadce0";
+            }
+        };
+
+        trafficControlDiv.appendChild(trafficButton);
+        map.controls[google.maps.ControlPosition.TOP_RIGHT].push(trafficControlDiv);
+        window.trafficControlDiv = trafficControlDiv;
+
+
+      // === Buscador de direcciones ===
         var searchBox = new google.maps.places.SearchBox(address);
         map.controls[google.maps.ControlPosition.TOP_LEFT].push(address);
-        searchBox.addListener('places_changed', function () {
+
+        let searchMarker = null; // marcador único
+        let bounds = new google.maps.LatLngBounds();
+
+        searchBox.addListener('places_changed', function() {
+
             var places = searchBox.getPlaces();
-            if (places.length == 0) 
-                return;
+            if (!places || places.length === 0) return;
+
+            // limpiar marcador anterior
+            if (searchMarker) {
+                searchMarker.setMap(null);
+            }
+
+            // Limpiar bounds si quieres resetear
+            bounds = new google.maps.LatLngBounds();
+
             places.forEach(function(place) {
-                if (place.geometry) {
-                    var location = place.geometry.location;
-                    map.setCenter(location);
+                if (!place.geometry || !place.geometry.location) return;
+
+                // Crear marcador como Google Maps hace normalmente
+                searchMarker = new google.maps.Marker({
+                    map: map,
+                    position: place.geometry.location,
+                    title: place.name,
+                    animation: google.maps.Animation.DROP
+                });
+
+                // Ajustar mapa al lugar encontrado
+                if (place.geometry.viewport) {
+                    bounds.union(place.geometry.viewport);
+                } else {
+                    bounds.extend(place.geometry.location);
                 }
             });
+
+            map.fitBounds(bounds);
+            map.setZoom(16); // puedes ajustar o quitar
         });
+
+
+        // === Líneas base ===
         line = new google.maps.Polyline({
             geodesic: true,
             strokeColor: '#2ecc71',
@@ -989,37 +1124,38 @@ $("#velocimetro").myfunc({divFact:10});
         map.controls[google.maps.ControlPosition.TOP_RIGHT].push(label_hora_mapa);
         $("#lbl_hora_mapa").text("");
 
+        // === Configuración según tipo de usuario ===
         @if(isset($id_coop))
-        //console.log('coop');
-          document.getElementById('cooperativa').value='{{$id_coop}}';
-	      setUnidadesOnMap('{{$id_coop}}',true);
-		  setInterval(setUnidadesOnMap,30000,'{{$id_coop}}');
+            document.getElementById('cooperativa').value = '{{$id_coop}}';
+            setUnidadesOnMap('{{$id_coop}}', true);
+            setInterval(setUnidadesOnMap, 30000, '{{$id_coop}}');
         @endif
 
         @if(Auth::user()->tipo_usuario->valor==2 || Auth::user()->tipo_usuario->valor==3 || Auth::user()->tipo_usuario->valor==4
-        || Auth::user()->tipo_usuario->valor==5)
-		   setUnidadesOnMap('',true);
-          setInterval(setUnidadesOnMap,30000,null);
+            || Auth::user()->tipo_usuario->valor==5)
+            setUnidadesOnMap('', true);
+            setInterval(setUnidadesOnMap, 30000, null);
         @endif
 
         @if(Auth::user()->tipo_usuario->valor != 1)
-           document.getElementById('div-cooperativa').style="display:none;";
+            document.getElementById('div-cooperativa').style = "display:none;";
         @endif
 
+        // === Polilíneas de rutas ===
         polyline = new google.maps.Polyline({
             path: path,
             geodesic: true,
             strokeColor: '#2ecc71',
             strokeOpacity: 1.0,
             strokeWeight: 4
-            });
+        });
         polyline2 = new google.maps.Polyline({
             path: path,
             geodesic: true,
             strokeColor: '#fff',
             strokeOpacity: 1.0,
             strokeWeight: 2
-            });
+        });
 
         polyline_general = new google.maps.Polyline({
             path: path,
@@ -1027,90 +1163,89 @@ $("#velocimetro").myfunc({divFact:10});
             strokeColor: '#2ecc71',
             strokeOpacity: 1.0,
             strokeWeight: 4
-            });
+        });
         polyline2_general = new google.maps.Polyline({
             path: path,
             geodesic: true,
             strokeColor: '#fff',
             strokeOpacity: 1.0,
             strokeWeight: 2
-            });
+        });
 
         var icono_bus = {
-        url: '{{url("/images/autobu.png")}}',
-        scale: 1,
-        labelOrigin: new google.maps.Point(4, 25)
+            url: '{{url("/images/autobu.png")}}',
+            scale: 1,
+            labelOrigin: new google.maps.Point(4, 25)
         };
         var icono_flecha;
-        var ii,jj;
-        var colorFlecha='red';
+        var ii, jj;
+        var colorFlecha = 'red';
 
         map.addListener('zoom_changed', function() {
-            if(map.getZoom() <=13 ) 
-                    for(ii=0;ii<array_marcador.length;ii++)                        
+            if (map.getZoom() <= 13) {
+                for (ii = 0; ii < array_marcador.length; ii++)
                     array_marcador[ii].setIcon(icono_bus);
-            else
-            {
-                if(map.getZoom()>13)
-                {
-                    for(ii=0;ii<array_marcador.length;ii++)
-                        {
-                                
-                            if (array_marcador[ii].sentido === 'i' || array_marcador[ii].sentido === 'r') {
-                                colorFlecha = (array_marcador[ii].sentido === 'r') ? '#0022AB' : '#00AA88';
-                            }
-
-                            for(jj=0;jj<array_marcador_angulos.length;jj++)
-                            {
-                                if(array_marcador_angulos[jj].indice==ii)
-                                {
-                                    icono_flecha= {
-                                        path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
-                                            scale: 3,
-                                            fillColor: colorFlecha, 
-                                            fillOpacity: 1.0,   
-                                            strokeColor: '#000000',  
-                                            strokeOpacity: 1.0,
-                                            strokeWeight: 1.0,
-                                            rotation:array_marcador_angulos[jj].rotacion,
-                                            labelOrigin: new google.maps.Point(1, 10)
-                                    }
-                                }
-                            }
-                            array_marcador[ii].setIcon(icono_flecha);
+            } else {
+                if (map.getZoom() > 13) {
+                    for (ii = 0; ii < array_marcador.length; ii++) {
+                        if (array_marcador[ii].sentido === 'i' || array_marcador[ii].sentido === 'r') {
+                            colorFlecha = (array_marcador[ii].sentido === 'r') ? '#0022AB' : '#00AA88';
                         }
-
-                }
-            }
-
-            if(map.getZoom() >= 15 && map.getZoom() < 18){
-                polyline.setOptions({strokeWeight: 13});
-                polyline2.setOptions({strokeWeight: 2});
-                for(i=0;i<arrayPoly.length;i++){
-                    arrayPoly[i].setOptions({strokeWeight: 13});
-                    arrayPoly2[i].setOptions({strokeWeight: 2});
-                }
-               // polyline_general.setOptions({strokeWeight: 13});
-                //polyline2_general.setOptions({strokeWeight: 2});
-            }
-            else{
-                if(map.getZoom() >= 18){
-                    if(map.getZoom() > 18){
-                        polyline.setOptions({strokeWeight: 20});
-                        polyline2.setOptions({strokeWeight: 3});
-                        for(i=0;i<arrayPoly.length;i++){
-                            arrayPoly[i].setOptions({strokeWeight: 20});
-                            arrayPoly2[i].setOptions({strokeWeight: 3});
+                        for (jj = 0; jj < array_marcador_angulos.length; jj++) {
+                            if (array_marcador_angulos[jj].indice == ii) {
+                                icono_flecha = {
+                                    path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+                                    scale: 3,
+                                    fillColor: colorFlecha,
+                                    fillOpacity: 1.0,
+                                    strokeColor: '#000000',
+                                    strokeOpacity: 1.0,
+                                    strokeWeight: 1.0,
+                                    rotation: array_marcador_angulos[jj].rotacion,
+                                    labelOrigin: new google.maps.Point(1, 10)
+                                };
+                            }
                         }
-                       // polyline_general.setOptions({strokeWeight: 20});
-                       // polyline2_general.setOptions({strokeWeight: 3});
+                        array_marcador[ii].setIcon(icono_flecha);
                     }
                 }
             }
-        }); 
 
-        $('#menu_toggle').trigger('click');       
+            if (map.getZoom() >= 15 && map.getZoom() < 18) {
+                polyline.setOptions({ strokeWeight: 13 });
+                polyline2.setOptions({ strokeWeight: 2 });
+                for (i = 0; i < arrayPoly.length; i++) {
+                    arrayPoly[i].setOptions({ strokeWeight: 13 });
+                    arrayPoly2[i].setOptions({ strokeWeight: 2 });
+                }
+            } else if (map.getZoom() >= 18) {
+                if (map.getZoom() > 18) {
+                    polyline.setOptions({ strokeWeight: 20 });
+                    polyline2.setOptions({ strokeWeight: 3 });
+                    for (i = 0; i < arrayPoly.length; i++) {
+                        arrayPoly[i].setOptions({ strokeWeight: 20 });
+                        arrayPoly2[i].setOptions({ strokeWeight: 3 });
+                    }
+                }
+            }
+        });
+
+        $('#menu_toggle').trigger('click');
     }
+
+    function mostrarBotonTrafico() {
+        if (window.trafficControlDiv) {
+            window.trafficControlDiv.style.display = "block";
+        }
+    }
+
+    function ocultarBotonTrafico() {
+        if (window.trafficControlDiv) {
+            window.trafficControlDiv.style.display = "none";
+        }
+    }
+
+
 
     function verifyGoogleMSG(){
         var googlemaps=document.getElementById('map');
@@ -1587,6 +1722,15 @@ $("#velocimetro").myfunc({divFact:10});
         var unidad_e=0;
         var ul=$('#ul_unidades');
         let bloques = $('#cooperativa').find("option:selected").data("bloques");
+        let trafico = $('#cooperativa').find("option:selected").data("trafico");
+
+        if (trafico) {
+            mostrarBotonTrafico();
+        } else {
+            ocultarBotonTrafico();
+        }
+
+
         if(data.unidades.length==0)
         {
             ul.empty();
@@ -2574,6 +2718,6 @@ $("#velocimetro").myfunc({divFact:10});
 
 <script src="https://developers.google.com/maps/documentation/javascript/examples/markerclusterer/markerclusterer.js">
     </script>
-<script src="https://maps.googleapis.com/maps/api/js?key=&libraries=places,geometry&callback=initMap"
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDfiiN9arSm8MnKyU4ELDSZoj9QV19bMCg&libraries=places,geometry&callback=initMap"
     async defer></script>
 @endsection

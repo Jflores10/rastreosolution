@@ -132,6 +132,8 @@
                                 @else
                                     <input onclick="finalizarTodos();" id="btnRecalculoAll" type="button"
                                         value="Recalcular los Despachos" class="btn btn-success" />
+                                    <button onclick="eliminarTodos();" id="btn_eliminar_despacho" type="button"
+                                         class="btn btn-danger"><i class="fa fa-trash"></i> Eliminar Despachos</button>
                                 @endif
                             </div>
                         </form>
@@ -505,6 +507,31 @@
             form.action = "{{ url('/despachos/search') }}";
             form.submit();
         }
+
+        function eliminarTodos() {
+            if (confirm("¿Está seguro que desea eliminar los despachos?")) {
+                var form = document.getElementById('formDespacho');
+                form.action = "{{ url('despachos/eliminar') }}";
+                $('#progress').modal('show');
+
+                $.post(form.action, $('#formDespacho').serialize(), function (data) {
+                    if (!data.error) {
+                        alert(data.mensaje);
+                    } else {
+                        alert("Ocurrió un error al eliminar los despachos.");
+                    }
+
+                }).fail(function (xhr) {
+                    console.error(xhr.responseText);
+
+                }).always(function () {
+                    $('#progress').modal('hide');
+                    location.reload(true); // <- descomenta si quieres recargar
+                });
+            }
+        }
+
+
 
         function finalizarTodos() {
             if (confirm("¿Seguro que desea " + document.getElementById("btnRecalculoAll").value + " ?")) {

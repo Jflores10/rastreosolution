@@ -410,7 +410,9 @@ class DespachoController extends Controller
             'unidades' => 'required|array'
         ]);
         $desde = new Carbon($request->input('desde') . ' 00:00:00');
+        $desde1=new Carbon($request->input('desde') . ' 00:00:00');;
         $hasta = new Carbon($request->input('hasta') . '23:59:59');
+        $hasta1=new Carbon($request->input('hasta') . '23:59:59');;
         date_sub($desde, date_interval_create_from_date_string('5 hours'));
         date_sub($hasta, date_interval_create_from_date_string('5 hours'));
         $tipo = $request->input('tipo');
@@ -446,7 +448,7 @@ class DespachoController extends Controller
         $despachos->setPath($request->fullUrl());
         return view('panel.despachos', [
             'cooperativas' => $cooperativas, 'despachos' => $despachos,
-            'tipo' => $tipo, 'desde' => $desde, 'hasta' => $hasta, 'cooperativa_search' => $request->input('cooperativa'),
+            'tipo' => $tipo, 'desde' => $desde1, 'hasta' => $hasta1, 'cooperativa_search' => $request->input('cooperativa'),
             'unidades_search' => $request->input('unidades'), 'filtro_fecha' => $request->input('filtro_fecha')
         ]);
     }
@@ -1497,6 +1499,58 @@ class DespachoController extends Controller
 
         return response()->json(['error' => false, 'despachos' => $array_despachos]);
     }
+
+    public function eliminarTodo(Request $request)
+    {
+        set_time_limit(0);
+        $this->validate($request, [
+            'unidades' => 'required|array',
+            'desde' => 'required|date',
+            'hasta' => 'required|date',
+            'tipo' => 'required|size:1'
+        ]);
+        $d = new Carbon($request->input('desde') . ' 00:00:00');
+        date_sub($d, date_interval_create_from_date_string('5 hours'));
+        $h = new Carbon($request->input('hasta') . ' 23:59:59');
+        date_sub($h, date_interval_create_from_date_string('5 hours'));
+
+        // === Determinar estado por tipo ===
+        $tipo = strtoupper($request->input('tipo'));
+        if ($tipo === 'L') {
+            $estado = 'P';
+        } elseif ($tipo === 'F') {
+            $estado = 'C';
+        } else {
+            $estado = 'I';
+        }
+
+
+        $unidades = $request->input('unidades');
+
+        $query = Despacho::where('estado', $estado)
+        ->where('fecha', '>=', $d)
+        ->where('fecha', '<=', $h)
+        ->whereIn('unidad_id', $unidades);
+
+        $ids = $query->pluck('_id')->toArray();
+        if (empty($ids)) {
+            return response()->json([
+                'error'   => false,
+                'mensaje' => 'No se encontraron despachos en el rango indicado.'
+            ]);
+        }
+          // === Eliminar en bloque ===
+        $totalEliminados = Despacho::whereIn('_id', $ids)->delete();
+
+        return response()->json([
+            'error'      => false,
+            'eliminados' => $totalEliminados,
+            'mensaje'    => 'Se eliminaron ' . $totalEliminados . ' despachos correctamente.'
+        ]);
+
+    }
+
+
 
     public function getUltimoDespacho($unidad_id, $cooperativa_id)
     {

@@ -209,10 +209,18 @@ Cooperativas
                         </label>
                     </div>
                 </div>
-                 <div class="form-group">
+                <div class="form-group">
                     <div class="checkbox">
                         <label>
                             <input type="checkbox" name="distancia_haversine" id="distancia_haversine" /> Calculo de distancia por Haversine
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <div class="checkbox">
+                        <label>
+                            <input type="checkbox" name="trafico" id="trafico" /> Activar Tráfico
                         </label>
                     </div>
                 </div>

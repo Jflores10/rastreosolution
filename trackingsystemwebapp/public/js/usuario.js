@@ -79,6 +79,7 @@ function editarUsuario(url,url2, tipo_usuario_valor)
     var password = document.getElementById('password');
     var tipo_usuario_id = document.getElementById('tipo_usuario_id');
     var ip = document.getElementById('ip');
+    let activar_ips = document.getElementById('activar_ip');
 
     $.get(url, function ( data ) {
         cleanForm(tipo_usuario_valor);
@@ -90,6 +91,10 @@ function editarUsuario(url,url2, tipo_usuario_valor)
         document.getElementById('operadora').value = (data.operadora != undefined)?data.operadora:'';
         document.getElementById('telefono').value = (data.telefono != undefined)?data.telefono:'';
         ip.value= (data.ip != undefined)?data.ip:'';
+        activar_ips.checked = data.activar_ips??false;
+         $('#ip').prop('readonly', !activar_ips.checked);
+
+
        /* if(tipo_usuario_valor=='1')
         {
            
@@ -291,7 +296,7 @@ function actualizarUsuario(url, id_cooperativa, tipo_usuario_valor)
     var span_correo_electronico = document.getElementById('span_correo_electronico');
     var span_contraseña = document.getElementById('span_contraseña');
     var span_tipo_usuario = document.getElementById('span_tipo_usuario');
-
+    var activar_ips = document.getElementById('activar_ip').checked ? 1 : 0;
 
     div_nombre.classList.remove('has-error');
     div_correo_electronico.classList.remove('has-error');
@@ -329,7 +334,8 @@ function actualizarUsuario(url, id_cooperativa, tipo_usuario_valor)
             correo : document.getElementById('correo').value,
             operadora : document.getElementById('operadora').value,
             telefono : document.getElementById('telefono').value,
-            ip:ip.value
+            ip:ip.value,
+            activar_ips: activar_ips
         };
     else
         param={
@@ -344,7 +350,8 @@ function actualizarUsuario(url, id_cooperativa, tipo_usuario_valor)
             correo : document.getElementById('correo').value,
             operadora : document.getElementById('operadora').value,
             telefono : document.getElementById('telefono').value,
-            ip:ip.value
+            ip:ip.value,
+            activar_ips: activar_ips
         };
     $.post(url, param
        , function( data ) {
