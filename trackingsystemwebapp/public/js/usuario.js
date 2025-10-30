@@ -93,8 +93,6 @@ function editarUsuario(url,url2, tipo_usuario_valor)
         ip.value= (data.ip != undefined)?data.ip:'';
         activar_ips.checked = data.activar_ips??false;
          $('#ip').prop('readonly', !activar_ips.checked);
-
-
        /* if(tipo_usuario_valor=='1')
         {
            
@@ -426,6 +424,8 @@ function cleanForm() {
     document.getElementById('operadora').value = '';
     document.getElementById('telefono').value = '';
     document.getElementById('ip').value = '';
+    document.getElementById('activar_ip').checked=true;
+    
 
     var div_cooperativa=  $('#div-cooperativa');
     div_cooperativa.empty();
