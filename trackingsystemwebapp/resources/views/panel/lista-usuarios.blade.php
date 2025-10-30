@@ -208,13 +208,7 @@
                                 <label for="ip_sep">Separar las ips por ';'</label>
                             </div>
 
-
-                            <div class="form-group">
-                                <input name="ip" id="ip" class="form-control" type="text" />
-                                <label for="ip_sep">Separar las ips por ';'</label>
-                            </div>
-
-
+                    
                             <div class="form-group">
                                 <label for="operadora">Operadora</label>
                                 <select name="operadora" id="operadora" class="form-control">
