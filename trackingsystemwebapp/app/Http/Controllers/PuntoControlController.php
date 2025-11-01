@@ -56,6 +56,19 @@ class PuntoControlController extends Controller
                 ->get());
         }
     }
+
+    public function getPuntosImaginarios($cooperativa_id)
+    {
+        $puntos = PuntoControl::where('pto_imaginario', true)
+                    ->where('cooperativa_id', $cooperativa_id)
+                    ->get();
+
+        return response()->json([
+            'status' => 'success',
+            'data'   => $puntos
+        ]);
+    }
+
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -107,6 +120,9 @@ class PuntoControlController extends Controller
             $puntoData['radio'] = null;
             $puntoData['poligono'] = $request->input('poligono');
         }
+
+        $puntoData['pto_imaginario'] = $request->input('pto_imaginario') == 'true'?true:false;
+
 
         $punto_control = PuntoControl::create($puntoData);
 
@@ -259,6 +275,8 @@ class PuntoControlController extends Controller
                 $punto_control->poligono = $request->input('poligono');
                
             }
+            $punto_control->pto_imaginario = $request->input('pto_imaginario') == 'true'?true:false;
+
             $punto_control->save();
             return response()->json(['error' => false, 'punto_control' => $punto_control]);
         }

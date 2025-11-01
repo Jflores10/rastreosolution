@@ -220,7 +220,7 @@ Cooperativas
                 <div class="form-group">
                     <div class="checkbox">
                         <label>
-                            <input type="checkbox" name="trafico" id="trafico" /> Activar Tráfico
+                            <input type="checkbox" name="trafico" id="trafico" /> Activar Tráfico y POI
                         </label>
                     </div>
                 </div>

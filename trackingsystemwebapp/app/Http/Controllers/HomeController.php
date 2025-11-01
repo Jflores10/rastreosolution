@@ -20,7 +20,7 @@ use Illuminate\Database\Eloquent\Collection;
 use App\PuntoControlAtmOficial;
 use App\RutaAtmOficial;
 use App\Bitacora;
-
+use GuzzleHttp\Client;  
 class HomeController extends Controller
 {
     public function showEnLinea()
@@ -29,6 +29,76 @@ class HomeController extends Controller
         return view('panel.reporte-linea', [
             'cooperativas' => $cooperativas
         ]);
+    }
+
+    public function poi(Request $request){
+        $lat = $request->lat;
+        $lng = $request->lng;
+        $type = $request->type;
+        $radius = 6000; // Metros
+
+        $key = 'AIzaSyDfiiN9arSm8MnKyU4ELDSZoj9QV19bMCg'; 
+
+        $url = "https://places.googleapis.com/v1/places:searchNearby";
+
+        $body = [
+            "includedTypes" => [$type],
+            "maxResultCount" => 20,
+            "locationRestriction" => [
+                "circle" => [
+                    "center" => [
+                        "latitude" => (float)$lat,
+                        "longitude" => (float)$lng
+                    ],
+                    "radius" => $radius
+                ]
+            ]
+        ];
+
+        $client = new Client();
+        $resp = $client->post($url, [
+            'headers' => [
+                "Content-Type" => "application/json",
+                "X-Goog-Api-Key" => $key,
+                "X-Goog-FieldMask" => "places.displayName,places.location,places.formattedAddress"
+            ],
+            'json' => $body
+        ]);
+
+        return response($resp->getBody(), 200)
+            ->header('Content-Type', 'application/json');   
+    }
+
+    public function osm()
+    {
+        $client = new Client();
+        
+        $query = '
+        [out:json][timeout:60];
+        area["ISO3166-1"="EC"]->.ecuador;
+        (
+          node["highway"="speed_camera"](area.ecuador);
+        );
+        out body;
+        ';
+
+        $res = $client->post('https://overpass-api.de/api/interpreter', [
+            'body' => $query
+        ]);
+
+        $json = json_decode($res->getBody(), true);
+
+        $radars = [];
+        foreach($json['elements'] as $el){
+            if(isset($el['lat']) && isset($el['lon'])){
+                $radars[] = [
+                    'lat' => $el['lat'],
+                    'lng' => $el['lon']
+                ];
+            }
+        }
+
+        return response()->json($radars);
     }
     
     public function en_linea($ruta)
@@ -163,6 +233,7 @@ class HomeController extends Controller
         }
         return view('home', ['cooperativas' => $cooperativas, 'unidades' => $unidades, 'rutas'=>$rutas,'rutas_atm'=>$rutas_atm, 'atm'=>$despachos_atm]);
     }
+
     
     public function cargarPuntosControl(Request $request)
     {

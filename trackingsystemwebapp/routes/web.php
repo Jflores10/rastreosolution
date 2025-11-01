@@ -62,8 +62,7 @@ Route::group(['middleware' => ['auth', 'usuario']], function () {
     Route::post('puntos-de-control-bloques', 'PuntoControlController@store_bloque');
     Route::put('puntos-de-control-bloques/{id}', 'PuntoControlController@update_bloque');
     Route::post('puntos-de-control/sync', 'PuntoControlController@actualizarBloques');
-
-
+    Route::get('puntos-de-control/list-imaginarios/{id}', 'PuntoControlController@getPuntosImaginarios');
 
 
     Route::group(['prefix' => 'puntos-de-control-atm'], function () {
@@ -192,6 +191,11 @@ Route::group(['middleware' => ['auth', 'usuario']], function () {
     Route::get('/comandos/enviar/{id}', 'ComandosController@enviar_comando');
     Route::get('/es-puntoscontrol', 'RecorridoController@index');
     Route::post('/es-puntoscontrol/listar', 'RecorridoController@listar');
+
+    Route::get('/radares', 'HomeController@osm');
+    Route::get('/poi', 'HomeController@poi');
+
+
 
 
 

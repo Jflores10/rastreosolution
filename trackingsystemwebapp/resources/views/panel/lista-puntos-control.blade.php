@@ -176,6 +176,13 @@ Puntos de control
                         <input name="pdi" id="pdi" class="form-control" type="number" />
                         <span class="help-block" id="span_pdi"></span>
                     </div>
+                    <div class="form-group">
+                      <div class="checkbox">
+                        <label>
+                          <input type="checkbox" id="pto_imaginario" name="pto_imaginario"  /> Punto Imaginario
+                        </label>
+                      </div>
+                    </div>
                 </div>
                 <div class="col-lg-6 col-md-6 col-sm-12">
                     <div class="form-group" id="div-cooperativa" {{ (!isset($id_cooperativa))?'style=display:none;':'' }}>
@@ -277,6 +284,7 @@ Puntos de control
                                     </label>
                                 </div>
                             </div>
+                            
                             <div class="form-group" id="div_entrada">
                                 <label for="entrada">Evento de entrada</label>
                                 <input readonly type="text" name="entrada" id="entrada" class="form-control" />
@@ -473,8 +481,9 @@ Puntos de control
     function validarPdi() {
         var tipo_mar = $("input[name='tipo_mar']:checked").val();
         var val = parseInt($("#pdi").val(), 10);
-
-        if (tipo_mar === "2") { // Polígono
+        var pto_imaginario = document.getElementById('pto_imaginario');
+        console.log(pto_imaginario.checked)
+        if (tipo_mar === "2" && !pto_imaginario.checked) { // Polígono
             if (isNaN(val) || val < 20 || val > 39) {
                 $("#span_pdi").text("Para Polígono, el PDI debe estar entre 20 y 39.");
                 $("#div-pdi").addClass("has-error");
@@ -493,6 +502,7 @@ Puntos de control
     }
 
     // Validar al salir del input
+
     $("#pdi").on("blur", validarPdi);
 
     // Revalidar cuando cambie tipo_mar

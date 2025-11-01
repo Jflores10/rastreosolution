@@ -1,6 +1,47 @@
 @extends('layouts.app')
 @section('styles')
 <style>
+#poi-bar {
+    position: absolute;
+    top: 180px;
+    right: 30px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column; /* ✅ Vertical */
+    background: rgba(255,255,255,0.95);
+    padding: 8px;
+    border-radius: 10px;
+    gap: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,.15);
+    font-family: Arial, sans-serif;
+}
+
+.poi-btn {
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    background: #fff;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: bold;
+    white-space: nowrap;
+    text-align: left;
+}
+
+.poi-btn:hover {
+    background: #e6f0ff;
+}
+
+/* Activo */
+.poi-btn.active {
+    background: #0078ff;
+    color: white;
+    border: 1px solid #004ea8;
+}
+
+</style>
+
+<style>
     #map
     {
         width : 100%;
@@ -155,6 +196,13 @@ Dashboard
             </div>
             <input class="form-control" type="text" placeholder="Escriba una referencia..." id="address" name="address" style="margin-bottom:8px;" />
             <!-- MAPA -->
+             <div id="poi-bar" style="display:none">
+                <button class="poi-btn" data-type="police">🚓 Policía</button>
+                <button class="poi-btn" data-type="fire_station">🚒 Bomberos</button>
+                <button class="poi-btn" data-type="gas_station">⛽ Gasolineras</button>
+                <button class="poi-btn" data-type="hospital">🏥 Hospitales</button>
+            </div>
+
             <div id="map" style="width:100%; height:calc(93vh - 184px); border:1px solid #ccc; position:relative; z-index:1;"></div>
 
             <!-- OVERLAY -->
@@ -906,6 +954,24 @@ $("#velocimetro").myfunc({divFact:10});
         }, "json");
     }
 
+    async function loadOSMRadars() {
+    const res = await fetch('/radares');
+    const radars = await res.json();
+
+    radars.forEach(r => {
+        new google.maps.Marker({
+            map: map,
+            position: {lat: r.lat, lng: r.lng},
+            icon: {
+                url: "/images/placeholder.png",
+                scaledSize: new google.maps.Size(26, 26)
+            },
+            title: "Radar de velocidad"
+        });
+    });
+}
+
+
     function sortJsonArrayByProperty(objArray, prop, direction){
         if (arguments.length<2) throw new Error("sortJsonArrayByProp requires 2 arguments");
         var direct = arguments.length>2 ? arguments[2] : 1; //Default to ascending
@@ -924,13 +990,122 @@ $("#velocimetro").myfunc({divFact:10});
         }
     }
 
+    let poiMarkers = {
+        police: [],
+        fire_station: [],
+        gas_station: [],
+        hospital: []
+    };
+
+    const poiIcons = {
+    police:       "https://img.icons8.com/color/96/policeman-male.png",     // Policía
+    fire_station: "https://img.icons8.com/color/96/fire-truck.png",     // Bomberos
+    gas_station:  "https://img.icons8.com/color/96/gas-station.png",    // Gasolinera
+    hospital:     "https://img.icons8.com/color/96/hospital-3.png"      // Hospital
+    };
+
+
+    async function loadPOI(type) {
+        const center = map.getCenter();
+        const lat = center.lat();
+        const lng = center.lng();
+
+        const resp = await fetch(`/poi?lat=${lat}&lng=${lng}&type=${type}`);
+        const data = await resp.json();
+
+        if (!data.places) return;
+
+        data.places.forEach(place => {
+        
+        const name = place.displayName?.text || place.displayName || "Sitio";
+        const address = place.formattedAddress?.text || place.formattedAddress || "Dirección no disponible";
+
+        const marker = new google.maps.Marker({
+            map,
+            position: {
+                lat: place.location.latitude,
+                lng: place.location.longitude
+            },
+            title: String(name),
+            icon: {
+                url: poiIcons[type],
+                scaledSize: new google.maps.Size(26, 26), 
+                anchor: new google.maps.Point(12, 12) 
+            }
+        });
+
+        const infowindow = new google.maps.InfoWindow({
+            content: `<b>${name}</b>`
+        });
+
+        marker.addListener("click", () => infowindow.open(map, marker));
+            // Guardar en tu array para limpieza
+            poiMarkers[type].push(marker);
+        });
+    }
+
+    function clearPOI(type) {
+        poiMarkers[type].forEach(m => m.setMap(null));
+        poiMarkers[type] = [];
+    }
+
+    async function loadPuntosImaginarios(cooperativa_id) {
+        try {
+            const resp = await fetch(`puntos-de-control/list-imaginarios/${cooperativa_id}`);
+            const data = await resp.json();
+
+            if (!data.data || data.data.length === 0) {
+                console.warn("No hay puntos imaginarios.");
+                return;
+            }
+            console.log(data)
+
+            data.data.forEach(p => {
+                const name = p.descripcion || "Punto Imaginario";
+                const lat = parseFloat(p.latitud);
+                const lng = parseFloat(p.longitud);
+
+                const marker = new google.maps.Marker({
+                    map,
+                    position: { lat, lng },
+                    title: String(name),
+                    icon: {
+                        url: "https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f4cd.svg", // Ícono externo no circular
+                        scaledSize: new google.maps.Size(30, 30),
+                        anchor: new google.maps.Point(12, 32)
+                    }
+                });
+
+                const infowindow = new google.maps.InfoWindow({
+                    content: `
+                        <div>
+                            <b>${name}</b><br>
+                        </div>
+                    `
+                });
+
+                marker.addListener("click", () => infowindow.open(map, marker));
+
+                // Guardar para limpieza si manejas arrays globales
+                markersPuntosImaginarios.push(marker);
+            });
+
+        } catch (error) {
+            console.error("Error cargando puntos imaginarios:", error);
+        }
+    }
+    
+    let markersPuntosImaginarios = [];
+    function clearPuntosImaginarios() {
+        markersPuntosImaginarios.forEach(marker => marker.setMap(null));
+        markersPuntosImaginarios = [];
+    }
+
 
     var array_marcador=[];
     var array_marcador_angulos=[];
 
     var guayaquil = {lat: -2.1775151734461176, lng: -79.91094589233398};
-
-
 
 
     function initMap() {
@@ -1229,8 +1404,24 @@ $("#velocimetro").myfunc({divFact:10});
                 }
             }
         });
-
+        //loadOSMRadars();
         $('#menu_toggle').trigger('click');
+
+         // === BOTONES DE POI ===
+        document.querySelectorAll("#poi-bar .poi-btn").forEach(btn => {
+            btn.addEventListener("click", () => {
+                const type = btn.getAttribute("data-type");
+
+                if (btn.classList.contains("active")) {
+                    clearPOI(type);
+                    btn.classList.remove("active");
+                } else {    
+                    loadPOI(type);
+                    btn.classList.add("active");
+                }
+            });
+        });
+
     }
 
     function mostrarBotonTrafico() {
@@ -1244,6 +1435,15 @@ $("#velocimetro").myfunc({divFact:10});
             window.trafficControlDiv.style.display = "none";
         }
     }
+
+    function mostrarPoiBar() {
+        document.getElementById("poi-bar").style.display = "flex";
+    }
+
+    function ocultarPoiBar() {
+        document.getElementById("poi-bar").style.display = "none";
+    }
+
 
 
 
@@ -1714,6 +1914,7 @@ $("#velocimetro").myfunc({divFact:10});
 
     function appendUnidades(data)
     {
+        clearPuntosImaginarios();
         var div_unidad=  $('#div-unidad');
         var div_mensaje=  $('#div-mensaje');
         var unidad_movimiento=0;
@@ -1726,10 +1927,22 @@ $("#velocimetro").myfunc({divFact:10});
 
         if (trafico) {
             mostrarBotonTrafico();
+            mostrarPoiBar();
         } else {
             ocultarBotonTrafico();
+            ocultarPoiBar();
+
         }
 
+        if(trafico){
+            let cooperativa = $('#cooperativa').find("option:selected");
+            loadPuntosImaginarios(cooperativa.val());
+        }
+        else{
+            clearPuntosImaginarios();
+        }
+      
+        
 
         if(data.unidades.length==0)
         {
@@ -1973,7 +2186,7 @@ $("#velocimetro").myfunc({divFact:10});
                                     ((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                                     ((data.unidades[i].rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                                 sentido+'<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1);" class="fa fa-bus" style="color:#F44336"></i>&nbsp'+ 
-                                data.unidades[i].descripcion+'&nbsp&nbsp('+fecha_gps+' | <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp'+  Math.round(data.unidades[i].velocidad_actual)+')'+'&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#F44336"></i>&nbsp'+voltaje
+                                data.unidades[i].descripcion+'&nbsp&nbsp'+fecha_gps+'  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp'+  Math.round(data.unidades[i].velocidad_actual)+''+'&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#F44336"></i>&nbsp'+voltaje
                                 +'&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#F44336"></i>&nbsp'+data.unidades[i].contador_total+" | "+data.unidades[i].contador_diario
                                 +'&nbsp&nbsp&nbsp'+((data.unidades[i].is_atm !== "undefined")?((data.unidades[i].is_atm===0)?'':((data.unidades[i].is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'')):'')
                                 +'&nbsp&nbsp&nbsp|&nbsp&nbsp'
@@ -2035,7 +2248,7 @@ $("#velocimetro").myfunc({divFact:10});
                                     ((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                                     ((data.unidades[i].rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                                 sentido+'<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1);" class="fa fa-bus" style="color:#00AA88"></i>&nbsp'+ data.unidades[i].descripcion
-                                +'&nbsp&nbsp('+fecha_gps+' | <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp'+ Math.round(data.unidades[i].velocidad_actual)+')'+'&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#00AA88"></i>&nbsp'+voltaje+'&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#00AA88"></i>&nbsp'
+                                +'&nbsp&nbsp'+fecha_gps+'  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp'+ Math.round(data.unidades[i].velocidad_actual)+''+'&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#00AA88"></i>&nbsp'+voltaje+'&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#00AA88"></i>&nbsp'
                                 +data.unidades[i].contador_total+" | "+data.unidades[i].contador_diario
                                 +'&nbsp&nbsp&nbsp'+((data.unidades[i].is_atm !== "undefined")?((data.unidades[i].is_atm===0)?'':((data.unidades[i].is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'')):'')
                                 +'&nbsp&nbsp&nbsp|&nbsp&nbsp'
@@ -2071,7 +2284,7 @@ $("#velocimetro").myfunc({divFact:10});
                                 ((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                                 ((data.unidades[i].rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                                 '<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1);" class="fa fa-bus" style="color:#990073"></i>&nbsp' + data.unidades[i].descripcion 
-                                + '&nbsp&nbsp(' + fecha_gps + ' | <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(data.unidades[i].velocidad_actual) + ')' + '&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#990073"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#990073"></i>&nbsp' + data.unidades[i].contador_total 
+                                + '&nbsp&nbsp' + fecha_gps + '  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(data.unidades[i].velocidad_actual) + '' + '&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#990073"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#990073"></i>&nbsp' + data.unidades[i].contador_total 
                                 + " | " + data.unidades[i].contador_diario
                                 +'&nbsp&nbsp&nbsp'+((data.unidades[i].is_atm !== "undefined")?((data.unidades[i].is_atm===0)?'':((data.unidades[i].is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'')):'')
                                 +'&nbsp&nbsp&nbsp|&nbsp&nbsp'

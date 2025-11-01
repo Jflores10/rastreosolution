@@ -117,6 +117,9 @@ function editarPuntoControl(url, tipo_usuario_valor, is_bloque = false) {
                     $("#otro").prop("checked", true).trigger("click");
                 }
 
+                if(data.punto_control.pto_imaginario){
+                    $("#pto_imaginario").prop("checked", true);
+                }
                 if (data.punto_control.tipo_mar == 2) {
                     $("input[name='tipo_mar'][value='2']").prop("checked", true).trigger("change");
 
@@ -219,6 +222,8 @@ function crearPuntoControl(url, tipo_usuario_valor, id_cooperativa)
     var entrada = document.getElementById('entrada');
     var salida = document.getElementById('salida');
     var otro = document.getElementById('otro');
+    var pto_imaginario = document.getElementById('pto_imaginario');
+
 
 
     var div_descripcion = document.getElementById('div-descripcion');
@@ -281,7 +286,9 @@ function crearPuntoControl(url, tipo_usuario_valor, id_cooperativa)
             salida: salida.value,
             otro: otro.checked,
             tipo_mar: tipo_mar,
-            poligono: poligono
+            poligono: poligono,
+            pto_imaginario: pto_imaginario.checked,
+
         }
     }
     else
@@ -298,7 +305,9 @@ function crearPuntoControl(url, tipo_usuario_valor, id_cooperativa)
               salida: salida.value,
               otro: otro.checked,
               tipo_mar: tipo_mar,
-              poligono: poligono
+              poligono: poligono,
+              pto_imaginario: pto_imaginario.checked,
+
           }
      }
 
@@ -331,7 +340,6 @@ function guardarPuntosControl(url, tipo_usuario_valor, id_cooperativa) {
     var entrada = document.getElementById('entrada');
     var salida = document.getElementById('salida');
     var otro = document.getElementById('otro');
-
      var tipo_mar = $("input[name='tipo_mar']:checked").val(); // 1 = radio, 2 = polígono
 
     // Si es polígono, capturamos los 4 vértices
@@ -364,7 +372,7 @@ function guardarPuntosControl(url, tipo_usuario_valor, id_cooperativa) {
         salida: salida.value,
         otro: otro.checked,
         tipo_mar: tipo_mar,
-        poligono: poligono1
+        poligono: poligono1,
         //dias: dias1
     };
 
@@ -595,6 +603,7 @@ function actualizarPuntoControl(url, tipo_usuario_valor, id_cooperativa)
     div_pdi.classList.remove('has-error');
     div_entrada.classList.remove('has-error');
     div_salida.classList.remove('has-error');
+    var pto_imaginario = document.getElementById('pto_imaginario');
 
     var cooperativa_id;
     var div_cooperativa;
@@ -635,7 +644,9 @@ function actualizarPuntoControl(url, tipo_usuario_valor, id_cooperativa)
             salida: salida.value,
             otro: otro.checked,
             tipo_mar: tipo_mar,
-            poligono: poligono
+            poligono: poligono,
+            pto_imaginario: pto_imaginario.checked,
+
         }
     }
     else
@@ -652,7 +663,9 @@ function actualizarPuntoControl(url, tipo_usuario_valor, id_cooperativa)
             salida: salida.value,
             otro: otro.checked,
             tipo_mar: tipo_mar,
-            poligono: poligono
+            poligono: poligono,
+            pto_imaginario: pto_imaginario.checked,
+
         }
     }
 
