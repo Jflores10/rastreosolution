@@ -26,6 +26,7 @@
     font-weight: bold;
     white-space: nowrap;
     text-align: left;
+    color:black;
 }
 
 .poi-btn:hover {
@@ -34,9 +35,80 @@
 
 /* Activo */
 .poi-btn.active {
-    background: #0078ff;
-    color: white;
-    border: 1px solid #004ea8;
+    background: #B2D0F7;
+    color: black;
+    border: 2px solid #0022AB;
+}
+
+@media(max-width: 768px) {
+
+    #poi-bar {
+        top: 63%;                 /* mitad vertical de pantalla */
+        transform: translateY(-50%); /* centrar verticalmente */
+        right: 30px;               /* pegado al borde derecho */
+        padding: 2px;
+        gap: 6px;
+        background: rgba(255,255,255,0.85);
+        border-radius: 10px;
+        box-shadow: 0 3px 8px rgba(0,0,0,0.15);
+        display: flex !important;
+        flex-direction: column;
+    }
+
+    .poi-btn {
+        width: 30px;              /* Tamaño compacto */
+        height: 30px;
+        padding: 0;
+        border-radius: 8px;
+        font-size: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .poi-btn::after {
+        font-size: 18px;
+        content: attr(data-icon);
+    }
+}
+
+@media (max-width: 768px) {
+
+   
+    #trafficToggle {
+        padding: 2px !important;     
+        border-radius: 6px !important;
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0 !important;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.12) !important;
+    }
+
+    #trafficText {
+        display: none !important;   
+    }
+
+    #trafficIcon {
+        font-size: 20px !important;  /* ✅ solo icono visible */
+        display: block;
+    }
+}
+
+@media (max-width: 768px) {
+    #velocimetro-container {
+        bottom: -90px !important; 
+        left: 50px !important;    
+        width: 80px !important;  
+        height: 80px !important;
+    }
+
+    #velocimetro {
+        width: 80px !important;
+        height: 80px !important;
+    }
 }
 
 </style>
@@ -196,11 +268,11 @@ Dashboard
             </div>
             <input class="form-control" type="text" placeholder="Escriba una referencia..." id="address" name="address" style="margin-bottom:8px;" />
             <!-- MAPA -->
-             <div id="poi-bar" style="display:none">
-                <button class="poi-btn" data-type="police">🚓 Policía</button>
-                <button class="poi-btn" data-type="fire_station">🚒 Bomberos</button>
-                <button class="poi-btn" data-type="gas_station">⛽ Gasolineras</button>
-                <button class="poi-btn" data-type="hospital">🏥 Hospitales</button>
+            <div id="poi-bar" style="display:none">
+                <button class="poi-btn" data-type="police" data-icon="🚓">🚓 Policía</button>
+                <button class="poi-btn" data-type="fire_station" data-icon="🚒">🚒 Bomberos</button>
+                <button class="poi-btn" data-type="gas_station" data-icon="⛽">⛽ Gasolineras</button>
+                <button class="poi-btn" data-type="hospital" data-icon="🏥">🏥 Hospitales</button>
             </div>
 
             <div id="map" style="width:100%; height:calc(93vh - 184px); border:1px solid #ccc; position:relative; z-index:1;"></div>
@@ -2175,18 +2247,16 @@ $("#velocimetro").myfunc({divFact:10});
                         sentido='<i class="fa fa-arrow-circle-left" title="RETORNO" style="color:#001672"></i>&nbsp&nbsp';
                     }
                 }
-
                 switch(estado)
                 {
                     case 'D':
                         unidad_stop++;
-                        
                         ul.append(
                                 '<li class="list-group-item" id=\''+ data.unidades[i]._id + '\'>'+
                                     ((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                                     ((data.unidades[i].rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                                 sentido+'<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1);" class="fa fa-bus" style="color:#F44336"></i>&nbsp'+ 
-                                data.unidades[i].descripcion+'&nbsp&nbsp'+fecha_gps+'  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp'+  Math.round(data.unidades[i].velocidad_actual)+''+'&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#F44336"></i>&nbsp'+voltaje
+                                data.unidades[i].descripcion+'&nbsp&nbsp <i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ data.unidades[i].latitud+'\',\''+ data.unidades[i].longitud+'\');" class="fa fa-map-marker" style="color:#F44336"></i>&nbsp'+fecha_gps+'  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp'+  Math.round(data.unidades[i].velocidad_actual)+''+'&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#F44336"></i>&nbsp'+voltaje
                                 +'&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#F44336"></i>&nbsp'+data.unidades[i].contador_total+" | "+data.unidades[i].contador_diario
                                 +'&nbsp&nbsp&nbsp'+((data.unidades[i].is_atm !== "undefined")?((data.unidades[i].is_atm===0)?'':((data.unidades[i].is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'')):'')
                                 +'&nbsp&nbsp&nbsp|&nbsp&nbsp'
@@ -2202,7 +2272,7 @@ $("#velocimetro").myfunc({divFact:10});
                                 @else 
                                     +((data.unidades[i].puerta_trasera !== 'undefined')?((data.unidades[i].puerta_trasera==='PUERTA ABIERTA (TRASERA)')?'<img src="../images/opendoor.png" height="20" width="20">':((data.unidades[i].puerta_trasera==='PUERTA CERRADA (TRASERA)')?'<img src="../images/closedoor.png" height="20" width="20">':'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>')
                                 @endif
-                                +'&nbsp&nbsp&nbsp|&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ data.unidades[i].latitud+'\',\''+ data.unidades[i].longitud+'\');" class="fa fa-map-marker" style="color:#F44336"></i>&nbsp&nbsp<font color="black">'+ruta_actual+'</font>'
+                                +'&nbsp&nbsp&nbsp|&nbsp&nbsp&nbsp<font color="black">'+ruta_actual+'</font>'
                                 +'&nbsp&nbsp<font color="black">('+ruta_fecha+')</font>-<font color="red">('+ruta_hora_fin+')</font>&nbsp&nbsp<font color="black">'+ruta_conductor+'</font>'
                                 +((data.array_bitacora[i].bitacora !="")?('&nbsp&nbsp&nbsp|&nbsp&nbsp <img id="' + bId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_Bitacora(\''+ data.unidades[i]._id+'\');" width="20" height="20" src="'+((data.array_bitacora[i].bitacora=="R")?'/images/police.png"':((data.array_bitacora[i].bitacora=="M")?'/images/mantenimiento.png"':((data.array_bitacora[i].bitacora=="O")?'/images/other.png"':'#"')))+'/>'):'&nbsp&nbsp&nbsp')
                                 +'</li>'
@@ -2217,7 +2287,7 @@ $("#velocimetro").myfunc({divFact:10});
                                     ((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                                     ((data.unidades[i].rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                                 '<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1);" class="fa fa-bus" style="color:#f49a16"></i>&nbsp'+ data.unidades[i].descripcion
-                                +'&nbsp&nbsp('+fecha_gps+' | <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp'+ Math.round(data.unidades[i].velocidad_actual)+')'+'&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#f49a16"></i>&nbsp'+voltaje
+                                +'&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ data.unidades[i].latitud+'\',\''+ data.unidades[i].longitud+'\');" class="fa fa-map-marker" style="color:#f49a16"></i>&nbsp'+fecha_gps+'  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp'+ Math.round(data.unidades[i].velocidad_actual)+''+'&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#f49a16"></i>&nbsp'+voltaje
                                 +'&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#f49a16"></i>&nbsp'+data.unidades[i].contador_total+" | "+data.unidades[i].contador_diario
                                 +'&nbsp&nbsp&nbsp'+((data.unidades[i].is_atm !== "undefined")?((data.unidades[i].is_atm===0)?'':((data.unidades[i].is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'')):'')
                                 +'&nbsp&nbsp&nbsp|&nbsp&nbsp'
@@ -2233,7 +2303,7 @@ $("#velocimetro").myfunc({divFact:10});
                                 @else 
                                     +((data.unidades[i].puerta_trasera !== 'undefined')?((data.unidades[i].puerta_trasera==='PUERTA ABIERTA (TRASERA)')?'<img src="../images/opendoor.png" height="20" width="20">':((data.unidades[i].puerta_trasera==='PUERTA CERRADA (TRASERA)')?'<img src="../images/closedoor.png" height="20" width="20">':'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>')
                                 @endif
-                                +'&nbsp&nbsp&nbsp|&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ data.unidades[i].latitud+'\',\''+ data.unidades[i].longitud+'\');" class="fa fa-map-marker" style="color:#f49a16"></i>&nbsp&nbsp<font color="black">'+ruta_actual+'</font>'
+                                +'&nbsp&nbsp&nbsp|&nbsp&nbsp&nbsp<font color="black">'+ruta_actual+'</font>'
                                 // +((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">':'')
                                 +'&nbsp&nbsp<font color="black">('+ruta_fecha+')</font>-<font color="red">('+ruta_hora_fin+')</font>&nbsp&nbsp<font color="black">'+ruta_conductor+'</font>'
                                 +((data.array_bitacora[i].bitacora !="")?('&nbsp&nbsp&nbsp|&nbsp&nbsp <img id="' + bId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_Bitacora(\''+ data.unidades[i]._id+'\');" width="20" height="20" src="'+((data.array_bitacora[i].bitacora=="R")?'/images/police.png"':((data.array_bitacora[i].bitacora=="M")?'/images/mantenimiento.png"':((data.array_bitacora[i].bitacora=="O")?'/images/other.png"':'#"')))+'/>'):'&nbsp&nbsp&nbsp')
@@ -2248,7 +2318,7 @@ $("#velocimetro").myfunc({divFact:10});
                                     ((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                                     ((data.unidades[i].rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                                 sentido+'<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1);" class="fa fa-bus" style="color:#00AA88"></i>&nbsp'+ data.unidades[i].descripcion
-                                +'&nbsp&nbsp'+fecha_gps+'  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp'+ Math.round(data.unidades[i].velocidad_actual)+''+'&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#00AA88"></i>&nbsp'+voltaje+'&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#00AA88"></i>&nbsp'
+                                +'&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ data.unidades[i].latitud+'\',\''+ data.unidades[i].longitud+'\');" class="fa fa-map-marker" style="color:#00AA88"></i>&nbsp'+fecha_gps+'  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp'+ Math.round(data.unidades[i].velocidad_actual)+''+'&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#00AA88"></i>&nbsp'+voltaje+'&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#00AA88"></i>&nbsp'
                                 +data.unidades[i].contador_total+" | "+data.unidades[i].contador_diario
                                 +'&nbsp&nbsp&nbsp'+((data.unidades[i].is_atm !== "undefined")?((data.unidades[i].is_atm===0)?'':((data.unidades[i].is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'')):'')
                                 +'&nbsp&nbsp&nbsp|&nbsp&nbsp'
@@ -2264,7 +2334,7 @@ $("#velocimetro").myfunc({divFact:10});
                                 @else 
                                     +((data.unidades[i].puerta_trasera !== 'undefined')?((data.unidades[i].puerta_trasera==='PUERTA ABIERTA (TRASERA)')?'<img src="../images/opendoor.png" height="20" width="20">':((data.unidades[i].puerta_trasera==='PUERTA CERRADA (TRASERA)')?'<img src="../images/closedoor.png" height="20" width="20">':'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>')
                                 @endif
-                                +'&nbsp&nbsp&nbsp|&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ data.unidades[i].latitud+'\',\''+ data.unidades[i].longitud+'\');" class="fa fa-map-marker" style="color:#00AA88"></i>&nbsp&nbsp<font color="black">'+ruta_actual+'</font>'
+                                +'&nbsp&nbsp&nbsp|&nbsp&nbsp&nbsp<font color="black">'+ruta_actual+'</font>'
                                 // +((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">':'')
                                 +'&nbsp&nbsp<font color="black">('+ruta_fecha+')</font>-<font color="red">('+ruta_hora_fin+')</font>&nbsp&nbsp<font color="black">'+ruta_conductor+'</font>'
                                 +((data.array_bitacora[i].bitacora !="")?('&nbsp&nbsp&nbsp|&nbsp&nbsp <img id="' + bId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_Bitacora(\''+ data.unidades[i]._id+'\');" width="20" height="20" src="'+((data.array_bitacora[i].bitacora=="R")?'/images/police.png"':((data.array_bitacora[i].bitacora=="M")?'/images/mantenimiento.png"':((data.array_bitacora[i].bitacora=="O")?'/images/other.png"':'#"')))+'/>'):'&nbsp&nbsp&nbsp')
@@ -2284,7 +2354,7 @@ $("#velocimetro").myfunc({divFact:10});
                                 ((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                                 ((data.unidades[i].rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                                 '<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1);" class="fa fa-bus" style="color:#990073"></i>&nbsp' + data.unidades[i].descripcion 
-                                + '&nbsp&nbsp' + fecha_gps + '  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(data.unidades[i].velocidad_actual) + '' + '&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#990073"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#990073"></i>&nbsp' + data.unidades[i].contador_total 
+                                + '&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ data.unidades[i].latitud+'\',\''+ data.unidades[i].longitud+'\');" class="fa fa-map-marker" style="color:#990073"></i>&nbsp' + fecha_gps + '  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(data.unidades[i].velocidad_actual) + '' + '&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#990073"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#990073"></i>&nbsp' + data.unidades[i].contador_total 
                                 + " | " + data.unidades[i].contador_diario
                                 +'&nbsp&nbsp&nbsp'+((data.unidades[i].is_atm !== "undefined")?((data.unidades[i].is_atm===0)?'':((data.unidades[i].is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'')):'')
                                 +'&nbsp&nbsp&nbsp|&nbsp&nbsp'
@@ -2300,7 +2370,7 @@ $("#velocimetro").myfunc({divFact:10});
                                 @else 
                                     +((data.unidades[i].puerta_trasera !== 'undefined')?((data.unidades[i].puerta_trasera==='PUERTA ABIERTA (TRASERA)')?'<img src="../images/opendoor.png" height="20" width="20">':((data.unidades[i].puerta_trasera==='PUERTA CERRADA (TRASERA)')?'<img src="../images/closedoor.png" height="20" width="20">':'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>')
                                 @endif
-                                +'&nbsp&nbsp&nbsp|&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ data.unidades[i].latitud+'\',\''+ data.unidades[i].longitud+'\');" class="fa fa-map-marker" style="color:#990073"></i>&nbsp&nbsp<font color="black">'+ruta_actual+'</font>'
+                                +'&nbsp&nbsp&nbsp|&nbsp&nbsp&nbsp<font color="black">'+ruta_actual+'</font>'
                                 // +((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">':'')
                                 +'&nbsp&nbsp<font color="black">('+ruta_fecha+')</font>-<font color="red">('+ruta_hora_fin+')</font>&nbsp&nbsp<font color="black">'+ruta_conductor+'</font>'
                                 +((data.array_bitacora[i].bitacora !="")?('&nbsp&nbsp&nbsp|&nbsp&nbsp <img id="' + bId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_Bitacora(\''+ data.unidades[i]._id+'\');" width="20" height="20" src="'+((data.array_bitacora[i].bitacora=="R")?'/images/police.png"':((data.array_bitacora[i].bitacora=="M")?'/images/mantenimiento.png"':((data.array_bitacora[i].bitacora=="O")?'/images/other.png"':'#"')))+'/>'):'&nbsp&nbsp&nbsp')
