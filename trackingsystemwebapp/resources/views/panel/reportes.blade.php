@@ -61,7 +61,7 @@ Reportes
                                         <label><input type="checkbox" id="seleccionar_unidades" /> Todas</label>
                                     </div>
                                     <div id="div_unidades">
-                                    	<select data-placeholder="Unidades" multiple class="form-control" id="unidad_id" name="unidad_id[]">
+                                    	<select data-placeholder="Unidades" multiple class="form-control select2" id="unidad_id" name="unidad_id[]">
                                     	</select>
                                     </div>
                                     <span class="help-block" id="span_unidad"></span>
@@ -72,7 +72,7 @@ Reportes
                                     <div class="checkbox">
                                         <label><input type="checkbox" id="seleccionar_rutas" /> Todas</label>
                                     </div>
-                                    <select data-placeholder="Rutas" multiple name="ruta_id[]" class="form-control" id="ruta_id" name="ruta_id">
+                                    <select data-placeholder="Rutas" multiple name="ruta_id[]" class="form-control select2" id="ruta_id" name="ruta_id">
                                     </select>
                                     <span class="help-block" id="span_ruta"></span>
                                 </div>
@@ -199,6 +199,17 @@ Reportes
 
 @section('scripts')
 <script>
+    
+    $(document).ready(function() {
+        $('#unidad_id').select2({
+            width: '100%',
+        });
+
+        $('#ruta_id').select2({
+            width: '100%',
+        });
+    });
+    
 
     window.onload = function () { 
         $('#menu_toggle').trigger('click');
@@ -1116,12 +1127,7 @@ Reportes
         }).change(function () {
             cargaDatosCooperativa($(this).val());
         });
-        $('#unidad_id').chosen({
-            width : '100%'
-        });
-        $('#ruta_id').chosen({
-            width : '100%'
-        });
+    
         $('#fecha_inicio').datetimepicker();
         $('#fecha_fin').datetimepicker(
         );
@@ -1168,21 +1174,38 @@ Reportes
             });
             $('#hoy').trigger('click');
             $('#seleccionar_unidades').click(function () {
-                var checked = $('#seleccionar_unidades').is(':checked');
-                $("#unidad_id").find("option").each(function() {
-                    $(this).prop('selected', checked);
-                    $('#unidad_id').trigger('chosen:updated');
-                });
+                 let allSelected = $(this).is(':checked');
+                if (allSelected) {
+                    // Seleccionar todos
+                    let values = [];
+                    $('#unidad_id option').each(function () {
+                        values.push($(this).val());
+                    });
+                    $('#unidad_id').val(values).trigger('change');
+                } else {
+                    // Deseleccionar todos
+                    $('#unidad_id').val(null).trigger('change');
+                }
+               
                 if (checked)
                     $('#div_unidades').hide();
                 else
                     $('#div_unidades').show();
             });
             $('#seleccionar_rutas').click(function () {
-                $("#ruta_id").find("option").each(function() {
-                    $(this).prop('selected', $('#seleccionar_rutas').is(':checked'));
-                    $('#ruta_id').trigger('chosen:updated');
-                });
+                let allSelected = $(this).is(':checked');
+
+                if (allSelected) {
+                    // Seleccionar todos
+                    let values = [];
+                    $('#ruta_id option').each(function () {
+                        values.push($(this).val());
+                    });
+                    $('#ruta_id').val(values).trigger('change');
+                } else {
+                    // Deseleccionar todos
+                    $('#ruta_id').val(null).trigger('change');
+                }
             });
     });
     

@@ -45,6 +45,7 @@
     <link rel="stylesheet" type="text/css" href="{{ asset('addons/datatables/datatables.min.css') }}"/>
 
     <link rel="stylesheet" type="text/css" href="{{ asset('css/app.css') }}"/>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/css/select2.min.css" rel="stylesheet" />
 
     @yield('styles')
   </head>
@@ -319,6 +320,8 @@
     <script type="text/javascript" src="{{ asset('addons/datatables/datatables.min.js') }}"></script>
     <script src="{{ asset('js/jspanel/jspanel.min.js') }}"></script>
     <script src="{{ asset('js/app.js') }}"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js"></script>
+
     @yield('scripts')
   
     <script>

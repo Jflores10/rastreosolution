@@ -1,6 +1,8 @@
 @extends('layouts.app')
 @section('styles')
 <style>
+
+    
 #poi-bar {
     position: absolute;
     top: 180px;
@@ -235,7 +237,7 @@ Dashboard
           <div class="col-lg-9 col-md-8 col-sm-12" style="padding:20px;">
             <div class="row" style="margin-bottom:5px;">
               <div class="col-md-3">
-                <select class="form-control" multiple data-placeholder="Ruta Unidad" name="ruta" id="ruta">
+                <select class="form-control select2" multiple data-placeholder="Ruta Unidad" name="ruta" id="ruta">
                   @if (isset($rutas))
                     @foreach ($rutas as $ruta)
                       <option value="{{ $ruta->_id }}">{{ $ruta->descripcion }}</option>
@@ -244,7 +246,7 @@ Dashboard
                 </select>
               </div>
               <div class="col-md-3">
-                <select class="form-control" multiple data-placeholder="Rutas General" name="ruta_general" id="ruta_general">
+                <select class="form-control select2" multiple data-placeholder="Rutas General" name="ruta_general" id="ruta_general">
                   @if (isset($rutas))
                     @foreach ($rutas as $ruta)
                       <option value="{{ $ruta->_id }}">{{ $ruta->descripcion }}</option>
@@ -520,6 +522,17 @@ Dashboard
 @section('scripts')
 <script src="js/speedometer.js"></script>
 <script>
+
+    $(document).ready(function() {
+        $('#ruta_general').select2({
+            width: '100%',
+        });
+
+        $('#ruta').select2({
+            width: '100%',
+        });
+    });
+
     function seleccionarTodos(seleccionar) {
         let check = seleccionar;
         let unidades = $('#uNotificaciones');
@@ -2631,7 +2644,7 @@ $("#velocimetro").myfunc({divFact:10});
         });
         
 
-        $('#ruta').chosen({ witdh : '100%'}).change(function () {
+        $('#ruta').change(function () {
             $('#progress').modal('show');
             $.get('{{ url("/puntos") }}', { rutas : $('#ruta').val() }, function (data) {
                 var puntos = data.puntos;
@@ -2864,7 +2877,7 @@ $("#velocimetro").myfunc({divFact:10});
         });
 
 
-        $('#ruta_general').chosen({ witdh : '100%'}).change(function () {
+        $('#ruta_general').change(function () {
             $('#progress').modal('show');
             $.get('{{ url("/puntos") }}', {
                 rutas : $('#ruta_general').val()
