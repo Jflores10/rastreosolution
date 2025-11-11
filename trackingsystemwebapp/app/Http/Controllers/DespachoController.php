@@ -505,6 +505,7 @@ class DespachoController extends Controller
         $ultimo_punto = null;
         $index = 0;
         $primerpunto = true;
+
         if (sizeof($recorridos) > 0) {
             foreach ($despacho->puntos_control as $punto_control) {
                 $puntoControlEsperado = null;
@@ -949,6 +950,13 @@ class DespachoController extends Controller
             if ($contador < 0)
                 $contador = 65535 + $contador;
 
+            if($despacho->estado == 'C'){
+                $despacho->recalculo_id=Auth::user()->_id;    
+            }
+            else{
+                $despacho->end_id=Auth::user()->_id;           
+            }
+
             $despacho->contador_final = $contador;
             if ($despacho->estado != 'C')
                 $despacho->fecha_culminacion = Carbon::now();
@@ -987,6 +995,7 @@ class DespachoController extends Controller
             $despacho->longitud_corte = $longitud_corte;
             $despacho->modificador_id = Auth::user()->_id;
             $despacho->fecha_culminacion = new Carbon();
+            
             $despacho->save();
 
             return response()->json([
@@ -995,6 +1004,14 @@ class DespachoController extends Controller
             ]);
             //***********************fin de algoritmo arreglo de marcas*************************
         } else {
+            if($despacho->estado == 'C'){
+                $despacho->recalculo_id=Auth::user()->_id;    
+            }
+            else{
+                $despacho->end_id=Auth::user()->_id;           
+            }
+
+
             $despacho->corte_tubo = '-';
             if ($despacho->estado != 'C')
                 $despacho->fecha_culminacion = Carbon::now();

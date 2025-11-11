@@ -11,7 +11,7 @@ class Despacho extends Model
         'ruta_id', 'unidad_id', 'conductor_id', 'fecha', 'estado', 'contador_inicial',
         'contador_final', 'puntos_control', 'contador_ayer', 'marcas', 'multa', 'salida', 'error_ATM',
         'corte_tubo', 'creador_id', 'modificador_id', 'fecha_exportacion', 'estado_exportacion', 'coord_corte_tubo',
-        'fecha_exportado', 'motivo_cancelar'
+        'fecha_exportado', 'motivo_cancelar','recalculo_id','end_id'
     ];
 
     public function getPuntosControlAttribute($value)
@@ -119,6 +119,17 @@ class Despacho extends Model
     {
         return $this->belongsTo('App\User');
     }
+
+    public function user_recalculo()
+    {
+        return $this->belongsTo(User::class, 'recalculo_id', '_id');
+    }
+
+    public function user_end()
+    {
+        return $this->belongsTo(User::class, 'end_id', '_id');
+    }
+
 
     protected $dates = [
         'fecha', 'salida', 'fecha_exportacion'

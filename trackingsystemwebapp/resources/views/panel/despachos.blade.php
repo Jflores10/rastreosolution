@@ -157,7 +157,10 @@
                                     <th>Conductor</th>
                                     <th>Asignación</th>
                                     <th>Salida</th>
-                                    <th>Usuario</th>
+                                    <th>Usuario CR.</th>
+                                    <th>Usuario RE.</th>
+                                    <th>Usuario FN.</th>
+
                                     @if ($tipo === 'F')
                                         <th>Inicio</th>
                                         <th>Fin</th>
@@ -188,7 +191,10 @@
                                             </td>
                                             <td>{{ $despacho->created_at }}</td>
                                             <td>{{ $despacho->fecha->addHours(5) }}</td>
-                                            <td>{{ $despacho->modificador != null ? $despacho->modificador->name : '' }}
+                                            <td>{{ $despacho->creador != null ? $despacho->creador->name : '' }}
+                                            <td>{{ $despacho->user_recalculo != null ? $despacho->user_recalculo->name : '' }}
+                                            <td>{{ $despacho->user_end != null ? $despacho->user_end->name : '' }}
+
                                             </td>
                                             @if ($tipo === 'F')
                                                 <td>{{ $despacho->contador_inicial }}</td>
