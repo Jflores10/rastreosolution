@@ -17,7 +17,63 @@
             padding: 3.5px 3px;
         }
     </style>
+    <style>
+        .table {
+            border-collapse: separate !important;
+            border-spacing: 0 6px; /* Espacio vertical entre filas */
+        }
+
+        .table th {
+            background-color: #f7f9fb;
+            padding: 10px 12px !important;
+            text-align: left;
+            vertical-align: middle;
+            border-bottom: 2px solid #ddd;
+        }
+
+        .table td {
+            padding: 8px 12px !important;
+            vertical-align: middle;
+            background-color: #fff;
+            border-top: 1px solid #e9ecef;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .table-hover tbody tr:hover td {
+            background-color: #f1f7ff;
+        }
+
+        .table-responsive {
+            margin-top: 10px;
+        }
+
+        /* Botones más compactos y espaciados */
+        .table .btn {
+            padding: 4px 8px;
+            margin: 0 2px;
+            font-size: 13px;
+        }
+
+        .table td.acciones {
+            white-space: nowrap;       /* Evita que los botones se bajen de línea */
+            padding: 0px 0px !important;
+        }
+
+        .table td.acciones .btn {
+            margin: 0 2px;             /* Espaciado mínimo entre botones */
+            padding: 3px 7px;
+            font-size: 12.5px;
+        }
+
+        .table td.acciones .btn i {
+            margin-right: 3px;
+        }
+
+    </style>
+
+
 @endsection
+
 @section('content')
     <div class="page-title">
         <div class="title_left">
@@ -87,7 +143,7 @@
                             <div id="div_cooperativa"
                                 class="form-group{{ $errors->has('cooperativa') ? ' has-error' : '' }}">
                                 <label for="cooperativa">Cooperativa</label>
-                                <select name="cooperativa" id="cooperativa_search" class="form-control"
+                                <select name="cooperativa" id="cooperativa_search" class="form-control select2"
                                     data-placeholder="Cooperativa">
                                     @foreach ($cooperativas as $cooperativa)
                                         <option value="{{ $cooperativa->_id }}">{{ $cooperativa->descripcion }}</option>
@@ -110,7 +166,7 @@
                                     <label><input type="checkbox" id="seleccionar_unidades" /> Todas</label>
                                 </div>
                                 <div id="unidades_div">
-                                    <select multiple name="unidades[]" id="unidades_search" class="form-control"
+                                    <select multiple name="unidades[]" id="unidades_search" class="form-control select2"
                                         data-placeholder="Unidades">
                                     </select>
                                 </div>
@@ -148,10 +204,10 @@
                                     href="{{ url('/despachos/cancelados') }}">Cancelados</a></li>
                         </ul>
                     </div>
-                    <div class="col-xs-12">
+                    <div class="col-xs-12 col-md-12">
                         @if ($despachos->count() > 0)
                             <div class="table-responsive">
-                                <table class="table">
+                                <table class="table table-hover">
                                     <th>Unidad</th>
                                     <th>Ruta</th>
                                     <th>Conductor</th>
@@ -177,9 +233,10 @@
                                         <th></th>
                                         <th></th>
                                     @endif
+                                    <!--
                                     <th>Exportado a ATM</th>
                                     <th>Fecha Exportado</th>
-                                    <th>Error ATM</th>
+                                    <th>Error ATM</th> -->
                                     @foreach ($despachos as $despacho)
                                         <tr>
                                             <td>
@@ -206,37 +263,38 @@
                                                 </td>
                                             @endif
                                             @if ($tipo === 'F')
-                                                <td><button onclick="construirImpresionInfo('{{ $despacho->_id }}');"
+                                                <td class="acciones"><button onclick="construirImpresionInfo('{{ $despacho->_id }}');"
                                                         type="button" class="btn btn-default"><i
                                                             class="fa fa-print"></i> Info</button></td>
                                             @endif
-                                            <td><button onclick="construirImpresion('{{ $despacho->_id }}');"
+                                                <td class="acciones"><button onclick="construirImpresion('{{ $despacho->_id }}');"
                                                     type="button" class="btn btn-default"><i class="fa fa-print"></i>
                                                     Imprimir</button></td>
                                             @if ($tipo != 'C')
                                                 @if ($despacho->ruta->ruta_padre == '5b4528f9f544150ac01cecc6')
-                                                    <td><button onclick="finish('{{ $despacho->_id }}');" type="button"
+                                                    <td class="acciones"><button onclick="finish('{{ $despacho->_id }}');" type="button"
                                                             class="btn btn-info"><i class="fa fa-check"></i>
                                                             {{ $despacho->estado === 'C' ? 'Recalcular' : 'Culminar' }}</button>
                                                     </td>
                                                 @else
-                                                    <td><button onclick="finish('{{ $despacho->_id }}');" type="button"
+                                                    <td class="acciones"><button onclick="finish('{{ $despacho->_id }}');" type="button"
                                                             class="btn btn-primary"><i class="fa fa-check"></i>
                                                             {{ $despacho->estado === 'C' ? 'Recalcular' : 'Culminar' }}</button>
                                                     </td>
                                                 @endif                                            
                                                 @if ($despacho->unidad->cooperativa_id != '59e8ddc83ebdfd11696c11f2')
-                                                    <td>
+                                                    <td class="acciones">
                                                     <button onclick="modalCancelar('{{ $despacho->_id }}');"
                                                         type="button" class="btn btn-danger"><i class="fa fa-close"></i>
                                                         Cancelar</button>
                                                     
                                                     </td>
                                                 @else
-                                                    <td> </td>
+                                                    <td class="acciones"> </td>
                                                 @endif
 
                                             @endif
+                                            <!-- 
                                             <td>{{ $despacho->estado_exportacion == 'E' ? 'Si' : 'No' }}</td>
                                             {{-- <td>{{ $despacho->fecha_exportado }}</td> --}}
                                             @if ($despacho->estado_exportacion == 'E')
@@ -255,6 +313,7 @@
                                                     <td></td>
                                                 @endif
                                             @endif
+                                            -->
                                         </tr>
                                     @endforeach
                                 </table>
@@ -503,6 +562,16 @@
 @endsection
 @section('scripts')
     <script>
+        $(document).ready(function() {
+            $('#cooperativa_search').select2({
+                width: '100%',
+            });
+
+            $('#unidades_search').select2({
+                width: '100%',
+            });
+        });
+
         var despachoIdTMP = "";
         window.onload = function() {
             $('#menu_toggle').trigger('click');
@@ -1628,9 +1697,7 @@
             $('#btnCulminar').click(function() {
                 culminar();
             });
-            $('#cooperativa_search').chosen({
-                width: '100%'
-            }).change(function() {
+            $('#cooperativa_search').change(function() {
                 $.get('/despachos/' + $(this).val() + '/unidades', function(data) {
                     $('#unidades_search').empty();
                     $("#div_errorAtm").hide();
@@ -1656,9 +1723,7 @@
                     @endif
                 }, 'json');
             });
-            $('#unidades_search').chosen({
-                width: '100%'
-            });
+        
             $('#cooperativa_search').val(null);
             $('#cooperativa_search').trigger('chosen:updated');
             @if (isset($cooperativa_search))
