@@ -43,8 +43,8 @@
                         <td>T. AD</td>
                         <td>Multa</td>
                         <td>Usuario CR.</td>
-                        <td>Usuario RE.</td>
                         <td>Usuario FN.</td>
+                        <td>Usuario RE.</td>
 
                         <td></td>
                         <th>Exportado a ATM</th>
@@ -163,8 +163,8 @@
                             <td>{{ $adelantos }}</td>
                             <td>{{ ($tip_calculo == 'algoritmo')?number_format($multa, 2): $despacho->multa }}</td>
                             <td>{{ ($despacho->creador!=null)?$despacho->creador->name:""}}</td>
+                            <td>{{ ($despacho->user_end!=null)?$despacho->user_end->name:""}}</td>´
                             <td>{{ ($despacho->user_recalculo!=null)?$despacho->user_recalculo->name:""}}</td>
-                            <td>{{ ($despacho->user_end!=null)?$despacho->user_end->name:""}}</td>
 
                             <td><a href="#" onclick="recalcular('{{ $despacho->_id }}');">Recalcular</a></td>
                             <td>{{ ($despacho->estado_exportacion == 'E')?'Si':'No' }}</td>

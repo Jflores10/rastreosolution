@@ -214,8 +214,8 @@
                                     <th>Asignación</th>
                                     <th>Salida</th>
                                     <th>Usuario CR.</th>
-                                    <th>Usuario RE.</th>
                                     <th>Usuario FN.</th>
+                                    <th>Usuario RE.</th>
 
                                     @if ($tipo === 'F')
                                         <th>Inicio</th>
@@ -248,11 +248,9 @@
                                             </td>
                                             <td>{{ $despacho->created_at }}</td>
                                             <td>{{ $despacho->fecha->addHours(5) }}</td>
-                                            <td>{{ $despacho->creador != null ? $despacho->creador->name : '' }}
-                                            <td>{{ $despacho->user_recalculo != null ? $despacho->user_recalculo->name : '' }}
-                                            <td>{{ $despacho->user_end != null ? $despacho->user_end->name : '' }}
-
-                                            </td>
+                                            <td>{{ $despacho->creador != null ? $despacho->creador->name : '' }}</td>
+                                            <td>{{ $despacho->user_end != null ? $despacho->user_end->name : '' }}</td>
+                                            <td>{{ $despacho->user_recalculo != null ? $despacho->user_recalculo->name : '' }}</td>
                                             @if ($tipo === 'F')
                                                 <td>{{ $despacho->contador_inicial }}</td>
                                                 <td>{{ $despacho->contador_final }} </td>
