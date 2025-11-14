@@ -45,10 +45,7 @@
                         <td>Usuario CR.</td>
                         <td>Usuario FN.</td>
                         <td>Usuario RE.</td>
-
                         <td></td>
-                        <th>Exportado a ATM</th>
-                        <th>Error ATM</th>
                         <td></td>
                     </tr>
                 </thead>
@@ -165,23 +162,12 @@
                             <td>{{ $adelantos }}</td>
                             <td>{{ ($tip_calculo == 'algoritmo')?number_format($multa, 2): $despacho->multa }}</td>
                             <td>{{ ($despacho->creador!=null)?$despacho->creador->name:""}}</td>
-                            <td>{{ ($despacho->user_end!=null)?$despacho->user_end->name:""}}</td>´
+                            <td>{{ ($despacho->user_end!=null)?$despacho->user_end->name:""}}</td>
                             <td>{{ ($despacho->user_recalculo!=null)?$despacho->user_recalculo->name:""}}</td>
 
                             <td><a href="#" onclick="recalcular('{{ $despacho->_id }}');">Recalcular</a> 
                             </td>
-                            <td>{{ ($despacho->estado_exportacion == 'E')?'Si':'No' }}</td>
-                            @if($despacho->estado_exportacion =='E')
-                                <td></td>
-                            @else
-                                @if(isset($despacho->error_ATM))
-                                    <td>
-                                        <button onclick="errorAtm('{{ $despacho->_id }}');" type="button" class="btn btn-info"><i class="fa fa-info"></i> Ver</button>
-                                    </td>
-                                @else
-                                    <td></td>
-                                @endif
-                            @endif   
+                            
                             <td><a href="#" onclick="construirImpresion('{{ $despacho->_id }}');">Imprimir</a>
                             </td>
                         </tr>
