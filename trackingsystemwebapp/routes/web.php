@@ -102,6 +102,9 @@ Route::group(['middleware' => ['auth', 'usuario']], function () {
         Route::post('/eliminar', 'DespachoController@eliminarTodo');
         Route::get('/info/{id}', 'DespachoController@infoPrint');
         Route::get('/ticketalbosao/{id}', 'DespachoController@showAlbosau');
+        Route::get('/{id}/finishv2', 'DespachoController@end_v2');
+
+
     });
     Route::resource('/despachos', 'DespachoController');
 

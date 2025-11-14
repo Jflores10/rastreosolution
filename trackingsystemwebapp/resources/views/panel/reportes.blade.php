@@ -304,6 +304,70 @@ Reportes
         }, 'json');
 	}
 
+    function recalcularv2(id)
+	{
+		var url = '{{ url("/despachos") }}' + '/' + id + '/finishv2';
+        //$('#progress').modal('show');
+        $.get(url, function (data) {
+            if(data.error == false){
+                var array_path=[];
+                for(var i=0; i<data.rutarecorrido.length ; i++)
+                {
+                    array_path.push({lat:parseFloat(data.rutarecorrido[i].lat),
+                        lng:parseFloat(data.rutarecorrido[i].lng)});
+                }
+                
+                ruta = new google.maps.Polyline({
+                    geodesic: true,
+                    strokeWeight: 20,
+                    path:array_path
+                });
+                var array_corte=[];
+                for(var i=0; i<data.recorridos.length ; i++)
+                {
+                    let latitud=data.recorridos[i].latitud;
+                    let longitud=data.recorridos[i].longitud; 
+
+                    var isLocationOnEdge = google.maps.geometry.poly.isLocationOnEdge;
+                    //1e-3
+                
+                    let result=isLocationOnEdge(new google.maps.LatLng(parseFloat(latitud), parseFloat(longitud)), ruta, 0.0010);
+
+                    if(!result){
+                        /*console.log('ERROR');
+                        console.log(latitud);
+                        console.log(longitud);*/
+                        array_corte.push({
+                            'lat':parseFloat(latitud),
+                            'lng':parseFloat(longitud)
+                        });
+                        
+                    }
+                }
+                /***GUARDAR COORDENADAS Y SI CORTE TUBO */
+                if(array_corte.length>0){
+                    let url_corte='{{ url("/despachos")}}'+"/cortetubo";
+                    var params = {
+                        array_corte : array_corte,
+                        despacho_id:id
+                    };
+                    $.post(url_corte,params, function (data) {
+                        search();
+                        $('#progress').modal('hide');
+                    });
+                }else{
+                    search();
+                    $('#progress').modal('hide');
+                }
+            }else{
+                alert('Error al recalcular el despacho');
+                search();
+                $('#progress').modal('hide');
+            }
+           
+        }, 'json');
+	}
+
     function excelMultas() {
         var cooperativa_id=document.getElementById('cooperativa_id').value;
         var form = document.getElementById('form');

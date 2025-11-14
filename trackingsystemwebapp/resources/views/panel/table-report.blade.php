@@ -65,6 +65,8 @@
                                     <span style="vertical-align: middle; font-size: 13px;">
                                         {{ $despacho->fecha->addHours(5)->format('d/m/Y H:i') }}
                                     </span>
+                                    <a href="#" onclick="recalcularv2('{{ $despacho->_id }}');">*</a>
+
                                 </div>
                             </td>
                             @foreach ($despacho->puntos_control as $punto_control)
@@ -166,7 +168,8 @@
                             <td>{{ ($despacho->user_end!=null)?$despacho->user_end->name:""}}</td>´
                             <td>{{ ($despacho->user_recalculo!=null)?$despacho->user_recalculo->name:""}}</td>
 
-                            <td><a href="#" onclick="recalcular('{{ $despacho->_id }}');">Recalcular</a></td>
+                            <td><a href="#" onclick="recalcular('{{ $despacho->_id }}');">Recalcular</a> 
+                            </td>
                             <td>{{ ($despacho->estado_exportacion == 'E')?'Si':'No' }}</td>
                             @if($despacho->estado_exportacion =='E')
                                 <td></td>
@@ -179,7 +182,8 @@
                                     <td></td>
                                 @endif
                             @endif   
-                            <td><a href="#" onclick="construirImpresion('{{ $despacho->_id }}');">Imprimir</a></td>
+                            <td><a href="#" onclick="construirImpresion('{{ $despacho->_id }}');">Imprimir</a>
+                            </td>
                         </tr>
                     @endforeach
                 </tbody>

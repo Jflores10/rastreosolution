@@ -26,6 +26,8 @@ use App\Bitacora;
 use Excel;
 use App\Helper\FunctionsHelper;
 
+
+
 class DespachoController extends Controller
 {
     public function importar(Request $request)
@@ -1021,6 +1023,384 @@ class DespachoController extends Controller
             return response()->json(['error' => true, 'despacho' => null]);
         }
     }
+
+
+   public function end_v2(Request $request, $id)
+{
+    set_time_limit(0);
+
+    $despacho = Despacho::findOrFail($id);
+
+    // Actualizamos puntos de control desde helper existente
+    $resultado = FunctionsHelper::update_pto_control_despacho($despacho->ruta, $despacho);
+    $despacho->puntos_control = $resultado['data']->puntos_control;
+
+    $cooperativa = $despacho->unidad->cooperativa;
+    $cooperativa_cortetubo = $despacho->unidad->cooperativa->multa_tubo ?? null;
+
+    $totalPuntos = count($despacho->puntos_control);
+    if ($totalPuntos == 0) {
+        return $this->cerrarDespachoSinRecorridos($despacho);
+    }
+
+    $primerPunto  = $despacho->puntos_control[0];
+    $ultimoPunto  = $despacho->puntos_control[$totalPuntos - 1];
+
+    // CORRECCIÓN: convertir UTCDateTime a Carbon correctamente
+    $ini = Carbon::instance($despacho->fecha->toDateTime());
+    $fin = Carbon::instance($ultimoPunto['tiempo_esperado']->toDateTime());
+
+    // Tolerancias de la cooperativa
+    $defaultMinutesIni = 570;
+    $defaultMinutesFin = 700;
+
+    if (!empty($cooperativa->tolerancia_buffer_minutos)) {
+        $tolerancia = intval($cooperativa->tolerancia_buffer_minutos);
+        $defaultMinutesIni = 600 - $tolerancia;
+        $defaultMinutesFin = 600 + $tolerancia;
+    }
+
+    // CORRECCIÓN: addMinutes SOLO sobre Carbon::instance()
+    $ini = $ini->copy()->addMinutes($defaultMinutesIni);
+    $fin = $fin->copy()->addMinutes($defaultMinutesFin);
+
+    $finiGlobal = new UTCDateTime($ini->getTimestamp() * 1000);
+    $ffinGlobal = new UTCDateTime($fin->getTimestamp() * 1000);
+
+    // Revisar si hay recorridos
+    $existenRecorridos = Recorrido::where('tipo', 'GTGEO')
+        ->where('unidad_id', new ObjectID($despacho->unidad_id))
+        ->where('fecha_gps', '>=', $finiGlobal)
+        ->where('fecha_gps', '<=', $ffinGlobal)
+        ->exists();
+
+    if (!$existenRecorridos) {
+        return $this->cerrarDespachoSinRecorridos($despacho);
+    }
+
+    // Parámetros de corte y marcas
+    $array_final   = [];
+    $multa         = 0.0;
+    $finiDinamico  = $finiGlobal;
+    $maxAtrasoMin  = !empty($cooperativa->max_atraso_minutos) ? intval($cooperativa->max_atraso_minutos) : 240;
+
+    $index         = 0;
+    $contadorFinal = 0;
+    $salidaMarca   = null;
+    $arrayTiempoE=[];
+    foreach ($despacho->puntos_control as $punto_control) {
+
+        $puntoControlObj = PuntoControl::find($punto_control['id']);
+        if (!$puntoControlObj) {
+            $array_final[] = $this->procesarPuntoSinGPS($punto_control);
+            $index++;
+            continue;
+        }
+
+        // CORRECCIÓN: convertir tiempo esperado a Carbon correctamente
+        $tiempoEsperado = Carbon::instance($punto_control['tiempo_esperado']->toDateTime());
+
+        // Igual que tu código: +10 horas
+        $tiempoEsperadoConsulta = $tiempoEsperado->copy()->addHours(10);
+        $tiempoEsperadoUTC = new UTCDateTime($tiempoEsperadoConsulta->getTimestamp() * 1000);
+
+        // Primer punto = siempre SALIDA
+        $modoCalculo = ($index == 0) ? 'S' : ($punto_control['calculo'] ?? 'S');
+
+        // Buscar GPS respetando entrada/salida
+        $gps = $this->buscarGPSMasCercanoPunto(
+            $despacho->unidad_id,
+            (int)$puntoControlObj->pdi,
+            $modoCalculo,
+            $finiDinamico,
+            $tiempoEsperadoUTC,
+            $ffinGlobal
+        );
+
+        if ($gps) {
+
+            // CORRECCIÓN: convertir fecha GPS original
+            $fechaGPSOriginal = $gps->fecha_gps->toDateTime();
+            $fechaGPSMostrar  = Carbon::instance($fechaGPSOriginal)->subHours(10);
+
+            // Intervalo de minutos con signo
+            $intervaloMin = $this->calcularIntervaloMinutos(
+                $tiempoEsperado,
+                $fechaGPSMostrar,
+                $punto_control['redondeo'] ?? null,
+                $cooperativa
+            );
+
+
+
+            $arrayTiempoE[]=$intervaloMin ;
+
+            if (abs($intervaloMin) > $maxAtrasoMin) {
+                $array_final[] = $this->procesarPuntoSinGPS($punto_control);
+            } else {
+
+                if ($intervaloMin < 0) {
+                    $multa += abs($intervaloMin) * (float)$punto_control['adelanto'];
+                } else {
+                    $multa += $intervaloMin * (float)$punto_control['atraso'];
+                }
+
+                $itemProcesado = $this->procesarPuntoConGPS(
+                    $punto_control,
+                    $gps,
+                    $fechaGPSMostrar,
+                    $intervaloMin
+                );
+
+                $array_final[] = $itemProcesado;
+
+                $contadorFinal = $gps->contador_total ?? $contadorFinal;
+
+                if ($index == 0) {
+                    $salidaMarca = $itemProcesado['marca'];
+                }
+
+                // CORRECCIÓN: actualizar f_ini dinámico
+                $finiDinamico = new UTCDateTime($fechaGPSOriginal->getTimestamp() * 1000);
+            }
+
+        } else {
+            $array_final[] = $this->procesarPuntoSinGPS($punto_control);
+        }
+
+        $index++;
+    }
+
+    // Corte de tubo (igual que original)
+    $corteTubo = 'No';
+    $array_recorridos_corte = [];
+    $latitud_corte = 0.0;
+    $longitud_corte = 0.0;
+
+    $despacho->multa = $multa;
+
+    // Finalización
+    if ($despacho->estado == 'C') {
+        $despacho->recalculo_id = Auth::user()->_id;
+    } else {
+        $despacho->end_id = Auth::user()->_id;
+    }
+
+    $despacho->recorridos = "si";
+    $despacho->puntos_control = $array_final;
+    $despacho->contador_final = $contadorFinal;
+
+    if ($salidaMarca) {
+        $despacho->salida = $salidaMarca;
+    }
+
+    if ($despacho->estado != 'C') {
+        $despacho->fecha_culminacion = Carbon::now();
+    }
+
+    $despacho->estado = 'C';
+    $despacho->auxiliar = [];
+    $despacho->corte_tubo = $corteTubo;
+    $despacho->array_corte = $array_recorridos_corte;
+    $despacho->latitud_corte = $latitud_corte;
+    $despacho->longitud_corte = $longitud_corte;
+    $despacho->modificador_id = Auth::user()->_id;
+    $despacho->fecha_culminacion = Carbon::now();
+
+    $despacho->save();
+
+    return response()->json([
+        'error'       => false,
+        'despacho'    => $despacho,
+        'marcar'      => $array_final,
+        'paso'        => 'si',
+        'array_temp'  => [],
+        'recorridos'  => [],
+        'tiempo_esperado'  => $arrayTiempoE,
+
+        'rutarecorrido' => $despacho->ruta->recorrido,
+    ]);
+}
+
+
+
+
+        /**
+     * Cerrar despacho cuando no hay recorridos GTGEO en el rango.
+     */
+    protected function cerrarDespachoSinRecorridos($despacho)
+    {
+        if ($despacho->estado == 'C') {
+            $despacho->recalculo_id = Auth::user()->_id;
+        } else {
+            $despacho->end_id = Auth::user()->_id;
+        }
+
+        $despacho->corte_tubo = '-';
+        if ($despacho->estado != 'C') {
+            $despacho->fecha_culminacion = Carbon::now();
+        }
+        $despacho->estado = 'C';
+        $despacho->modificador_id = Auth::user()->_id;
+        $despacho->save();
+
+        return response()->json(['error' => true, 'despacho' => null]);
+    }
+
+    /**
+     * Buscar GPS más cercano respetando tu parametrización de ENTRADA / SALIDA.
+     * Primero busca antes del tiempo esperado, luego después, y elige el más cercano.
+     *
+     * $calculo: 'E' = entrada (entrada = 1), otro valor = salida (entrada != 1)
+     */
+    protected function buscarGPSMasCercanoPunto($unidadID, $pdi, $calculo, UTCDateTime $fini, UTCDateTime $tiempoEsperado, UTCDateTime $ffinGlobal)
+    {
+        $isEntrada = ($calculo === 'E');
+
+        // Query base
+        $baseQuery = Recorrido::where('tipo', 'GTGEO')
+            ->where('unidad_id', new ObjectID($unidadID))
+            ->where('pdi', (int)$pdi);
+
+        if ($isEntrada) {
+            $baseQuery = $baseQuery->where('entrada', 1);
+        } else {
+            $baseQuery = $baseQuery->where('entrada', '!=', 1);
+        }
+
+        // 1) Candidato ANTES del tiempo esperado (tu lógica original)
+        $antes = (clone $baseQuery)
+            ->where('fecha_gps', '>', $fini)
+            ->where('fecha_gps', '<=', $tiempoEsperado)
+            ->orderBy('fecha_gps', 'desc')
+            ->first();
+
+        // 2) Candidato DESPUÉS del tiempo esperado
+        $despues = (clone $baseQuery)
+            ->where('fecha_gps', '>', $tiempoEsperado)
+            ->where('fecha_gps', '<=', $ffinGlobal)
+            ->orderBy('fecha_gps', 'asc')
+            ->first();
+
+        if ($antes && $despues) {
+            $tEsperado = $tiempoEsperado->toDateTime()->getTimestamp();
+
+            $tAntes = $antes->fecha_gps->toDateTime()->getTimestamp();
+            $tDespues = $despues->fecha_gps->toDateTime()->getTimestamp();
+
+            $diffAntes = abs($tEsperado - $tAntes);
+            $diffDespues = abs($tDespues - $tEsperado);
+
+            return ($diffAntes <= $diffDespues) ? $antes : $despues;
+        }
+
+        if ($antes)   return $antes;
+        if ($despues) return $despues;
+
+        return null;
+    }
+
+    /**
+     * Calcula el intervalo en minutos entre dos tiempos (esperado y gps),
+     * usando diferencia REAL en segundos para obtener precisión total.
+     *
+     * - Diferencia < 0  => Adelanto
+     * - Diferencia > 0  => Atraso
+     * - Retorna minutos enteros (con signo)
+     */
+    protected function calcularIntervaloMinutos(Carbon $tiempoEsperado, Carbon $fechaGPS,  $redondeo, $cooperativa)
+    {
+        $dtEsperado = $tiempoEsperado->toDateTime();
+        $dtGPS      = $fechaGPS->toDateTime();
+
+        // Diferencia en formato DateInterval
+        $diff = $dtEsperado->diff($dtGPS);
+
+        // Mostrar HH:MM:SS exacto (+ o -)
+        $signo = ($dtGPS < $dtEsperado) ? "-" : "+";
+        $intervaloHMS = $signo . $diff->format("%H:%I:%S");
+
+        // Convertir diferencia a minutos decimales
+        $totalMin = ($diff->h * 60) + $diff->i + ($diff->s / 60);
+
+        // Redondeo global (cooperativa)
+        if (isset($cooperativa->redondear_tiempos_atraso) &&
+            $cooperativa->redondear_tiempos_atraso) {
+            return (int) ceil($totalMin);
+        }
+
+        // Redondeo por punto
+        if ($redondeo === 'min') {
+            return (int) floor($totalMin);
+        }
+        if ($redondeo === 'max') {
+            return (int) ceil($totalMin);
+        }
+
+        // Truncar por defecto (mantener lógica previa)
+        return (int) $totalMin;
+    }
+
+
+    /**
+     * Procesar punto cuando SÍ se encontró GPS.
+     */
+    protected function procesarPuntoConGPS($punto_control, $gps, \DateTime $fechaGPSMostrar, $intervaloMin)
+    {
+        $tiempoEsperado = $punto_control['tiempo_esperado']->toDateTime();
+        $diff = $tiempoEsperado->diff($fechaGPSMostrar);
+
+        $tiempo_atraso = null;
+        $tiempo_adelanto = null;
+
+        if ($fechaGPSMostrar > $tiempoEsperado) {
+            // Atraso
+            $tiempo_atraso = $diff->format('%h:%i:%s');
+        } elseif ($fechaGPSMostrar < $tiempoEsperado ) {
+            // Adelanto
+            $tiempo_adelanto = $diff->format('%h:%i:%s');
+        }
+      
+
+        return [
+            'id'              => $punto_control['id'],
+            'tiempo_esperado' => $punto_control['tiempo_esperado'],
+            'adelanto'        => $punto_control['adelanto'],
+            'atraso'          => $punto_control['atraso'],
+            'marca'           => $fechaGPSMostrar->format('Y-m-d H:i:s'),
+            'contador_marca'  => $gps->contador_total ?? null,
+            'tiempo_atraso'   => $tiempo_atraso,
+            'tiempo_adelanto' => $tiempo_adelanto,
+            'intervalo'       => $intervaloMin,
+            'calculo'         => $punto_control['calculo'] ?? null,
+            'redondeo'        => $punto_control['redondeo'] ?? null,
+            'retorno'         => $punto_control['retorno'] ?? null,
+        ];
+    }
+
+    /**
+     * Procesar punto cuando NO se encontró GPS.
+     */
+    protected function procesarPuntoSinGPS($punto_control)
+    {
+        return [
+            'id'              => $punto_control['id'],
+            'tiempo_esperado' => $punto_control['tiempo_esperado'],
+            'adelanto'        => $punto_control['adelanto'],
+            'atraso'          => $punto_control['atraso'],
+            'marca'           => null,
+            'contador_marca'  => null,
+            'tiempo_atraso'   => null,
+            'tiempo_adelanto' => null,
+            'intervalo'       => null,
+            'calculo'         => $punto_control['calculo'] ?? null,
+            'redondeo'        => $punto_control['redondeo'] ?? null,
+            'retorno'         => $punto_control['retorno'] ?? null,
+        ];
+    }
+
+
+
     
     public function endtmp(Request $request, $id)
     {
