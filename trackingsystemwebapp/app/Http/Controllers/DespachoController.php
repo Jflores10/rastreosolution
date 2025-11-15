@@ -1339,40 +1339,44 @@ class DespachoController extends Controller
      * - Diferencia > 0  => Atraso
      * - Retorna minutos enteros (con signo)
      */
-    protected function calcularIntervaloMinutos(Carbon $tiempoEsperado, Carbon $fechaGPS,  $redondeo, $cooperativa)
+    protected function calcularIntervaloMinutos(Carbon $tiempoEsperado, Carbon $fechaGPS, $redondeo, $cooperativa)
     {
         $dtEsperado = $tiempoEsperado->toDateTime();
         $dtGPS      = $fechaGPS->toDateTime();
 
-        // Diferencia en formato DateInterval
+        // Diferencia sin signo
         $diff = $dtEsperado->diff($dtGPS);
 
-        // Convertir diferencia a minutos decimales
+        // Convertir diferencia en minutos
         $totalMin = ($diff->h * 60) + $diff->i + ($diff->s / 60);
 
+        // Determinar signo real (- adelanto, + atraso)
+        $signo = ($dtGPS < $dtEsperado) ? -1 : 1;
 
-        // Redondeo global (cooperativa)
-        if (isset($cooperativa->redondear_tiempos_atraso) &&
-            $cooperativa->redondear_tiempos_atraso) {
-            return (int) ceil($totalMin);
+        // Aplicar signo ANTES del redondeo (esto es lo correcto)
+        $totalMin = $totalMin * $signo;
+
+        // Redondeo global
+        if (!empty($cooperativa->redondear_tiempos_atraso)) {
+            return ($totalMin < 0)
+                ? (int) ceil($totalMin) // -4.2 → -4
+                : (int) ceil($totalMin); // 4.2 → 5
         }
 
         // Redondeo por punto
         if ($redondeo === 'min') {
-            return (int) floor($totalMin);
+            return ($totalMin < 0)
+                ? (int) ceil($totalMin)  // -4.7 → -4
+                : (int) floor($totalMin); // 4.7 → 4
         }
+
         if ($redondeo === 'max') {
-            return (int) ceil($totalMin);
+            return ($totalMin < 0)
+                ? (int) floor($totalMin) // -4.2 → -5
+                : (int) ceil($totalMin); // 4.2 → 5
         }
 
-        // Determinar si es adelanto (-) o atraso (+)
-        $signo = ($dtGPS < $dtEsperado) ? -1 : 1;
-
-        // Aplicar signo real
-        $totalMin = $totalMin * $signo;
-
-
-        // Truncar por defecto (mantener lógica previa)
+        // Sin reglas: truncado nativo
         return (int) $totalMin;
     }
 
