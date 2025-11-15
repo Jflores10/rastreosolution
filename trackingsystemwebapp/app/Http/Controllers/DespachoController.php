@@ -1377,7 +1377,7 @@ class DespachoController extends Controller
         }
 
         // Sin reglas: truncado nativo
-        return (int) $totalMin;
+        return (int) (($diff->h * 60) + $diff->i + ($diff->s / 60));
     }
 
 
