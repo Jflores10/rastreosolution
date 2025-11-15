@@ -1247,7 +1247,7 @@ class DespachoController extends Controller
         'paso'        => 'si',
         'array_temp'  => [],
         'recorridos'  => [],
-        'multas'  => $multasPorPunto,
+        'arrayTiempoE'  => $arrayTiempoE,
 
         'rutarecorrido' => $despacho->ruta->recorrido,
     ]);
