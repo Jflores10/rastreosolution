@@ -1090,8 +1090,6 @@ class DespachoController extends Controller
     $arrayTiempoE=[];
     $ultimaMarcaValida = null;
     $multasPorPunto = []; // NUEVO
-        $arraygps=[];
-
     foreach ($despacho->puntos_control as $punto_control) {
 
         $puntoControlObj = PuntoControl::find($punto_control['id']);
@@ -1148,12 +1146,12 @@ class DespachoController extends Controller
         }
         //--------------------------------------------------------------------
 
+
         if ($gps) {
 
             // CORRECCIÓN: convertir fecha GPS original
             $fechaGPSOriginal = $gps->fecha_gps->toDateTime();
             $fechaGPSMostrar  = Carbon::instance($fechaGPSOriginal)->subHours(10);
-            $arraygps[]=$fechaGPSMostrar;
 
             // Intervalo de minutos con signo
             $intervaloMin = $this->calcularIntervaloMinutos(
@@ -1250,7 +1248,7 @@ class DespachoController extends Controller
         'array_temp'  => [],
         'recorridos'  => [],
         'arrayTiempoE'  => $arrayTiempoE,
-        'recorrido'=>$arraygps,
+
         'rutarecorrido' => $despacho->ruta->recorrido,
     ]);
 }
