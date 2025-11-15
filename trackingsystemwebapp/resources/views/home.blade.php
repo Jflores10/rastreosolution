@@ -237,7 +237,7 @@ Dashboard
           <div class="col-lg-9 col-md-8 col-sm-12" style="padding:20px;">
             <div class="row" style="margin-bottom:5px;">
               <div class="col-md-3">
-                <select class="form-control select2" multiple data-placeholder="Ruta Unidad" name="ruta" id="ruta">
+                <select class="form-control select2" multiple data-placeholder="Rutas en Despachos" name="ruta" id="ruta">
                   @if (isset($rutas))
                     @foreach ($rutas as $ruta)
                       <option value="{{ $ruta->_id }}">{{ $ruta->descripcion }}</option>
