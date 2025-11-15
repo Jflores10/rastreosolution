@@ -1088,6 +1088,7 @@ class DespachoController extends Controller
     $contadorFinal = 0;
     $salidaMarca   = null;
     $arrayTiempoE=[];
+     $ultimaMarcaValida = null;
     foreach ($despacho->puntos_control as $punto_control) {
 
         $puntoControlObj = PuntoControl::find($punto_control['id']);
@@ -1116,6 +1117,28 @@ class DespachoController extends Controller
             $tiempoEsperadoUTC,
             $ffinGlobal
         );
+
+         //--------------------------------------------------------------------
+        if ($gps) {
+            $fechaGPSOriginal = $gps->fecha_gps->toDateTime();
+
+            if ($ultimaMarcaValida && $fechaGPSOriginal < $ultimaMarcaValida) {
+
+                // Invalida el punto anterior:
+                $array_final[count($array_final) - 1] = $this->procesarPuntoSinGPS(
+                    $despacho->puntos_control[$index - 1]
+                );
+
+                // Aceptar esta marca como correcta
+                $ultimaMarcaValida = $fechaGPSOriginal;
+
+            } else {
+                // Secuencia correcta
+                $ultimaMarcaValida = $fechaGPSOriginal;
+            }
+        }
+        //--------------------------------------------------------------------
+        
 
         if ($gps) {
 
