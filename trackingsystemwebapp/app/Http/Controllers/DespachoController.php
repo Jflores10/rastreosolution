@@ -1149,11 +1149,11 @@ class DespachoController extends Controller
         //--------------------------------------------------------------------
 
         if ($gps) {
-            $arraygps[]=$fechaGPSOriginal;
 
             // CORRECCIÓN: convertir fecha GPS original
             $fechaGPSOriginal = $gps->fecha_gps->toDateTime();
             $fechaGPSMostrar  = Carbon::instance($fechaGPSOriginal)->subHours(10);
+            $arraygps[]=$fechaGPSMostrar;
 
             // Intervalo de minutos con signo
             $intervaloMin = $this->calcularIntervaloMinutos(
