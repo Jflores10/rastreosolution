@@ -1149,7 +1149,7 @@ class DespachoController extends Controller
         //--------------------------------------------------------------------
 
         if ($gps) {
-            $arraygps[]=$gps;
+            $arraygps[]=$fechaGPSOriginal;
 
             // CORRECCIÓN: convertir fecha GPS original
             $fechaGPSOriginal = $gps->fecha_gps->toDateTime();
