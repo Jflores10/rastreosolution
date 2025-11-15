@@ -1088,7 +1088,8 @@ class DespachoController extends Controller
     $contadorFinal = 0;
     $salidaMarca   = null;
     $arrayTiempoE=[];
-     $ultimaMarcaValida = null;
+    $ultimaMarcaValida = null;
+    $multasPorPunto = []; // NUEVO
     foreach ($despacho->puntos_control as $punto_control) {
 
         $puntoControlObj = PuntoControl::find($punto_control['id']);
@@ -1124,6 +1125,12 @@ class DespachoController extends Controller
 
             if ($ultimaMarcaValida && $fechaGPSOriginal < $ultimaMarcaValida) {
 
+                 // 1) Restar multa del punto anterior
+                if (isset($multasPorPunto[$index - 1])) {
+                    $multa -= $multasPorPunto[$index - 1];
+                    unset($multasPorPunto[$index - 1]);
+                }
+                
                 // Invalida el punto anterior:
                 $array_final[count($array_final) - 1] = $this->procesarPuntoSinGPS(
                     $despacho->puntos_control[$index - 1]
@@ -1138,7 +1145,7 @@ class DespachoController extends Controller
             }
         }
         //--------------------------------------------------------------------
-        
+
 
         if ($gps) {
 
@@ -1162,11 +1169,12 @@ class DespachoController extends Controller
                 $array_final[] = $this->procesarPuntoSinGPS($punto_control);
             } else {
 
-                if ($intervaloMin < 0) {
-                    $multa += abs($intervaloMin) * (float)$punto_control['adelanto'];
-                } else {
-                    $multa += $intervaloMin * (float)$punto_control['atraso'];
-                }
+                $multaPunto = ($intervaloMin < 0)
+                    ? abs($intervaloMin) * (float) $punto_control['adelanto']
+                    : $intervaloMin * (float) $punto_control['atraso'];
+
+                $multa += $multaPunto;
+                $multasPorPunto[$index] = $multaPunto;
 
                 $itemProcesado = $this->procesarPuntoConGPS(
                     $punto_control,
