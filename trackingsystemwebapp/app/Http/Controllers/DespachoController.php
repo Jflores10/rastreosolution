@@ -1347,12 +1347,9 @@ class DespachoController extends Controller
         // Diferencia en formato DateInterval
         $diff = $dtEsperado->diff($dtGPS);
 
-        // Mostrar HH:MM:SS exacto (+ o -)
-        $signo = ($dtGPS < $dtEsperado) ? "-" : "+";
-        $intervaloHMS = $signo . $diff->format("%H:%I:%S");
-
         // Convertir diferencia a minutos decimales
         $totalMin = ($diff->h * 60) + $diff->i + ($diff->s / 60);
+
 
         // Redondeo global (cooperativa)
         if (isset($cooperativa->redondear_tiempos_atraso) &&
@@ -1367,6 +1364,13 @@ class DespachoController extends Controller
         if ($redondeo === 'max') {
             return (int) ceil($totalMin);
         }
+
+        // Determinar si es adelanto (-) o atraso (+)
+        $signo = ($dtGPS < $dtEsperado) ? -1 : 1;
+
+        // Aplicar signo real
+        $totalMin = $totalMin * $signo;
+
 
         // Truncar por defecto (mantener lógica previa)
         return (int) $totalMin;
