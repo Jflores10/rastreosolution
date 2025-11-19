@@ -1446,7 +1446,7 @@ class DespachoController extends Controller
         if ($despues) return $despues;
         
 
-        return $modoRecorrido;
+        return $antesList;
     }
 
 
