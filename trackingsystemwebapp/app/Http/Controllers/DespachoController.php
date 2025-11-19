@@ -1123,7 +1123,7 @@ class DespachoController extends Controller
         $modoCalculo = ($index == 0) ? 'S' : ($punto_control['calculo'] ?? 'S');
          // ---------------------------------------------------------------------
         $modoRecorrido = 1;
-        if ($indiceRetorno !== null && $index >= $indiceRetorno) {
+        if ($indiceRetorno !== null && $index > $indiceRetorno) {
             $modoRecorrido = 2;
         }
         // ---------------------------------------------------------------------
