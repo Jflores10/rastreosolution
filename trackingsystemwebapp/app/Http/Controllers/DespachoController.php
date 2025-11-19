@@ -1101,6 +1101,8 @@ class DespachoController extends Controller
     $arrayTiempoE=[];
     $ultimaMarcaValida = null;
     $multasPorPunto = []; // NUEVO
+    $puntos_ecn=[];
+
     foreach ($despacho->puntos_control as $punto_control) {
 
         $puntoControlObj = PuntoControl::find($punto_control['id']);
@@ -1135,6 +1137,8 @@ class DespachoController extends Controller
             $ffinGlobal,
             $modoRecorrido
         );
+
+        $puntos_ecn=$gps;
 
          //--------------------------------------------------------------------
         if ($gps) {
@@ -1265,7 +1269,7 @@ class DespachoController extends Controller
         'array_temp'  => [],
         'recorridos'  => [],
         'arrayTiempoE'  => $arrayTiempoE,
-
+        'puntos_ecn'=>$puntos_ecn,
         'rutarecorrido' => $despacho->ruta->recorrido,
     ]);
 }
