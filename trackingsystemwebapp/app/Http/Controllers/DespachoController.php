@@ -1081,7 +1081,7 @@ class DespachoController extends Controller
      // ---------------------------------------------------------------------
     $indiceRetorno = null;
     foreach ($despacho->puntos_control as $k => $p) {
-        if (!empty($p['retorno']) && $p['retorno'] == 1) {
+        if (!empty($p['retorno']) && $p['retorno'] == '1') {
             $indiceRetorno = $k;
             break;
         }
@@ -1140,32 +1140,7 @@ class DespachoController extends Controller
 
         $puntos_ecn[]=$gps;
 
-         //--------------------------------------------------------------------
-        if ($gps) {
-            $fechaGPSOriginal = $gps->fecha_gps->toDateTime();
-
-            if ($ultimaMarcaValida && $fechaGPSOriginal < $ultimaMarcaValida) {
-
-                 // 1) Restar multa del punto anterior
-                if (isset($multasPorPunto[$index - 1])) {
-                    $multa -= $multasPorPunto[$index - 1];
-                    unset($multasPorPunto[$index - 1]);
-                }
-                
-                // Invalida el punto anterior:
-                $array_final[count($array_final) - 1] = $this->procesarPuntoSinGPS(
-                    $despacho->puntos_control[$index - 1]
-                );
-
-                // Aceptar esta marca como correcta
-                $ultimaMarcaValida = $fechaGPSOriginal;
-
-            } else {
-                // Secuencia correcta
-                $ultimaMarcaValida = $fechaGPSOriginal;
-            }
-        }
-        //--------------------------------------------------------------------
+      
 
 
         if ($gps) {
