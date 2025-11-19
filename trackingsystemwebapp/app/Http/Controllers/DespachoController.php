@@ -1339,26 +1339,33 @@ class DespachoController extends Controller
 
         // --------------------------------------------------------
         // --------------------------------------------------------
-        $antesQuery = (clone $baseQuery)
-            ->where('fecha_gps', '>', $fini)
-            ->where('fecha_gps', '<=', $tiempoEsperado)
-            ->orderBy('fecha_gps', 'desc');
+        $antesList = (clone $baseQuery)
+            ->where('fecha_gps','>', $fini)
+            ->where('fecha_gps','<=', $tiempoEsperado)
+            ->orderBy('fecha_gps','desc')
+            ->get();
 
-         // obtener TODOS
-        $antesList = $antesQuery->get();
-
-        // tomar 1er recorrido (index 0) o 2do recorrido (index 1)
-        $antes = $antesList->get($modoRecorrido - 1);
+        // Si retorno y existen al menos 2 → usar el segundo
+        if ($modoRecorrido == 2) {
+            $antes = $antesList->count() >= 2 ? $antesList->get(1) : $antesList->first();
+        } else {
+            $antes = $antesList->first();
+        }
 
         // --------------------------------------------------------
         // --------------------------------------------------------
-        $despuesQuery = (clone $baseQuery)
-            ->where('fecha_gps', '>', $tiempoEsperado)
-            ->where('fecha_gps', '<=', $ffinGlobal)
-            ->orderBy('fecha_gps', 'asc');
+        $despuesList = (clone $baseQuery)
+        ->where('fecha_gps','>', $tiempoEsperado)
+        ->where('fecha_gps','<=', $ffinGlobal)
+        ->orderBy('fecha_gps','asc')
+        ->get();
 
-        $despuesList = $despuesQuery->get();
-        $despues = $despuesList->get($modoRecorrido - 1);
+        // Si retorno y existen al menos 2 → usar el segundo
+        if ($modoRecorrido == 2) {
+            $despues = $despuesList->count() >= 2 ? $despuesList->get(1) : $despuesList->first();
+        } else {
+            $despues = $despuesList->first();
+        }
 
 
         // --------------------------------------------------------
