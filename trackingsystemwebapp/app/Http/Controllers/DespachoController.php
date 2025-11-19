@@ -1138,7 +1138,17 @@ class DespachoController extends Controller
             $modoRecorrido
         );
 
-        $puntos_ecn[]=$gps;
+         $gps1 = $this->buscarGPSMasCercanoPunto1(
+            $despacho->unidad_id,
+            (int)$puntoControlObj->pdi,
+            $modoCalculo,
+            $finiDinamico,
+            $tiempoEsperadoUTC,
+            $ffinGlobal,
+            $modoRecorrido
+        );
+
+        $puntos_ecn[]=$gps1;
 
          //--------------------------------------------------------------------
         if ($gps) {
@@ -1306,6 +1316,73 @@ class DespachoController extends Controller
      * $calculo: 'E' = entrada (entrada = 1), otro valor = salida (entrada != 1)
      */
     protected function buscarGPSMasCercanoPunto(
+        $unidadID,
+        $pdi,
+        $calculo,
+        UTCDateTime $fini,
+        UTCDateTime $tiempoEsperado,
+        UTCDateTime $ffinGlobal,
+        $modoRecorrido = 1  // 1 = ida (primer recorrido), 2 = retorno (segundo recorrido)
+    ) {
+        $isEntrada = ($calculo === 'E');
+
+        // Query base
+        $baseQuery = Recorrido::where('tipo', 'GTGEO')
+            ->where('unidad_id', new ObjectID($unidadID))
+            ->where('pdi', (int)$pdi);
+
+        if ($isEntrada) {
+            $baseQuery = $baseQuery->where('entrada', 1);
+        } else {
+            $baseQuery = $baseQuery->where('entrada', '!=', 1);
+        }
+
+        // --------------------------------------------------------
+        // --------------------------------------------------------
+        $antesQuery = (clone $baseQuery)
+            ->where('fecha_gps', '>', $fini)
+            ->where('fecha_gps', '<=', $tiempoEsperado)
+            ->orderBy('fecha_gps', 'desc');
+
+         // obtener TODOS
+        $antesList = $antesQuery->get();
+
+        // tomar 1er recorrido (index 0) o 2do recorrido (index 1)
+        $antes = $antesList->get($modoRecorrido - 1);
+
+        // --------------------------------------------------------
+        // --------------------------------------------------------
+        $despuesQuery = (clone $baseQuery)
+            ->where('fecha_gps', '>', $tiempoEsperado)
+            ->where('fecha_gps', '<=', $ffinGlobal)
+            ->orderBy('fecha_gps', 'asc');
+
+        $despuesList = $despuesQuery->get();
+        $despues = $despuesList->get($modoRecorrido - 1);
+
+
+        // --------------------------------------------------------
+        // --------------------------------------------------------
+        if ($antes && $despues) {
+            $tEsperado = $tiempoEsperado->toDateTime()->getTimestamp();
+
+            $tAntes = $antes->fecha_gps->toDateTime()->getTimestamp();
+            $tDespues = $despues->fecha_gps->toDateTime()->getTimestamp();
+
+            $diffAntes = abs($tEsperado - $tAntes);
+            $diffDespues = abs($tDespues - $tEsperado);
+
+            return ($diffAntes <= $diffDespues) ? $antes : $despues;
+        }
+
+        if ($antes)   return $antes;
+        if ($despues) return $despues;
+        
+
+        return null;
+    }
+
+    protected function buscarGPSMasCercanoPunto1(
         $unidadID,
         $pdi,
         $calculo,
