@@ -1334,10 +1334,7 @@ class DespachoController extends Controller
             ->where('fecha_gps', '<=', $tiempoEsperado)
             ->orderBy('fecha_gps', 'desc');
 
-        if ($modoRecorrido == 2) {
-            // Si estamos en retorno -> tomar el segundo registro
-            $antesQuery->skip(1);
-        }
+       
 
         $antes = $antesQuery->first();
 
@@ -1348,11 +1345,7 @@ class DespachoController extends Controller
             ->where('fecha_gps', '<=', $ffinGlobal)
             ->orderBy('fecha_gps', 'asc');
 
-        if ($modoRecorrido == 2) {
-            // Si estamos en retorno -> tomar el segundo registro
-            $despuesQuery->skip(1);
-        }
-
+     
         $despues = $despuesQuery->first();
 
         // --------------------------------------------------------
