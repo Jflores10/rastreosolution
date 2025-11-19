@@ -1334,9 +1334,11 @@ class DespachoController extends Controller
             ->where('fecha_gps', '<=', $tiempoEsperado)
             ->orderBy('fecha_gps', 'desc');
 
-       
+         // obtener TODOS
+        $antesList = $antesQuery->get();
 
-        $antes = $antesQuery->first();
+        // tomar 1er recorrido (index 0) o 2do recorrido (index 1)
+        $antes = $antesList->get($modoRecorrido - 1);
 
         // --------------------------------------------------------
         // --------------------------------------------------------
@@ -1345,8 +1347,9 @@ class DespachoController extends Controller
             ->where('fecha_gps', '<=', $ffinGlobal)
             ->orderBy('fecha_gps', 'asc');
 
-     
-        $despues = $despuesQuery->first();
+        $despuesList = $despuesQuery->get();
+        $despues = $despuesList->get($modoRecorrido - 1);
+
 
         // --------------------------------------------------------
         // --------------------------------------------------------
@@ -1366,7 +1369,7 @@ class DespachoController extends Controller
         if ($despues) return $despues;
         
 
-        return $antes;
+        return null;
     }
 
 
