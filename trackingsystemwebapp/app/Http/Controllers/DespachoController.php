@@ -1078,6 +1078,17 @@ class DespachoController extends Controller
         return $this->cerrarDespachoSinRecorridos($despacho);
     }
 
+     // ---------------------------------------------------------------------
+    $indiceRetorno = null;
+    foreach ($despacho->puntos_control as $k => $p) {
+        if (!empty($p['retorno']) && $p['retorno'] == 1) {
+            $indiceRetorno = $k;
+            break;
+        }
+    }
+    // ---------------------------------------------------------------------
+
+
     // Parámetros de corte y marcas
     $array_final   = [];
     $multa         = 0.0;
@@ -1108,7 +1119,12 @@ class DespachoController extends Controller
 
         // Primer punto = siempre SALIDA
         $modoCalculo = ($index == 0) ? 'S' : ($punto_control['calculo'] ?? 'S');
-
+         // ---------------------------------------------------------------------
+        $modoRecorrido = 1;
+        if ($indiceRetorno !== null && $index >= $indiceRetorno) {
+            $modoRecorrido = 2;
+        }
+        // ---------------------------------------------------------------------
         // Buscar GPS respetando entrada/salida
         $gps = $this->buscarGPSMasCercanoPunto(
             $despacho->unidad_id,
@@ -1116,7 +1132,8 @@ class DespachoController extends Controller
             $modoCalculo,
             $finiDinamico,
             $tiempoEsperadoUTC,
-            $ffinGlobal
+            $ffinGlobal,
+            $modoRecorrido
         );
 
          //--------------------------------------------------------------------
@@ -1284,8 +1301,15 @@ class DespachoController extends Controller
      *
      * $calculo: 'E' = entrada (entrada = 1), otro valor = salida (entrada != 1)
      */
-    protected function buscarGPSMasCercanoPunto($unidadID, $pdi, $calculo, UTCDateTime $fini, UTCDateTime $tiempoEsperado, UTCDateTime $ffinGlobal)
-    {
+    protected function buscarGPSMasCercanoPunto(
+        $unidadID,
+        $pdi,
+        $calculo,
+        UTCDateTime $fini,
+        UTCDateTime $tiempoEsperado,
+        UTCDateTime $ffinGlobal,
+        $modoRecorrido = 1  // 1 = ida (primer recorrido), 2 = retorno (segundo recorrido)
+    ) {
         $isEntrada = ($calculo === 'E');
 
         // Query base
@@ -1299,20 +1323,36 @@ class DespachoController extends Controller
             $baseQuery = $baseQuery->where('entrada', '!=', 1);
         }
 
-        // 1) Candidato ANTES del tiempo esperado (tu lógica original)
-        $antes = (clone $baseQuery)
+        // --------------------------------------------------------
+        // --------------------------------------------------------
+        $antesQuery = (clone $baseQuery)
             ->where('fecha_gps', '>', $fini)
             ->where('fecha_gps', '<=', $tiempoEsperado)
-            ->orderBy('fecha_gps', 'desc')
-            ->first();
+            ->orderBy('fecha_gps', 'desc');
 
-        // 2) Candidato DESPUÉS del tiempo esperado
-        $despues = (clone $baseQuery)
+        if ($modoRecorrido == 2) {
+            // Si estamos en retorno -> tomar el segundo registro
+            $antesQuery->skip(1);
+        }
+
+        $antes = $antesQuery->first();
+
+        // --------------------------------------------------------
+        // --------------------------------------------------------
+        $despuesQuery = (clone $baseQuery)
             ->where('fecha_gps', '>', $tiempoEsperado)
             ->where('fecha_gps', '<=', $ffinGlobal)
-            ->orderBy('fecha_gps', 'asc')
-            ->first();
+            ->orderBy('fecha_gps', 'asc');
 
+        if ($modoRecorrido == 2) {
+            // Si estamos en retorno -> tomar el segundo registro
+            $despuesQuery->skip(1);
+        }
+
+        $despues = $despuesQuery->first();
+
+        // --------------------------------------------------------
+        // --------------------------------------------------------
         if ($antes && $despues) {
             $tEsperado = $tiempoEsperado->toDateTime()->getTimestamp();
 
@@ -1330,6 +1370,7 @@ class DespachoController extends Controller
 
         return null;
     }
+
 
     /**
      * Calcula el intervalo en minutos entre dos tiempos (esperado y gps),
