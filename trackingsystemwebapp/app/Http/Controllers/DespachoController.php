@@ -1138,7 +1138,7 @@ class DespachoController extends Controller
             $modoRecorrido
         );
 
-        $puntos_ecn=$gps;
+        $puntos_ecn[]=$gps;
 
          //--------------------------------------------------------------------
         if ($gps) {
