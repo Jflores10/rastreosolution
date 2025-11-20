@@ -46,7 +46,8 @@
                         <td>Usuario FN.</td>
                         <td>Usuario RE.</td>
                         <td></td>
-                        <td></td>
+                        <td colspan="2"></td>
+
                     </tr>
                 </thead>
                 <tbody>
@@ -168,8 +169,16 @@
                             <td><a href="#" onclick="recalcular('{{ $despacho->_id }}');">Recalcular</a> 
                             </td>
                             
-                            <td><a href="#" onclick="construirImpresion('{{ $despacho->_id }}');">Imprimir</a>
+                            <td style="white-space: nowrap;">
+                                <a href="#" onclick="construirImpresionInfo('{{ $despacho->_id }}');"><i class="fa fa-print"></i>&nbsp;Info</a>
+
                             </td>
+                               
+                            <td style="white-space: nowrap;">
+                                <a href="#" onclick="construirImpresion('{{ $despacho->_id }}');"><i class="fa fa-print"></i>&nbsp;Imprimir</a>
+
+                            </td>
+
                         </tr>
                     @endforeach
                 </tbody>
@@ -182,6 +191,167 @@
 @endif
 
 <script>
+    
+        function construirImpresionInfo(id) {
+            var desc1=0;
+            var desc2=0;
+            var url = '{{ url('/despachos/info') }}' + '/' + id;
+            $('#progress').modal('show');
+            var w = window.open("", "Imprimir", "width=257,height=400");
+            $.get(url, function(data) {
+                $('#progress').modal('hide');
+                var tabla = [];
+                tabla.push('<!DOCTYPE html>');
+                tabla.push('<html>');
+                tabla.push('<head>');
+                tabla.push('<style>');
+                tabla.push('@media print {input : { visibility:hidden !important; }}');
+                tabla.push('@page {size: auto;margin: 0mm;padding:1;}');
+
+                tabla.push('#info, #info tr, #info td, #info th { border: 1px solid black; }');
+                tabla.push('#info, #info tr { border-left: 0px; border-right: 0px; }');
+                tabla.push('#info .left { border-left: 1px solid black;}');
+                tabla.push('#info .right { border-right: 0px; }');
+                tabla.push('#info { border-collapse: collapse; }');
+
+                tabla.push('</style>')
+                tabla.push('</head>');
+                tabla.push('<body style="display:block;overflow:auto;">');
+                tabla.push('<div>');
+                tabla.push(
+                    '<input type="button" id="btImprimirTicket" value="Imprimir" onclick="imprimirTicket();" />'
+                );
+
+                let rutaId = (data.ruta.rutapadre == null) ? data.ruta._id : data.ruta.rutapadre._id;
+                const ruta44 = '5edb924c2243df11d23c9e62';
+                const ruta46 = '5ec4619c2243df3c3074fd32'; 
+
+                tabla.push('<table style="width:100%;">');
+                tabla.push('<tbody>');
+                tabla.push('<tr>');
+                tabla.push('<td colspan="3" align="center"><strong>TICKET INFO.</strong></td>');
+                tabla.push('</tr>');
+                tabla.push('<tr>');
+                if (data.unidad.cooperativa_id != '5cc725bc2243df3e4d365362' &&
+                    data.unidad.cooperativa_id != '5e0778022243df6cb03a0943' &&
+                    data.unidad.cooperativa_id != '5ac3032b2243df3f4d02f243') // RAMOVAL 10AGOSTO           
+                    tabla.push('<td  colspan="2">' + data.conductor.nombre + '</td>');
+                tabla.push('<td>' + data.contador_inicial + '/' + data.contador_final + '</td>');
+
+                tabla.push('</tr>');
+                tabla.push('<tr>');
+                tabla.push('<td>' + ((data.ruta.rutapadre == null) ? data.ruta.descripcion : data.ruta.rutapadre
+                    .descripcion) + '</td>');
+                tabla.push('<td>' + new Date(data.fecha).format('d/m/Y') + '</td>');
+                tabla.push('<td><strong>' + data.unidad.descripcion + '</strong></td>');
+                tabla.push('</tbody>');
+                tabla.push('</table>');
+
+                tabla.push('<table id="info" style="width:100%; text-align:center;">');
+                tabla.push('<thead><th>PT.</th><th>M</th><th>A-|A+</th></thead>');
+                //CUANDO LA VUELTA ANTERIOR TIENE MAS PUNTOS QUE LA QUE SE VA A REALIZAR SE DEBE RECORRER APARTE EL DATA.ANTERIOR.PUNTOS_CONTROL PARA CON ESTO LUEGO HACER UN APPEND LA TABLA, 
+                let recorrido_puntos = data.puntos_control.length;
+                var anteriorBusAT = 0;
+                var anteriorBusAD = 0;
+
+                for (var i = 0; i < recorrido_puntos; i++) {
+                    tabla.push('<tr style="line-height : 0.7;">');
+                    let descripcionReal = data.unidad.cooperativa_id == '68012ee36d838a101b60fb13';
+                    tabla.push('<td class="left">' + ((data.puntos_control[i] != null) ? (
+                        descripcionReal?data.puntos_control[i].original_descripcion:data.puntos_control[i].descripcion
+                    ) : '-') + '</td>');
+
+                    if (data.puntos_control[i] != null) {
+                        if (data.puntos_control[i].tiempo_esperado != null &&
+                            data.puntos_control[i].tiempo_esperado != undefined) {
+                            console.log(data.puntos_control[i]);
+                            var horaAnterior = new Date(parseInt(data.puntos_control[i].tiempo_esperado.$date
+                                .$numberLong));
+                            horaAnterior.setHours(horaAnterior.getHours() + 5);
+
+                            tabla.push('<td> ' + horaAnterior.format('H:i') + '</td>');
+                            if (data.puntos_control[i].marca != null) {
+                                var intervalo= (data.puntos_control[i].intervalo!=null &&
+                                    data.puntos_control[i].intervalo!=undefined)?data.puntos_control[i].intervalo:0;
+                                var atraso = (data.puntos_control[i].atraso != null && data.puntos_control[i]
+                                    .atraso != undefined) ? data.puntos_control[i].atraso : 0;
+                                var adelanto = (data.puntos_control[i].adelanto != null && 
+                                data.puntos_control[i].adelanto != undefined) ? data.puntos_control[i].adelanto : 0;
+                                var tt=(data.puntos_control[i].intervalo>0)?"+"+data.puntos_control[i].intervalo:data.puntos_control[i].intervalo;
+                                tabla.push('<td>' + tt  + '</td>');
+                                if (data.puntos_control[i].intervalo > 0)
+                                    anteriorBusAT += data.puntos_control[i].intervalo;
+                                else
+                                    anteriorBusAD += data.puntos_control[i].intervalo * -1;
+
+                                var desc = 0;
+                                if (data.puntos_control[i].tiempo_atraso != null && data.puntos_control[i].tiempo_atraso != undefined) {
+                                    desc = intervalo * atraso;
+                                } else {
+                                    desc = intervalo * adelanto;
+                                }
+
+                                if (rutaId == ruta44) {
+                                    if(i<4)
+                                        desc1+=toFloat(desc);
+                                    else if (i >= 4 && i < 6)
+                                        desc2+=toFloat(desc);
+                                }
+                                else if (rutaId == ruta46) {
+                                    if(i<4)
+                                        desc1+=toFloat(desc);
+                                    else if (i >= 5 && i < 9)
+                                        desc2+=toFloat(desc);
+                                }
+                            } else
+                                tabla.push('<td>-</td>');
+                        } else {
+                            tabla.push('<td>-</td>');
+                            tabla.push('<td>-</td>');
+                        }
+                    } else {
+                        tabla.push('<td>-</td>');
+                        tabla.push('<td>-</td>');
+                    }
+                    tabla.push('</tr>');
+                }
+
+                tabla.push('</table><br/>');
+                tabla.push('<table style="width:100%; text-align:center;">');
+                tabla.push('<tr>');
+
+                tabla.push('<td >' + new Date().format('d/m/Y H:i:s') + '</td>');
+                tabla.push('</tr>');
+                tabla.push('</table>');
+                if (data.unidad.cooperativa_id == '5829c7407aea9111257dd831') {
+                    tabla.push('<b>Descuento 1: $ ' + desc1.toFixed(2) + '</b><br/>');
+                    tabla.push('<b>Descuento 2: $ ' + desc2.toFixed(2) + '</b><br/>');
+                    let descuentoTotal = desc1 + desc2;
+                    tabla.push('<b>Total: $ ' + descuentoTotal.toFixed(2) + '</b><br/>'); 
+                }
+                tabla.push('<b>Cobro Total: $ ' + ((data.multa == null) ? '-' : data.multa.toFixed(2)) + '</b><br/>');
+                //tabla.push('<b>Descuento: $ ' + ((data.multa == null)?'-':data.multa.toFixed(2)) + '</b><br/>');
+                tabla.push('<b>Corte de tubo:' + ((data == null) ? '-' : data.corte_tubo) + '</b><br/>');
+                tabla.push('<b>Total AD ant.:' + anteriorBusAD + '</b>&nbsp&nbsp&nbsp&nbsp');
+                tabla.push('<b>Total AT ant.:' + anteriorBusAT + '</b><br/>');
+                tabla.push('</div>');
+                tabla.push('</body>');
+                tabla.push('<script>');
+                tabla.push('function imprimirTicket()');
+                tabla.push('{');
+                tabla.push('var doc=document.getElementById("btImprimirTicket");');
+                tabla.push('doc.setAttribute("style","display:none");');
+                tabla.push('window.print();');
+                tabla.push('}');
+                tabla.push('<\/script>');
+                tabla.push('</html>');
+                html = tabla.join('');
+                w.document.write(html);
+                w.document.close();
+            }, 'json');
+        }
+
+
     function printmult($unidad_id,$ruta_id,$ruta_padre){
         var url = '{{ url("/reportes/multasticket") }}';
         var w=window.open("", "Imprimir", "width=250,height=400");
