@@ -1090,6 +1090,7 @@ class DespachoController extends Controller
 
 
     // Parámetros de corte y marcas
+    $retornoGPS_Real = null;
     $array_final   = [];
     $multa         = 0.0;
     $finiDinamico  = $finiGlobal;
@@ -1135,7 +1136,8 @@ class DespachoController extends Controller
             $finiDinamico,
             $tiempoEsperadoUTC,
             $ffinGlobal,
-            $modoRecorrido
+            $modoRecorrido,
+            $retornoGPS_Real 
         );
 
          $gps1 = $this->buscarGPSMasCercanoPunto1(
@@ -1145,10 +1147,17 @@ class DespachoController extends Controller
             $finiDinamico,
             $tiempoEsperadoUTC,
             $ffinGlobal,
-            $modoRecorrido
+            $modoRecorrido,
+            $retornoGPS_Real 
         );
 
         $puntos_ecn[]=$gps1;
+
+        if ($indiceRetorno !== null && $index == $indiceRetorno && $gps) {
+            $retornoGPS_Real = new UTCDateTime(
+                $gps->fecha_gps->toDateTime()->getTimestamp() * 1000
+            );
+        }
 
          //--------------------------------------------------------------------
         if ($gps) {
@@ -1322,7 +1331,8 @@ class DespachoController extends Controller
         UTCDateTime $fini,
         UTCDateTime $tiempoEsperado,
         UTCDateTime $ffinGlobal,
-        $modoRecorrido = 1  // 1 = ida (primer recorrido), 2 = retorno (segundo recorrido)
+        $modoRecorrido = 1,
+         UTCDateTime $retornoGPS_Real = null
     ) {
         $isEntrada = ($calculo === 'E');
 
@@ -1337,36 +1347,26 @@ class DespachoController extends Controller
             $baseQuery = $baseQuery->where('entrada', '!=', 1);
         }
 
+        if ($modoRecorrido == 2 && $retornoGPS_Real) {
+            $baseQuery = $baseQuery->where('fecha_gps', '>', $retornoGPS_Real);
+        }
+
+
         // --------------------------------------------------------
-        // --------------------------------------------------------
-        $antesList = (clone $baseQuery)
+        $antes = (clone $baseQuery)
             ->where('fecha_gps','>', $fini)
             ->where('fecha_gps','<=', $tiempoEsperado)
             ->orderBy('fecha_gps','desc')
-            ->get();
-
-        // Si retorno y existen al menos 2 → usar el segundo
-        if ($modoRecorrido == 2) {
-            $antes = $antesList->count() >= 2 ? $antesList->get(1) : $antesList->first();
-        } else {
-            $antes = $antesList->first();
-        }
+            ->first();
 
         // --------------------------------------------------------
-        // --------------------------------------------------------
-        $despuesList = (clone $baseQuery)
+        $despues = (clone $baseQuery)
         ->where('fecha_gps','>', $tiempoEsperado)
         ->where('fecha_gps','<=', $ffinGlobal)
         ->orderBy('fecha_gps','asc')
-        ->get();
+        ->first();
 
-        // Si retorno y existen al menos 2 → usar el segundo
-        if ($modoRecorrido == 2) {
-            $despues = $despuesList->count() >= 2 ? $despuesList->get(1) : $despuesList->first();
-        } else {
-            $despues = $despuesList->first();
-        }
-
+      
 
         // --------------------------------------------------------
         // --------------------------------------------------------
@@ -1396,7 +1396,8 @@ class DespachoController extends Controller
         UTCDateTime $fini,
         UTCDateTime $tiempoEsperado,
         UTCDateTime $ffinGlobal,
-        $modoRecorrido = 1  // 1 = ida (primer recorrido), 2 = retorno (segundo recorrido)
+        $modoRecorrido = 1,
+        UTCDateTime $retornoGPS_Real = null
     ) {
         $isEntrada = ($calculo === 'E');
 
@@ -1453,7 +1454,7 @@ class DespachoController extends Controller
         if ($despues) return $despues;
         
 
-        return $despuesList;
+        return $retornoGPS_Real;
     }
 
 
