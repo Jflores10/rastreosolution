@@ -265,11 +265,16 @@
                         if (data.puntos_control[i].tiempo_esperado != null &&
                             data.puntos_control[i].tiempo_esperado != undefined) {
                             console.log(data.puntos_control[i]);
-                            var horaAnterior = new Date(parseInt(data.puntos_control[i].tiempo_esperado.$date
-                                .$numberLong));
-                            horaAnterior.setHours(horaAnterior.getHours() + 5);
+                            //var horaAnterior = new Date(parseInt(data.puntos_control[i].tiempo_esperado.$date
+                            //    .$numberLong));
+                            //horaAnterior.setHours(horaAnterior.getHours() + 5);
+                            var marcahora = "-";
+                            let marca = data.puntos_control[i].marca;
 
-                            tabla.push('<td> ' + horaAnterior.format('H:i') + '</td>');
+                            if (marca) {
+                                marcahora = marca.substring(11, 19);
+                            }
+                            tabla.push('<td> ' + marcahora + '</td>');
                             if (data.puntos_control[i].marca != null) {
                                 var intervalo= (data.puntos_control[i].intervalo!=null &&
                                     data.puntos_control[i].intervalo!=undefined)?data.puntos_control[i].intervalo:0;
