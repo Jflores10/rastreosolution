@@ -1012,7 +1012,7 @@
                 tabla.push('</table>');
 
                 tabla.push('<table id="info" style="width:100%; text-align:center;">');
-                tabla.push('<thead><th>PT.</th><th>M</th><th>A-|A+</th></thead>');
+                tabla.push('<thead><th>PT.</th><th>R</th><th>M</th><th>A-|A+</th></thead>');
                 //CUANDO LA VUELTA ANTERIOR TIENE MAS PUNTOS QUE LA QUE SE VA A REALIZAR SE DEBE RECORRER APARTE EL DATA.ANTERIOR.PUNTOS_CONTROL PARA CON ESTO LUEGO HACER UN APPEND LA TABLA, 
                 let recorrido_puntos = data.puntos_control.length;
                 var anteriorBusAT = 0;
@@ -1029,12 +1029,18 @@
                         if (data.puntos_control[i].tiempo_esperado != null &&
                             data.puntos_control[i].tiempo_esperado != undefined) {
                             console.log(data.puntos_control[i]);
+                            var horaAnterior = new Date(parseInt(data.puntos_control[i].tiempo_esperado.$date
+                                .$numberLong));
+                            horaAnterior.setHours(horaAnterior.getHours() + 5);
+
                             var marcahora = "-";
                             let marca = data.puntos_control[i].marca;
 
                             if (marca) {
                                 marcahora = marca.substring(11, 19);
                             }
+                            tabla.push('<td> ' + horaAnterior.format('H:i') + '</td>');
+
                             tabla.push('<td> ' + marcahora + '</td>');
                             if (data.puntos_control[i].marca != null) {
                                 var intervalo= (data.puntos_control[i].intervalo!=null &&
