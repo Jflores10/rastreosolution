@@ -882,7 +882,7 @@ $("#velocimetro").myfunc({divFact:10});
                 velocidad=0.0;
             }
             var html =
-                    '<div class="panel-body"  style="height:12em;overflow: auto;margin: 2px; padding: 2px; ">'+
+                    '<div class="panel-body popup-content"  style="height:12em;overflow: auto;margin: 2px; padding: 2px; ">'+
                     '<ul  style="list-style-type: none; margin: 3px; padding: 3px;overflow: auto;width=100px;overflow-y: hidden;">'+
                     '<li><strong>Disco:</strong>&nbsp'+recorrido.disco+' </li>' +
                     '<li><strong>Placa:</strong>&nbsp'+recorrido.placa+' </li>' +
@@ -894,7 +894,12 @@ $("#velocimetro").myfunc({divFact:10});
                     '<li><strong>Estado:</strong>&nbsp'+estado+'</li>' +
                     '<li><strong>Fecha de servidor:</strong>&nbsp'+'<br/>'+recorrido.fecha_servidor+'</li>' +
                     '<li><strong>Fecha de GPS:</strong>&nbsp'+'<br/>'+recorrido.fecha+'</li>' +
+                    '<li id="li_dir_actual2" style="display:none"><strong>Dirección Actual:</strong>&nbsp'+'<br/><span class="dir-wrap" id="dir_actual_marca2"></span></li>' +
                     '</ul>'+
+                    '<button class="btn btn-info btn-block" onclick="ver_direccion(\'' 
+                    + recorrido.lat + '\', \'' 
+                    + recorrido.lng + '\', \'#dir_actual_marca2\', \'#li_dir_actual2\')">Ver Dirección</button>'+
+
                     '</div>';
             var infoWindow = new google.maps.InfoWindow({
             content : html
@@ -1540,9 +1545,9 @@ $("#velocimetro").myfunc({divFact:10});
         document.getElementById("poi-bar").style.display = "none";
     }
 
-    function ver_direccion(lat, lon){
-        $('#li_dir_actual').show();
-        $('#dir_actual_marca').text('Buscando...');
+    function ver_direccion(lat, lon, label, li){
+        $(li).show();
+        $(label).text('Buscando...');
         $.ajax({
             url: '/get_address', 
             type: 'POST',
@@ -1550,11 +1555,11 @@ $("#velocimetro").myfunc({divFact:10});
             dataType: 'json',
             success: function(response) {
                 if(response.success){
-                    $('#dir_actual_marca').text(response.ubicacion);
+                    $(label).text(response.ubicacion);
                 }
             },
             error: function(xhr, status, error) {
-                $('#dir_actual_marca').text('');
+                $(label).text('');
                 console.log("Ocurrió un error  al obtener la dirección");
             }
         });
@@ -1631,7 +1636,10 @@ $("#velocimetro").myfunc({divFact:10});
 
                 '</ul>'+
                 '<div class="form-group">'+
-                '<button class="btn btn-info btn-block" onclick="ver_direccion(\'' + unidad.latitud + '\', \'' + unidad.longitud + '\')">Ver Dirección</button>'+
+                '<button class="btn btn-info btn-block" onclick="ver_direccion(\'' 
+                    + unidad.latitud + '\', \'' 
+                    + unidad.longitud + '\', \'#dir_actual_marca\', \'#li_dir_actual\')">Ver Dirección</button>'+
+
                 '<button onclick="openCommandForm(\'' + unidad.imei + '\', \'' + unidad.latitud + '\', \'' + unidad.longitud + '\');velocimetro_change('+unidad.velocidad_actual+');" class="btn btn-primary btn-block">Consola de comando</button>'+
                 
                 '</div>'+

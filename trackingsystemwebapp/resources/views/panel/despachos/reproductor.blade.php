@@ -5,6 +5,20 @@ Reproductor de Despacho
 
 @section('styles')
 <style>
+    .dir-wrap {
+        white-space: normal !important;
+        word-break: break-word !important;
+        overflow-wrap: break-word !important;
+        max-width: 150px !important; /* ajusta el ancho máximo del texto */
+        display: block !important;
+    }
+
+    .popup-content li {
+        max-width: 150px !important;  /* evita que el <li> deforme el modal */
+        white-space: normal !important;
+    }
+    
+
     #map {
         height: 440px;
         width: 100%;
@@ -515,6 +529,28 @@ Reproductor de Despacho
             alert("No se encontró ningún recorrido.");
     }
 
+    function ver_direccion(lat, lon, label, li){
+        $(li).show();
+        $(label).text('Buscando...');
+        $.ajax({
+            url: '/get_address', 
+            type: 'POST',
+            data: {lat: lat, lon: lon},
+            dataType: 'json',
+            success: function(response) {
+                if(response.success){
+                    $(label).text(response.ubicacion);
+                }
+            },
+            error: function(xhr, status, error) {
+                $(label).text('');
+                console.log("Ocurrió un error  al obtener la dirección");
+            }
+        });
+      
+    }
+    
+
     var processes = [];
     var array_tiposMarcas=[];   
     var array_marcas=[];
@@ -580,7 +616,7 @@ Reproductor de Despacho
                 velocidad=0.0;
             }
             var html =
-                    '<div class="panel-body"  style="height:12em;overflow: auto;margin: 2px; padding: 2px; ">'+
+                    '<div class="panel-body popup-content"  style="height:12em;overflow: auto;margin: 2px; padding: 2px; ">'+
                     '<ul  style="list-style-type: none; margin: 3px; padding: 3px;overflow: auto;width=100px;overflow-y: hidden;">'+
                     '<li><strong>Disco:</strong>&nbsp'+recorrido.disco+' </li>' +
                     '<li><strong>Placa:</strong>&nbsp'+recorrido.placa+' </li>' +
@@ -592,7 +628,12 @@ Reproductor de Despacho
                     '<li><strong>Estado:</strong>&nbsp'+estado+'</li>' +
                     '<li><strong>Fecha de servidor:</strong>&nbsp'+'<br/>'+recorrido.fecha_servidor+'</li>' +
                     '<li><strong>Fecha de GPS:</strong>&nbsp'+'<br/>'+recorrido.fecha+'</li>' +
+                    '<li id="li_dir_actual2" style="display:none"><strong>Dirección Actual:</strong>&nbsp'+'<br/><span class="dir-wrap" id="dir_actual_marca2"></span></li>' +
+
                     '</ul>'+
+                     '<button class="btn btn-info btn-block" onclick="ver_direccion(\'' 
+                    + recorrido.lat + '\', \'' 
+                    + recorrido.lng + '\', \'#dir_actual_marca2\', \'#li_dir_actual2\')">Ver Dirección</button>'+
                     '</div>';
             var infoWindow = new google.maps.InfoWindow({
             content : html
