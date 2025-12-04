@@ -198,6 +198,9 @@ Route::group(['middleware' => ['auth', 'usuario']], function () {
     Route::get('/radares', 'HomeController@osm');
     Route::get('/poi', 'HomeController@poi');
 
+    Route::post('/get_address', 'HomeController@getAddress');
+
+
 
 
 

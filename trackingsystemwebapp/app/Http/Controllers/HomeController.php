@@ -477,4 +477,40 @@ class HomeController extends Controller
         $response = $client->get($url);
         return response()->json(json_decode($response->getBody()));
     }
+
+    public function getAddress(Request $request){
+        $latitude = $request->input('lat');
+        $longitude = $request->input('lon');
+
+        $ubicacion='Ubicación no encontrada';
+        try {
+            $client = new Client();
+            $urlFinal='https://nominatim.openstreetmap.org/reverse?format=json&lat='.$latitude. '&lon='.$longitude;
+            $res = $client->get($urlFinal, [
+                'verify' => false
+            ]);
+            $code = $res->getStatusCode();
+            if ($code === 200) {
+                $json = json_decode($res->getBody());
+                if (!isset($json->error))
+                {
+                    $ubicacion=$json->display_name;
+                }
+            }
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'ubicacion' => $ubicacion,
+                'error' => $e->getMessage()
+            ]);
+        }
+
+
+        return response()->json([
+            'success' => true,
+            'ubicacion' => $ubicacion
+        ]);
+
+    }
 }

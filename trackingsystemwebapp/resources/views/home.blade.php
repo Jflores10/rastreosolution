@@ -1,7 +1,18 @@
 @extends('layouts.app')
 @section('styles')
 <style>
+.dir-wrap {
+    white-space: normal !important;
+    word-break: break-word !important;
+    overflow-wrap: break-word !important;
+    max-width: 150px !important; /* ajusta el ancho máximo del texto */
+    display: block !important;
+}
 
+.popup-content li {
+    max-width: 150px !important;  /* evita que el <li> deforme el modal */
+    white-space: normal !important;
+}
     
 #poi-bar {
     position: absolute;
@@ -1529,6 +1540,27 @@ $("#velocimetro").myfunc({divFact:10});
         document.getElementById("poi-bar").style.display = "none";
     }
 
+    function ver_direccion(lat, lon){
+        $('#li_dir_actual').show();
+        $('#dir_actual_marca').text('Buscando...');
+        $.ajax({
+            url: '/get_address', 
+            type: 'POST',
+            data: {lat: lat, lon: lon},
+            dataType: 'json',
+            success: function(response) {
+                if(response.success){
+                    $('#dir_actual_marca').text(response.ubicacion);
+                }
+            },
+            error: function(xhr, status, error) {
+                $('#dir_actual_marca').text('');
+                console.log("Ocurrió un error  al obtener la dirección");
+            }
+        });
+      
+    }
+
 
 
 
@@ -1579,7 +1611,7 @@ $("#velocimetro").myfunc({divFact:10});
 
         var html =// '<div class="panel">'+
                // '<div class="panel-heading"><h3>'+unidad.descripcion+'</h3></div>'+
-                '<div class="panel-body"  style="height:12em;overflow: auto;margin: 2px; padding: 2px; ">'+
+                '<div class="panel-body popup-content"  style="height:12em;overflow: auto;margin: 2px; padding: 2px; ">'+
                 '<ul  style="list-style-type: none; margin: 3px; padding: 3px;overflow: auto;width=100px;overflow-y: hidden;">'+
                 '<li><strong>Disco:</strong>&nbsp'+unidad.descripcion+'</li>' +
                 '<li><strong>Placa:</strong>&nbsp'+unidad.placa+'</li>' +
@@ -1595,9 +1627,13 @@ $("#velocimetro").myfunc({divFact:10});
                 '<li><strong>Estado:</strong>&nbsp'+estado+'</li>' +
                 '<li><strong>Fecha de servidor:</strong>&nbsp'+'<br/>'+fecha+'</li>' +
                 '<li><strong>Fecha de GPS:</strong>&nbsp'+'<br/>'+fecha_gps+'</li>' +
+                '<li id="li_dir_actual" style="display:none"><strong>Dirección Actual:</strong>&nbsp'+'<br/><span class="dir-wrap" id="dir_actual_marca"></span></li>' +
+
                 '</ul>'+
                 '<div class="form-group">'+
-                '<button onclick="openCommandForm(\'' + unidad.imei + '\', \'' + unidad.latitud + '\', \'' + unidad.longitud + '\');velocimetro_change('+unidad.velocidad_actual+');" class="btn btn-primary btn-block">Consola de comando</button>'
+                '<button class="btn btn-info btn-block" onclick="ver_direccion(\'' + unidad.latitud + '\', \'' + unidad.longitud + '\')">Ver Dirección</button>'+
+                '<button onclick="openCommandForm(\'' + unidad.imei + '\', \'' + unidad.latitud + '\', \'' + unidad.longitud + '\');velocimetro_change('+unidad.velocidad_actual+');" class="btn btn-primary btn-block">Consola de comando</button>'+
+                
                 '</div>'+
                // '</div>'+
                 '</div>';
