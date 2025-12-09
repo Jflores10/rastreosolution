@@ -273,9 +273,9 @@ Dashboard
                     <button class="btn btn-info" type="button" onclick="eraseClick();"><i class="fa fa-eraser"></i></button>
                     <button class="btn btn-info" onclick="setOpciones();" data-toggle="modal" data-target="#form"><i class="fa fa-cog"></i></button>
                     <button class="btn btn-info" type="button" onclick="eraseClick();cargarTodasLasUnidades();"><i class="fa fa-spinner"></i></button>
-                    @if(Auth::user()->tipo_usuario->valor!=4)
+                    <!-- @if(Auth::user()->tipo_usuario->valor!=4) -->
                     <button class="btn btn-info" type="button" onclick="consultarEnLinea();"><i class="fa fa-eye"></i></button>
-                    @endif
+                   <!-- @endif -->
                 </div>
               </div>
             </div>
