@@ -33,6 +33,7 @@ Reportes
                     <div class="col-lg-12 col-md-12 col-sm-12">
                         <div class="form-group text-right">
                             <div class="btn-group" role="group" aria-label="...">
+                                <button onclick="finalizarTodosv2();" type="button" class="btn btn-success">Recalcular Despachos</button>
                                 <button onclick="excelCompleto();" type="button" class="btn btn-primary">Generar por unidades</button>
                                 <button onclick="excelUnaHoja();" type="button" class="btn btn-info">Generar por hoja</button>
                                 <button onclick="excelPorRutas();" type="button" class="btn btn-default">Generar por rutas</button>
@@ -367,6 +368,22 @@ Reportes
            
         }, 'json');
 	}
+
+    function finalizarTodosv2() {
+        if (confirm("¿Seguro que desea recalcular los despachos ?")) {
+
+            var form = document.getElementById('form');
+            form.action = "{{ url('despachos/despachosfinalizar/v2')}}";
+            $('#progress').modal('show');
+            $.post(form.action,
+                $('#form').serialize() , function (data) {
+                    search();
+                    //$('#report').empty().append(data);
+                    $('#progress').modal('hide');
+            });
+
+        }
+    }
 
     function excelMultas() {
         var cooperativa_id=document.getElementById('cooperativa_id').value;

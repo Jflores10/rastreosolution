@@ -1980,6 +1980,63 @@ class DespachoController extends Controller
         return response()->json(['error' => false, 'despachos' => $array_despachos]);
     }
 
+
+    public function finalizarTodov2(Request $request)
+    {
+        set_time_limit(0);
+        $this->validate($request, [
+            'unidad_id' => 'required|array',
+            'desde' => 'required|date',
+            'hasta' => 'required|date',
+        ]);
+
+        $d = Carbon::createFromFormat('Y/m/d H:i', $request->input('desde'));
+
+        date_sub($d, date_interval_create_from_date_string('5 hours'));
+        //$d = new UTCDateTime(($desde->getTimestamp()) * 1000);
+        $h =  Carbon::createFromFormat('Y/m/d H:i', $request->input('hasta'));
+        date_sub($h, date_interval_create_from_date_string('5 hours'));
+        //$h = new UTCDateTime(($hasta->getTimestamp()) * 1000);
+        $unidad_id = $request->input('unidad_id');
+        $reportes = array();
+        $status = 'C';
+       
+        foreach ($unidad_id as $id) {
+            $user = Auth::user();
+            if ($user->tipo_usuario->valor == 5) {
+                $unidades_pertenecientes = $user->unidades_pertenecientes;
+                $despachos = Despacho::orderBy('fecha', 'desc')->where('estado', $status)->where(
+                    'fecha',
+                    '>=',
+                    $d
+                )->where('fecha', '<=', $h)->where('unidad_id', $id)->get();
+            } else {
+                $despachos = Despacho::orderBy('fecha', 'desc')->where('estado', $status)->where(
+                    'fecha',
+                    '>=',
+                    $d
+                )->where('fecha', '<=', $h)->where('unidad_id', $id)->get();
+            }
+            if ($despachos->count() > 0) {
+                array_push($reportes, ['despachos' => $despachos]);
+            }
+        }
+        /********FINALIZAR DESPACHOS */
+        $array_despachos = array();
+        foreach ($reportes as $reporte) {
+            foreach ($reporte['despachos'] as $despacho) {
+                array_push($array_despachos, $despacho->_id);
+                $this->end($request, $despacho->_id);
+            }
+        }
+        unset($reportes);
+        $reportes = array();
+
+        return response()->json(['error' => false, 'despachos' => $array_despachos]);
+    }
+
+
+
     public function eliminarTodo(Request $request)
     {
         set_time_limit(0);
