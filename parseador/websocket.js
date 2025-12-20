@@ -11,11 +11,11 @@ const redisClient = redis.createClient(); // publish (YA EXISTE)
 const redisSub = redis.createClient();
 
 redisClient.on('error', (err) => {
-  console.error('Redis Error:', err);
+  console.log('Redis Error:', err);
 });
 
 redisSub.on('error', (err) => {
-  console.error('Redis SUB Error:', err);
+  console.log('Redis SUB Error:', err);
 });
 
 // =========================
@@ -90,12 +90,12 @@ wss.on('connection', (ws) => {
       // Validación original (EXISTENTE)
       // =========================
       if (!data.imei || !data.latitud || !data.longitud) {
-        console.warn('Datos incompletos recibidos:', data);
+        console.log('Datos incompletos recibidos:', data);
         return;
       }
 
     } catch (err) {
-      console.error('Error procesando mensaje WebSocket:', err);
+      console.log('Error procesando mensaje WebSocket:', err);
     }
   });
 
