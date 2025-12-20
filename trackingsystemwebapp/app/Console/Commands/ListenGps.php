@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Http\Request;
 
-use App\Models\Unidad;
+use App\Unidad;
 
 
 class ListenGps extends Command
