@@ -60,7 +60,7 @@ class ListenGps extends Command
                     new Request($data)
                 );
 
-                
+                /*
                 $unidad = Unidad::where('imei', $data['imei'])->first();
                 if (!$unidad) return;
 
@@ -83,6 +83,7 @@ class ListenGps extends Command
                 ];
 
                 Redis::publish('gps-realtime', json_encode($payload));
+                */
 
             });
         } catch (\Exception $e) {
