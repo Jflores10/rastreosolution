@@ -73,7 +73,7 @@ wss.on('connection', (ws) => {
         // Publica los datos en Redis (EXISTENTE)
         redisClient.publish('gps-channel', JSON.stringify(data));
 
-        console.log(`Datos enviados a Redis: IMEI ${data.imei}`);
+        console.log(`Data enviados a Redis: IMEI ${data.imei}`);
         return;
       }
 
