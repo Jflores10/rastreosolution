@@ -7,9 +7,6 @@ use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Http\Request;
 
-use App\Models\Unidad;
-
-
 class ListenGps extends Command
 {
     /**
@@ -59,32 +56,6 @@ class ListenGps extends Command
                 app(\App\Http\Controllers\RecorridoController::class)->update_sentido(
                     new Request($data)
                 );
-
-                /*
-                $unidad = Unidad::where('imei', $data['imei'])->first();
-                if (!$unidad) return;
-
-                $payload = [
-                    '_id' => (string)$unidad->_id,
-                    'latitud' => $unidad->latitud,
-                    'longitud' => $unidad->longitud,
-                    'velocidad' => $unidad->velocidad,
-                    'sentido' => $unidad->sentido,
-                    'fecha_gps' => $unidad->fecha_gps
-                        ? $unidad->fecha_gps->toDateTime()->format('Y-m-d H:i:s')
-                        : null,
-                    'fecha' => $unidad->fecha
-                        ? $unidad->fecha->toDateTime()->format('Y-m-d H:i:s')
-                        : null,
-                    'alerta_velocidad_message' => $unidad->alerta_velocidad_message,
-                    'alerta_puerta_message' => $unidad->alerta_puerta_message,
-                    'alerta_desconx_message' => $unidad->alerta_desconx_message,
-                    'cooperativa_id' => (string)$unidad->cooperativa_id
-                ];
-
-                Redis::publish('gps-realtime', json_encode($payload));
-                */
-
             });
         } catch (\Exception $e) {
             Log::error("Error en ListenGps: " . $e->getMessage(), [
