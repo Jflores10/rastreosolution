@@ -40,6 +40,8 @@ redisSub.subscribe('gps-realtime');
 
 redisSub.on('message', (channel, message) => {
   try {
+    console.log('gps-realtime recibido:', message);
+    
     const data = JSON.parse(message);
 
     // Enviar SOLO a los frontends de la cooperativa
