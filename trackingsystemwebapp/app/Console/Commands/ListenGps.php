@@ -38,7 +38,7 @@ class ListenGps extends Command
      *
      * @return mixed
      */
-    public function handle()
+     public function handle()
     {
         $this->info('ListenGps iniciado, esperando datos GPS...');
 
@@ -50,11 +50,10 @@ class ListenGps extends Command
                 $data = json_decode($message, true);
 
                 if (!$data || empty($data['imei'])) {
-                    Log::warning("GPS inválido recibido", ['data' => $data]);
+                    Log::warning('GPS inválido recibido', ['data' => $data]);
                     return;
                 }
 
-                // Lógica existente (NO se toca)
                 app(\App\Http\Controllers\RecorridoController::class)
                     ->update_sentido(new Request($data));
 
@@ -82,7 +81,11 @@ class ListenGps extends Command
                     'cooperativa_id' => (string) $unidad->cooperativa_id
                 ];
 
-                Redis::publish('gps-realtime', json_encode($payload));
+                //USAR CONEXIÓN SEPARADA
+                Redis::connection('publisher')->publish(
+                    'gps-realtime',
+                    json_encode($payload)
+                );
             });
 
         } catch (\Throwable $e) {
