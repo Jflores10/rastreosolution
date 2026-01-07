@@ -1693,7 +1693,7 @@ $("#velocimetro").myfunc({divFact:10});
                 '</div>'+
                // '</div>'+
                 '</div>';
-        if ((currentUnidad == null || currentUnid   ad == unidad._id) && unidad.latitud != undefined && unidad.longitud != undefined)
+        if ((currentUnidad == null || currentUnidad == unidad._id) && unidad.latitud != undefined && unidad.longitud != undefined)
 	        addMarker(html, unidad.latitud,
 	                unidad.longitud,
 	                unidad._id,
