@@ -538,7 +538,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const coopId = document.getElementById('cooperativa').value;
 
-    ws = new WebSocket('ws://127.0.0.1:6001');
+    ws = new WebSocket('wss://rastreo.infinitysolutionsec.com:6001');
 
     ws.onopen = () => {
         ws.send(JSON.stringify({
