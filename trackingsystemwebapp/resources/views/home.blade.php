@@ -530,6 +530,54 @@ Dashboard
 @endsection
 @section('scripts')
 <script src="js/speedometer.js"></script>
+
+<script>
+let ws;
+
+document.addEventListener('DOMContentLoaded', function () {
+
+    const coopId = document.getElementById('cooperativa').value;
+
+    ws = new WebSocket('ws://127.0.0.1:6001');
+
+    ws.onopen = () => {
+        ws.send(JSON.stringify({
+            type: 'frontend',
+            cooperativa_id: coopId
+        }));
+    };
+
+    ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        console.log(data)
+
+        if (data.type === 'unidad.updated') {
+            actualizarUnidadRealtime(data.payload);
+        }
+    };
+
+});
+
+function actualizarUnidadRealtime(unidad) {
+
+    if (!unidad || !unidad.latitud || !unidad.longitud) {
+        return;
+    }
+
+    let fakeFecha = {
+        fecha_gps: unidad.fecha_gps ?? null,
+        fecha_servidor: unidad.fecha ?? null,
+        diferencia: null,
+        fecha_puerta_abierta: null,
+        fecha_puerta_cerrada: null
+    };
+    setMarcadorUnidad(unidad, fakeFecha, fakeFecha, 0);
+}
+
+
+</script>
+
+
 <script>
 
     $(document).ready(function() {
@@ -1399,6 +1447,7 @@ $("#velocimetro").myfunc({divFact:10});
         $("#lbl_hora_mapa").text("");
 
         // === Configuración según tipo de usuario ===
+        /*
         @if(isset($id_coop))
             document.getElementById('cooperativa').value = '{{$id_coop}}';
             setUnidadesOnMap('{{$id_coop}}', true);
@@ -1410,6 +1459,7 @@ $("#velocimetro").myfunc({divFact:10});
             setUnidadesOnMap('', true);
             setInterval(setUnidadesOnMap, 30000, null);
         @endif
+        */
 
         @if(Auth::user()->tipo_usuario->valor != 1)
             document.getElementById('div-cooperativa').style = "display:none;";
@@ -1643,7 +1693,7 @@ $("#velocimetro").myfunc({divFact:10});
                 '</div>'+
                // '</div>'+
                 '</div>';
-        if ((currentUnidad == null || currentUnidad == unidad._id) && unidad.latitud != undefined && unidad.longitud != undefined)
+        if ((currentUnidad == null || currentUnid   ad == unidad._id) && unidad.latitud != undefined && unidad.longitud != undefined)
 	        addMarker(html, unidad.latitud,
 	                unidad.longitud,
 	                unidad._id,
@@ -1801,6 +1851,7 @@ $("#velocimetro").myfunc({divFact:10});
 
     function llenarUnidades(opc)
     {
+        
         if(opc==1)
         {
             for(var i=0;i<array_marcador.length;i++)
@@ -1836,6 +1887,7 @@ $("#velocimetro").myfunc({divFact:10});
 	}
     function setUnidadesOnMap(coop,load)
     {
+
         if(load)
             $('#progress').modal('show');
 
