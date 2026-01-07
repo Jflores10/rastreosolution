@@ -535,10 +535,10 @@ Dashboard
 let ws;
 
 document.addEventListener('DOMContentLoaded', function () {
-
     const coopId = document.getElementById('cooperativa').value;
 
-    ws = new WebSocket('wss://rastreo.infinitysolutionsec.com:6001');
+    const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
+    ws = new WebSocket(`${protocol}://${location.host}/ws/`);
 
     ws.onopen = () => {
         ws.send(JSON.stringify({
@@ -549,13 +549,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
     ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
-        console.log(data)
 
         if (data.type === 'unidad.updated') {
             actualizarUnidadRealtime(data.payload);
         }
     };
 
+    ws.onerror = (e) => {
+        console.error('WebSocket error', e);
+    };
 });
 
 function actualizarUnidadRealtime(unidad) {
