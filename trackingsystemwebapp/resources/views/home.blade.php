@@ -530,56 +530,6 @@ Dashboard
 @endsection
 @section('scripts')
 <script src="js/speedometer.js"></script>
-
-<script>
-let ws;
-
-document.addEventListener('DOMContentLoaded', function () {
-    const coopId = document.getElementById('cooperativa').value;
-
-    const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
-    ws = new WebSocket(`${protocol}://${location.host}/ws/`);
-
-    ws.onopen = () => {
-        ws.send(JSON.stringify({
-            type: 'frontend',
-            cooperativa_id: coopId
-        }));
-    };
-
-    ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-
-        if (data.type === 'unidad.updated') {
-            actualizarUnidadRealtime(data.payload);
-        }
-    };
-
-    ws.onerror = (e) => {
-        console.error('WebSocket error', e);
-    };
-});
-
-function actualizarUnidadRealtime(unidad) {
-
-    if (!unidad || !unidad.latitud || !unidad.longitud) {
-        return;
-    }
-
-    let fakeFecha = {
-        fecha_gps: unidad.fecha_gps ?? null,
-        fecha_servidor: unidad.fecha ?? null,
-        diferencia: null,
-        fecha_puerta_abierta: null,
-        fecha_puerta_cerrada: null
-    };
-    setMarcadorUnidad(unidad, fakeFecha, fakeFecha, 0);
-}
-
-
-</script>
-
-
 <script>
 
     $(document).ready(function() {
@@ -1449,7 +1399,6 @@ $("#velocimetro").myfunc({divFact:10});
         $("#lbl_hora_mapa").text("");
 
         // === Configuración según tipo de usuario ===
-        /*
         @if(isset($id_coop))
             document.getElementById('cooperativa').value = '{{$id_coop}}';
             setUnidadesOnMap('{{$id_coop}}', true);
@@ -1461,7 +1410,6 @@ $("#velocimetro").myfunc({divFact:10});
             setUnidadesOnMap('', true);
             setInterval(setUnidadesOnMap, 30000, null);
         @endif
-        */
 
         @if(Auth::user()->tipo_usuario->valor != 1)
             document.getElementById('div-cooperativa').style = "display:none;";
@@ -1853,7 +1801,6 @@ $("#velocimetro").myfunc({divFact:10});
 
     function llenarUnidades(opc)
     {
-        
         if(opc==1)
         {
             for(var i=0;i<array_marcador.length;i++)
@@ -1889,7 +1836,6 @@ $("#velocimetro").myfunc({divFact:10});
 	}
     function setUnidadesOnMap(coop,load)
     {
-
         if(load)
             $('#progress').modal('show');
 
