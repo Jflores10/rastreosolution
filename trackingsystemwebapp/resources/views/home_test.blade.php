@@ -1833,7 +1833,7 @@ $("#velocimetro").myfunc({divFact:10});
     {
         if(modalLoad)
             $('#progress').modal('show');
-        var url = '{{url('/home')}}';
+        var url = '{{url('/home-test')}}';
         var cooperativa_id=document.getElementById('cooperativa').value;
 
         var consulta=document.getElementById('consulta').value;
