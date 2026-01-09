@@ -538,25 +538,50 @@ document.addEventListener('DOMContentLoaded', function () {
     const coopId = document.getElementById('cooperativa').value;
 
     const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
-    ws = new WebSocket(`${protocol}://${location.host}/ws/`);
+    const wsUrl = `${protocol}://${location.host}/ws/`;
 
+    console.log('Intentando conectar WS:', wsUrl);
+
+    ws = new WebSocket(wsUrl);
+
+    // ✅ CUANDO CONECTA
     ws.onopen = () => {
+        console.log('%cWebSocket CONECTADO', 'color: green; font-weight: bold');
+
         ws.send(JSON.stringify({
             type: 'frontend',
             cooperativa_id: coopId
         }));
     };
 
+    // ✅ CUANDO LLEGA DATA
     ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
+        try {
+            const data = JSON.parse(event.data);
 
-        if (data.type === 'unidad.updated') {
-            actualizarUnidadRealtime(data.payload);
+            console.log('%cWS mensaje recibido:', 'color: blue', data);
+
+            if (data.type === 'unidad.updated') {
+                actualizarUnidadRealtime(data.payload);
+            }
+        } catch (err) {
+            console.error('WS mensaje inválido:', event.data);
         }
     };
 
+    // ⚠️ ERROR DE CONEXIÓN
     ws.onerror = (e) => {
-        console.error('WebSocket error', e);
+        console.error('%cWebSocket ERROR', 'color: red; font-weight: bold', e);
+    };
+
+    // ⚠️ CUANDO SE CIERRA
+    ws.onclose = (e) => {
+        console.warn(
+            '%cWebSocket DESCONECTADO',
+            'color: orange; font-weight: bold',
+            'code:', e.code,
+            'reason:', e.reason
+        );
     };
 });
 
