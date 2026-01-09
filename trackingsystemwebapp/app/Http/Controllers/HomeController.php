@@ -529,6 +529,19 @@ class HomeController extends Controller
         ]);
     }
 
+     public function getVistaNueva2(Request $request)
+    {
+         $cooperativas = Cooperativa::where('estado','A')->get();
+
+        $cood_id=$request->input('cooperativa');
+        $rutas = Ruta::where('cooperativa_id', $cood_id)->whereIn('tipo_ruta',['P', 'I','C'])->where('estado','A')->get();
+        $rutas_atm = RutaAtmOficial::where('cooperativa_id', $cood_id)->where('estado','A')->get();
+        $cooperativa = Cooperativa::findOrFail($cood_id);
+        return view('home-test',['unidades'=>null,'id_coop'=>$cood_id,'cooperativas'=>$cooperativas,
+        		'rutas' => $rutas,'rutas_atm'=>$rutas_atm, 'atm'=>$cooperativa->despachos_atm
+        ]);
+    }
+
     public function reverseProxy(Request $request)
     {
         $latitud = $request->input('lat');

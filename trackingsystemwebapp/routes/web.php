@@ -17,6 +17,9 @@ Route::group(['middleware' => ['auth', 'usuario']], function () {
     Route::get('/puntos', 'HomeController@cargarPuntosControl');
     Route::get('/puntos-atm', 'HomeController@cargarPuntosControlATM');
     Route::get('/homeUniCoop', 'HomeController@getVistaNueva');
+    Route::get('/homeUniCoop2', 'HomeController@getVistaNueva2');
+
+    
     Route::get('/dashboard', 'DashboardController@index');
     Route::group(['prefix' => 'dashboard'], function () {
         Route::match(['get', 'post'], '/general/{id}', 'DashboardController@recargarPorCooperativa');
