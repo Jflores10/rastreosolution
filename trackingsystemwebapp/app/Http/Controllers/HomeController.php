@@ -177,6 +177,67 @@ class HomeController extends Controller
         return view('panel.ubicacion');
 
     }
+
+
+    public function index2()
+    {
+        $user = Auth::user();
+        $unidades_pertenecientes = Auth::user()->unidades_pertenecientes;
+        $rutas_atm=null;
+        $despachos_atm=null;
+        if($user->tipo_usuario->valor==4 || $user->tipo_usuario->valor==5 )//socio  -- despachador especial
+        {
+            if($unidades_pertenecientes==null)
+                $unidades=Unidad::where('_id','');
+            else
+                $unidades=Unidad::orderBy('descripcion','asc')->whereIn('_id', $unidades_pertenecientes)->where('estado','A')->get();
+
+            $cooperativas=Cooperativa::where('_id', $user->cooperativa_id)->where('estado','A')->get();
+			$rutas = Ruta::where('cooperativa_id', $user->cooperativa_id)->whereIn('tipo_ruta',['P', 'I','C'])->where('estado','A')->get();
+            $rutas_atm = RutaAtmOficial::where('cooperativa_id', $user->cooperativa_id)->where('estado','A')->get();
+            $cooperativatmp = Cooperativa::where('_id', $user->cooperativa_id)->where('estado','A')->first();
+            $despachos_atm=$cooperativatmp->despachos_atm;
+        }
+        else
+        {
+            if ($user->tipo_usuario->valor == 1) //Superadmin
+            {
+                $cooperativas = Cooperativa::orderBy('descripcion', 'asc')->where('estado','A')->get();
+                $unidades = Unidad::orderBy('descripcion', 'asc')->where('estado', 'A')->get();
+				$rutas = Ruta::whereIn('tipo_ruta',['P', 'I','C'])->where('estado','A')->get();
+            }
+            else
+            {
+                if ($user->tipo_usuario->valor == 2 || $user->tipo_usuario->valor == 3)//Administrador/despachador
+                {
+                    $cooperativas = Cooperativa::where('_id', $user->cooperativa_id)->where('estado','A')->get();
+                    $cooperativatmp = Cooperativa::where('_id', $user->cooperativa_id)->where('estado','A')->first();
+                    $unidades = Unidad::orderBy('descripcion', 'asc')->where('cooperativa_id', Auth::user()->cooperativa_id)->get();
+					$rutas = Ruta::where('cooperativa_id', $user->cooperativa_id)->whereIn('tipo_ruta',['P', 'I','C'])->where('estado','A')->get();
+                    $rutas_atm = RutaAtmOficial::where('cooperativa_id', $user->cooperativa_id)->where('estado','A')->get();
+                    $despachos_atm=$cooperativatmp->despachos_atm;
+                }
+                else
+                    return view('panel.error',['mensaje_acceso'=>'No posee suficientes permisos para poder ingresar a este sitio.']);
+            }
+        }
+        foreach($unidades as $unidad)
+        {
+            if($unidad->fecha_gps!=null && $unidad->fecha!=null)
+            {
+                $f_gps=$unidad["fecha_gps"]->toDateTime();
+                $f_servidor=$unidad["fecha"]->toDateTime();
+                date_sub($f_gps, date_interval_create_from_date_string('10 hours'));
+                date_sub($f_servidor, date_interval_create_from_date_string('5 hours'));
+                $unidad["fecha"]=$f_servidor->format('d-m-Y H:i');
+                $unidad["fecha_gps"]=$f_gps->format('d-m-Y H:i');
+            }
+        }
+        return view('home_test', ['cooperativas' => $cooperativas, 'unidades' => $unidades, 'rutas'=>$rutas,'rutas_atm'=>$rutas_atm, 'atm'=>$despachos_atm]);
+    }
+
+    
+
     public function index()
     {
         $user = Auth::user();

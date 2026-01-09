@@ -10,6 +10,10 @@ Route::group(['middleware' => ['auth', 'usuario']], function () {
     Route::get('/', 'HomeController@index');
     Route::post('/home', 'HomeController@search');
     Route::get('/home', 'HomeController@index');
+
+    Route::get('/home-test', 'HomeController@index2');
+
+
     Route::get('/puntos', 'HomeController@cargarPuntosControl');
     Route::get('/puntos-atm', 'HomeController@cargarPuntosControlATM');
     Route::get('/homeUniCoop', 'HomeController@getVistaNueva');
