@@ -191,7 +191,7 @@ Dashboard
           
           <!-- Panel lateral (buscador y lista de unidades) -->
           <div class="col-lg-3 col-md-4 col-sm-12" style="padding:5px; max-height:80vh;">
-            <form name="form_coop" method="GET" action="{{ url('/homeUniCoop') }}" id="form_coop">
+            <form name="form_coop" method="GET" action="{{ url('/homeUniCoop2') }}" id="form_coop">
               {{ csrf_field() }}
               <div class="form-group" id="div-cooperativa">
                 <label>Cooperativa</label>
