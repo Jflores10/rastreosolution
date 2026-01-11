@@ -1465,19 +1465,17 @@ $("#velocimetro").myfunc({divFact:10});
         $("#lbl_hora_mapa").text("");
 
         // === Configuración según tipo de usuario ===
-        /*
         @if(isset($id_coop))
             document.getElementById('cooperativa').value = '{{$id_coop}}';
             setUnidadesOnMap('{{$id_coop}}', true);
-            setInterval(setUnidadesOnMap, 30000, '{{$id_coop}}');
+            //setInterval(setUnidadesOnMap, 30000, '{{$id_coop}}');
         @endif
 
         @if(Auth::user()->tipo_usuario->valor==2 || Auth::user()->tipo_usuario->valor==3 || Auth::user()->tipo_usuario->valor==4
             || Auth::user()->tipo_usuario->valor==5)
             setUnidadesOnMap('', true);
-            setInterval(setUnidadesOnMap, 30000, null);
+            //setInterval(setUnidadesOnMap, 30000, null);
         @endif
-        */
 
         @if(Auth::user()->tipo_usuario->valor != 1)
             document.getElementById('div-cooperativa').style = "display:none;";
