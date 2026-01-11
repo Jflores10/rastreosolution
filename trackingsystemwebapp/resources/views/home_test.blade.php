@@ -532,21 +532,30 @@ Dashboard
 <script src="js/speedometer.js"></script>
 
 <script>
-let ws;
+let ws = null;
 
-document.addEventListener('DOMContentLoaded', function () {
-    const coopId = document.getElementById('cooperativa').value;
-    console.log("Hola"+coopId)
+function conectarWebSocket(coopId) {
+
+    // 🔴 Si ya hay conexión, cerrarla
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        console.warn('🔄 Cerrando WS anterior');
+        ws.close();
+    }
+
     const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
     const wsUrl = `${protocol}://${location.host}/ws/`;
 
-    console.log('🔌 Conectando a:', wsUrl);
+    console.log('🔌 Conectando WS a:', wsUrl);
 
     ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
         console.log('%c🟢 WS CONECTADO', 'color:green;font-weight:bold');
 
+        document.getElementById('ws_status').textContent = 'Conectado';
+        document.getElementById('ws_status').style.color = 'green';
+
+        // 🔥 Registrar cooperativa
         ws.send(JSON.stringify({
             type: 'frontend',
             cooperativa_id: String(coopId)
@@ -556,13 +565,14 @@ document.addEventListener('DOMContentLoaded', function () {
     ws.onmessage = (event) => {
         try {
             const data = JSON.parse(event.data);
+
             console.log('📥 WS mensaje:', data);
 
             if (data.type === 'unidad.updated') {
                 actualizarUnidadRealtime(data.payload);
             }
         } catch (err) {
-            console.error('❌ Mensaje WS inválido', event.data);
+            console.error('❌ WS mensaje inválido', event.data);
         }
     };
 
@@ -571,9 +581,14 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     ws.onclose = () => {
-        console.warn('⚠️ WS DESCONECTADO');
+        console.warn('🔴 WS DESCONECTADO');
+
+        document.getElementById('ws_status').textContent = 'Desconectado';
+        document.getElementById('ws_status').style.color = 'red';
     };
-});
+}
+
+
 
 
 function actualizarUnidadRealtime(unidad) {
@@ -1468,6 +1483,7 @@ $("#velocimetro").myfunc({divFact:10});
         @if(isset($id_coop))
             document.getElementById('cooperativa').value = '{{$id_coop}}';
             setUnidadesOnMap('{{$id_coop}}', true);
+            conectarWebSocket('{{$id_coop}}');
             //setInterval(setUnidadesOnMap, 30000, '{{$id_coop}}');
         @endif
 
