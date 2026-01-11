@@ -540,50 +540,41 @@ document.addEventListener('DOMContentLoaded', function () {
     const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
     const wsUrl = `${protocol}://${location.host}/ws/`;
 
-    console.log('Intentando conectar WS:', wsUrl);
+    console.log('🔌 Conectando a:', wsUrl);
 
     ws = new WebSocket(wsUrl);
 
-    // ✅ CUANDO CONECTA
     ws.onopen = () => {
-        console.log('%cWebSocket CONECTADO', 'color: green; font-weight: bold');
+        console.log('%c🟢 WS CONECTADO', 'color:green;font-weight:bold');
 
         ws.send(JSON.stringify({
             type: 'frontend',
-            cooperativa_id: coopId
+            cooperativa_id: String(coopId)
         }));
     };
 
-    // ✅ CUANDO LLEGA DATA
     ws.onmessage = (event) => {
         try {
             const data = JSON.parse(event.data);
-
-            console.log('%cWS mensaje recibido:', 'color: blue', data);
+            console.log('📥 WS mensaje:', data);
 
             if (data.type === 'unidad.updated') {
                 actualizarUnidadRealtime(data.payload);
             }
         } catch (err) {
-            console.error('WS mensaje inválido:', event.data);
+            console.error('❌ Mensaje WS inválido', event.data);
         }
     };
 
-    // ⚠️ ERROR DE CONEXIÓN
     ws.onerror = (e) => {
-        console.error('%cWebSocket ERROR', 'color: red; font-weight: bold', e);
+        console.error('❌ WS ERROR', e);
     };
 
-    // ⚠️ CUANDO SE CIERRA
-    ws.onclose = (e) => {
-        console.warn(
-            '%cWebSocket DESCONECTADO',
-            'color: orange; font-weight: bold',
-            'code:', e.code,
-            'reason:', e.reason
-        );
+    ws.onclose = () => {
+        console.warn('⚠️ WS DESCONECTADO');
     };
 });
+
 
 function actualizarUnidadRealtime(unidad) {
 
