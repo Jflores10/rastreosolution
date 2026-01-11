@@ -38,60 +38,67 @@ class ListenGps extends Command
      *
      * @return mixed
      */
-     public function handle()
+    public function handle()
     {
-        $this->info('ListenGps iniciado, esperando datos GPS...');
+        $this->info('🟢 ListenGps iniciado');
 
-        try {
-            Redis::subscribe(['gps-channel'], function ($message) {
+        while (true) {
 
-                Log::info('GPS recibido', ['raw' => $message]);
+            try {
 
-                $data = json_decode($message, true);
+                Redis::subscribe(['gps-channel'], function ($message) {
 
-                if (!$data || empty($data['imei'])) {
-                    Log::warning('GPS inválido recibido', ['data' => $data]);
-                    return;
-                }
+                    Log::info('📡 GPS recibido', ['raw' => $message]);
 
-                app(\App\Http\Controllers\RecorridoController::class)
-                    ->update_sentido(new Request($data));
+                    $data = json_decode($message, true);
+                    if (!$data || empty($data['imei'])) {
+                        return;
+                    }
 
-                $unidad = Unidad::where('imei', $data['imei'])->first();
-                if (!$unidad) {
-                    Log::warning('Unidad no encontrada', ['imei' => $data['imei']]);
-                    return;
-                }
+                    app(\App\Http\Controllers\RecorridoController::class)
+                        ->update_sentido(new Request($data));
 
-                $payload = [
-                    '_id' => (string) $unidad->_id,
-                    'latitud' => $unidad->latitud,
-                    'longitud' => $unidad->longitud,
-                    'velocidad' => $unidad->velocidad,
-                    'sentido' => $unidad->sentido,
-                    'fecha_gps' => $unidad->fecha_gps
-                        ? $unidad->fecha_gps->toDateTime()->format('Y-m-d H:i:s')
-                        : null,
-                    'fecha' => $unidad->fecha
-                        ? $unidad->fecha->toDateTime()->format('Y-m-d H:i:s')
-                        : null,
-                    'alerta_velocidad_message' => $unidad->alerta_velocidad_message,
-                    'alerta_puerta_message' => $unidad->alerta_puerta_message,
-                    'alerta_desconx_message' => $unidad->alerta_desconx_message,
-                    'cooperativa_id' => trim((string) $unidad->cooperativa_id)
-                ];
+                    $unidad = Unidad::where('imei', $data['imei'])->first();
+                    if (!$unidad) {
+                        Log::warning('Unidad no encontrada', [
+                            'imei' => $data['imei']
+                        ]);
+                        return;
+                    }
 
-                //USAR CONEXIÓN SEPARADA
-                Redis::connection('publisher')->publish(
-                    'gps-realtime',
-                    json_encode($payload)
-                );
-            });
+                    $payload = [
+                        '_id' => (string) $unidad->_id,
+                        'latitud' => $unidad->latitud,
+                        'longitud' => $unidad->longitud,
+                        'velocidad' => $unidad->velocidad,
+                        'sentido' => $unidad->sentido,
+                        'fecha_gps' => optional($unidad->fecha_gps)
+                            ->toDateTime()
+                            ->format('Y-m-d H:i:s'),
+                        'fecha' => optional($unidad->fecha)
+                            ->toDateTime()
+                            ->format('Y-m-d H:i:s'),
+                        'alerta_velocidad_message' => $unidad->alerta_velocidad_message,
+                        'alerta_puerta_message' => $unidad->alerta_puerta_message,
+                        'alerta_desconx_message' => $unidad->alerta_desconx_message,
+                        'cooperativa_id' => trim((string) $unidad->cooperativa_id),
+                    ];
 
-        } catch (\Throwable $e) {
-            Log::error('Error Redis ListenGps', [
-                'error' => $e->getMessage()
-            ]);
+                    Redis::connection('publisher')->publish(
+                        'gps-realtime',
+                        json_encode($payload)
+                    );
+                });
+
+            } catch (\Throwable $e) {
+
+                Log::error('❌ Error Redis ListenGps', [
+                    'error' => $e->getMessage()
+                ]);
+
+                // 🔁 Esperar antes de reintentar
+                sleep(2);
+            }
         }
     }
 
