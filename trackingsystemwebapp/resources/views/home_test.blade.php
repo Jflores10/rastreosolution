@@ -551,7 +551,7 @@ function conectarWebSocket(coopId) {
 
     ws.onopen = () => {
         console.log('%c🟢 WS CONECTADO', 'color:green;font-weight:bold');
-
+        console.log("Cooperativa:"+coopId)
 
         // 🔥 Registrar cooperativa
         ws.send(JSON.stringify({
