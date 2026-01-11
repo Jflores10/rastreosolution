@@ -552,8 +552,6 @@ function conectarWebSocket(coopId) {
     ws.onopen = () => {
         console.log('%c🟢 WS CONECTADO', 'color:green;font-weight:bold');
 
-        document.getElementById('ws_status').textContent = 'Conectado';
-        document.getElementById('ws_status').style.color = 'green';
 
         // 🔥 Registrar cooperativa
         ws.send(JSON.stringify({
@@ -583,8 +581,6 @@ function conectarWebSocket(coopId) {
     ws.onclose = () => {
         console.warn('🔴 WS DESCONECTADO');
 
-        document.getElementById('ws_status').textContent = 'Desconectado';
-        document.getElementById('ws_status').style.color = 'red';
     };
 }
 
