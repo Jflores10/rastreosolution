@@ -537,7 +537,7 @@ class HomeController extends Controller
         $rutas = Ruta::where('cooperativa_id', $cood_id)->whereIn('tipo_ruta',['P', 'I','C'])->where('estado','A')->get();
         $rutas_atm = RutaAtmOficial::where('cooperativa_id', $cood_id)->where('estado','A')->get();
         $cooperativa = Cooperativa::findOrFail($cood_id);
-        return view('home-test',['unidades'=>null,'id_coop'=>$cood_id,'cooperativas'=>$cooperativas,
+        return view('home_test',['unidades'=>null,'id_coop'=>$cood_id,'cooperativas'=>$cooperativas,
         		'rutas' => $rutas,'rutas_atm'=>$rutas_atm, 'atm'=>$cooperativa->despachos_atm
         ]);
     }
