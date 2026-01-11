@@ -536,7 +536,7 @@ let ws;
 
 document.addEventListener('DOMContentLoaded', function () {
     const coopId = document.getElementById('cooperativa').value;
-
+    console.log("Hola"+coopId)
     const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
     const wsUrl = `${protocol}://${location.host}/ws/`;
 
