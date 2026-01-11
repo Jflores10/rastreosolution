@@ -78,7 +78,7 @@ class ListenGps extends Command
                     'alerta_velocidad_message' => $unidad->alerta_velocidad_message,
                     'alerta_puerta_message' => $unidad->alerta_puerta_message,
                     'alerta_desconx_message' => $unidad->alerta_desconx_message,
-                    'cooperativa_id' => (string) $unidad->cooperativa_id
+                    'cooperativa_id' => trim((string) $unidad->cooperativa_id)
                 ];
 
                 //USAR CONEXIÓN SEPARADA

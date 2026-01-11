@@ -556,7 +556,7 @@ function conectarWebSocket(coopId) {
         // 🔥 Registrar cooperativa
         ws.send(JSON.stringify({
             type: 'frontend',
-            cooperativa_id: String(coopId)
+            cooperativa_id: String(coopId).trim()
         }));
     };
 

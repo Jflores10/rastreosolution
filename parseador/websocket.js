@@ -38,14 +38,24 @@ redisSub.on('message', (channel, message) => {
   try {
     console.log('📡 gps-realtime recibido');
 
-    const data = JSON.parse(message);
-    const coopMsg = String(data.cooperativa_id);
+   const data = JSON.parse(message);
+
+    const coopMsg = String(data.cooperativa_id || '').trim();
+
+    console.log('📦 Redis coop:', coopMsg);
+    console.log('👥 Fronts registrados:', [...frontendClients.values()]);
 
     frontendClients.forEach((coopId, ws) => {
+      const coopFront = String(coopId || '').trim();
+
+      console.log('🔎 Comparando:', coopFront, '===', coopMsg);
+
       if (
         ws.readyState === WebSocket.OPEN &&
-        String(coopId) === coopMsg
+        coopFront === coopMsg
       ) {
+        console.log('✅ ENVIANDO DATA A FRONT');
+
         ws.send(JSON.stringify({
           type: 'unidad.updated',
           payload: data
