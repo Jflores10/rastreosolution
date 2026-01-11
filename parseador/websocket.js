@@ -39,26 +39,19 @@ redisSub.on('message', (channel, message) => {
     console.log('📡 gps-realtime recibido');
 
     const data = JSON.parse(message);
+    const coopMsg = String(data.cooperativa_id);
 
-  console.log('📦 Redis coop:', data.cooperativa_id);
-  console.log('👤 Fronts registrados:', [...frontendClients.values()]);
-
-  const coopMsg = String(data.cooperativa_id);
-
-  frontendClients.forEach((coopId, ws) => {
-    console.log('🔎 Comparando:', coopId, 'vs', coopMsg);
-
-    if (
-      ws.readyState === WebSocket.OPEN &&
-      String(coopId) === coopMsg
-    ) {
-      console.log('✅ ENVIANDO A FRONT');
-      ws.send(JSON.stringify({
-        type: 'unidad.updated',
-        payload: data
-      }));
-    }
-  });
+    frontendClients.forEach((coopId, ws) => {
+      if (
+        ws.readyState === WebSocket.OPEN &&
+        String(coopId) === coopMsg
+      ) {
+        ws.send(JSON.stringify({
+          type: 'unidad.updated',
+          payload: data
+        }));
+      }
+    });
 
   } catch (err) {
     console.error('❌ Error procesando gps-realtime:', err);
