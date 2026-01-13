@@ -455,7 +455,7 @@ class DespachoController extends Controller
         ]);
     }
 
-    public function end(Request $request, $id)
+    public function end_v2(Request $request, $id)
     {
         
         set_time_limit(0);
@@ -1025,7 +1025,7 @@ class DespachoController extends Controller
     }
 
 
-   public function end_v2(Request $request, $id)
+   public function end(Request $request, $id)
 {
     set_time_limit(0);
 
