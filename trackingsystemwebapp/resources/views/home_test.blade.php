@@ -536,29 +536,36 @@ let ws = null;
 
 function conectarWebSocket(coopId) {
 
-    // 🔴 Si ya hay conexión, cerrarla
-    if (ws && ws.readyState === WebSocket.OPEN) {
-        console.warn('🔄 Cerrando WS anterior');
-        ws.close();
+    // 🔴 Si ya hay conexión abierta o en proceso, cerrarla para evitar sockets huérfanos
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+        console.warn('🔄 Cerrando WS anterior (open/connecting)');
+        try { ws.close(); } catch(e) { /* ignore */ }
     }
 
     const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
-    // Conectar directamente al WS server en el puerto 6001 (el servidor WS corre en este puerto)
     const wsUrl = `${protocol}://${location.host}/ws/`;
 
     console.log('🔌 Conectando WS a:', wsUrl);
 
-    ws = new WebSocket(wsUrl);
+    // Usar variable local para evitar condición de carrera en los handlers
+    const socket = new WebSocket(wsUrl);
 
-    ws.onopen = () => {
+    socket.onopen = (event) => {
         console.log('%c🟢 WS CONECTADO', 'color:green;font-weight:bold');
-        console.log("Cooperativa:"+coopId)
+        console.log('Cooperativa:' + coopId);
 
-        // 🔥 Registrar cooperativa
-        ws.send(JSON.stringify({
-            type: 'frontend',
-            cooperativa_id: String(coopId).trim()
-        }));
+        // Asignar socket abierto a la variable global
+        ws = socket;
+
+        // 🔥 Registrar cooperativa usando el socket abierto
+        try {
+            socket.send(JSON.stringify({
+                type: 'frontend',
+                cooperativa_id: String(coopId).trim()
+            }));
+        } catch (e) {
+            console.error('Error enviando registro de cooperativa:', e);
+        }
     };
 
     ws.onmessage = (event) => {
@@ -590,8 +597,10 @@ function conectarWebSocket(coopId) {
         console.error('❌ WS ERROR', e);
     };
 
-    ws.onclose = () => {
+    // Nota: esta función puede ser llamada tanto para el socket local como para la variable global
+    const handleClose = (s) => {
         console.warn('🔴 WS DESCONECTADO');
+        if (ws === s) ws = null; // limpiar referencia global si coincide
         // Reintentar conexión con backoff
         setTimeout(function(){
             try {
@@ -601,6 +610,20 @@ function conectarWebSocket(coopId) {
             }
         }, 3000);
     };
+
+    // Si se creó socket local lo gestionamos, si no, dejamos el handler en la variable global
+    // (cuando usamos socket local, el onclose ya fue asignado en esa variable)
+    if (typeof socket !== 'undefined') {
+        socket.onclose = () => handleClose(socket);
+        socket.onerror = (e) => {
+            console.error('❌ WS ERROR', e);
+        };
+    } else {
+        ws.onclose = () => handleClose(ws);
+        ws.onerror = (e) => {
+            console.error('❌ WS ERROR', e);
+        };
+    }
 }
 
 
