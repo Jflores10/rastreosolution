@@ -643,11 +643,39 @@ function onClientConnected(socket) {
                                         }
                                         else {
                                             // 🔹 Notificar a WebSocket (Laravel recibirá por Redis)
+                                            // Construir payload más completo para el frontend
+                                            let unidadPayload = {
+                                                _id: document.value._id,
+                                                imei: document.value.imei || data[imei],
+                                                descripcion: document.value.descripcion || '',
+                                                placa: document.value.placa || '',
+                                                latitud: document.value.latitud,
+                                                longitud: document.value.longitud,
+                                                velocidad_actual: document.value.velocidad_actual || document.value.velocidad || 0,
+                                                voltaje: document.value.voltaje,
+                                                mileage: document.value.mileage,
+                                                bateria: document.value.bateria,
+                                                contador_total: document.value.contador_total,
+                                                contador_diario: document.value.contador_diario,
+                                                contador_total_sensor_2: document.value.contador_total_sensor_2,
+                                                contador_diario_sensor_2: document.value.contador_diario_sensor_2,
+                                                contador_total_sensor_3: document.value.contador_total_sensor_3,
+                                                contador_diario_sensor_3: document.value.contador_diario_sensor_3,
+                                                estado_movil: document.value.estado_movil,
+                                                angulo: document.value.angulo,
+                                                fecha_gps: document.value.fecha_gps,
+                                                fecha: document.value.fecha,
+                                                evento: document.value.evento,
+                                                sentido: document.value.sentido || null,
+                                                cooperativa_id: document.value.cooperativa_id || null
+                                            };
+
                                             let recorrido = {
                                                 imei: data[imei],
                                                 latitud: document.value.latitud,
                                                 longitud: document.value.longitud,
-                                                cooperativa_id: document.value.cooperativa_id || null
+                                                cooperativa_id: document.value.cooperativa_id || null,
+                                                unidad: unidadPayload
                                             };
 
                                             enviarALaravelPorWS(recorrido);

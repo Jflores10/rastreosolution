@@ -568,7 +568,18 @@ function conectarWebSocket(coopId) {
             console.log('📥 WS mensaje:', data);
 
             if (data.type === 'unidad.updated') {
-                actualizarUnidadRealtime(data.payload);
+                // payload puede venir como { unidad: {...} } o directamente con la unidad
+                const payload = data.payload || {};
+                const unidad = payload.unidad || payload;
+                if (unidad) {
+                    // normalizar campos esperados por setMarcadorUnidad
+                    const fakeFecha = { fecha_gps: unidad.fecha_gps || unidad.fecha || null, fecha_servidor: unidad.fecha || null };
+                    try {
+                        setMarcadorUnidad(unidad, fakeFecha, fakeFecha, 0);
+                    } catch (e) {
+                        console.error('Error actualizando marcador desde WS', e);
+                    }
+                }
             }
         } catch (err) {
             console.error('❌ WS mensaje inválido', event.data);
@@ -581,7 +592,14 @@ function conectarWebSocket(coopId) {
 
     ws.onclose = () => {
         console.warn('🔴 WS DESCONECTADO');
-
+        // Reintentar conexión con backoff
+        setTimeout(function(){
+            try {
+                conectarWebSocket(coopId);
+            } catch(e){
+                console.error('Error reconectando WS', e);
+            }
+        }, 3000);
     };
 }
 
@@ -603,6 +621,13 @@ function actualizarUnidadRealtime(unidad) {
     };
     setMarcadorUnidad(unidad, fakeFecha, fakeFecha, 0);
 }
+
+// Inicializar WS cuando carga la página con la cooperativa seleccionada
+document.addEventListener('DOMContentLoaded', function () {
+    var coopEl = document.getElementById('cooperativa');
+    var coopId = coopEl ? coopEl.value : '';
+    conectarWebSocket(coopId);
+});
 
 
 </script>
