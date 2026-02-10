@@ -646,7 +646,8 @@ function onClientConnected(socket) {
                                             let recorrido = {
                                                 imei: data[imei],
                                                 latitud: document.value.latitud,
-                                                longitud: document.value.longitud
+                                                longitud: document.value.longitud,
+                                                cooperativa_id: document.value.cooperativa_id || null
                                             };
 
                                             enviarALaravelPorWS(recorrido);

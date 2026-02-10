@@ -31,31 +31,29 @@ const frontendClients = new Map();
 
 /* =========================
  * Escuchar Redis realtime
+ * Suscribirse a ambos canales que podemos usar: 'gps-realtime' y 'gps-channel'
  * ========================= */
-redisSub.subscribe('gps-realtime');
+redisSub.subscribe('gps-realtime', 'gps-channel');
 
 redisSub.on('message', (channel, message) => {
   try {
-    console.log('📡 gps-realtime recibido');
+    console.log(`📡 Mensaje Redis en canal ${channel}`);
 
-   const data = JSON.parse(message);
+    const data = JSON.parse(message);
 
     const coopMsg = String(data.cooperativa_id || '').trim();
 
-    console.log('📦 Redis coop:', coopMsg);
+    console.log('📦 Redis coop:', coopMsg || '<ninguna>');
     console.log('👥 Fronts registrados:', [...frontendClients.values()]);
 
     frontendClients.forEach((coopId, ws) => {
       const coopFront = String(coopId || '').trim();
 
-      console.log('🔎 Comparando:', coopFront, '===', coopMsg);
+      // Si no hay coopMsg (o es vacío), hacemos broadcast a todos los frontends conectados
+      const shouldSend = (coopMsg === '' || coopMsg === null) ? (ws.readyState === WebSocket.OPEN) : (ws.readyState === WebSocket.OPEN && coopFront === coopMsg);
 
-      if (
-        ws.readyState === WebSocket.OPEN &&
-        coopFront === coopMsg
-      ) {
-        console.log('✅ ENVIANDO DATA A FRONT');
-
+      if (shouldSend) {
+        console.log('✅ ENVIANDO DATA A FRONT ->', coopFront || '<broadcast>');
         ws.send(JSON.stringify({
           type: 'unidad.updated',
           payload: data
@@ -64,7 +62,7 @@ redisSub.on('message', (channel, message) => {
     });
 
   } catch (err) {
-    console.error('❌ Error procesando gps-realtime:', err);
+    console.error('❌ Error procesando mensaje Redis:', err);
   }
 });
 
