@@ -568,7 +568,7 @@ function conectarWebSocket(coopId) {
         }
     };
 
-    ws.onmessage = (event) => {
+    socket.onmessage = (event) => {
         try {
             const data = JSON.parse(event.data);
 
@@ -593,7 +593,7 @@ function conectarWebSocket(coopId) {
         }
     };
 
-    ws.onerror = (e) => {
+    socket.onerror = (e) => {
         console.error('❌ WS ERROR', e);
     };
 
