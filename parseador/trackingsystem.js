@@ -45,11 +45,37 @@ var socketArray = [];//Declaring socket array for all default clients
 var logsAdmin = [];
 const { ObjectId } = require('mongodb'); 
 const WebSocket = require("ws");
-const ws = new WebSocket("ws://127.0.0.1:6001");
 
-ws.on("open", () => {
-  console.log("Conectado a WebSocket local");
-});
+// WebSocket cliente con reconexión automática
+let wsClient = null;
+let wsReconnectTimeout = 3000;
+
+function connectWebSocketClient() {
+    try {
+        wsClient = new WebSocket("ws://127.0.0.1:6001");
+
+        wsClient.on("open", () => {
+            console.log("Conectado a WebSocket local");
+        });
+
+        wsClient.on("close", (code, reason) => {
+            console.warn(`WS local cerrado. Reconectando en ${wsReconnectTimeout}ms (code=${code})`);
+            setTimeout(connectWebSocketClient, wsReconnectTimeout);
+        });
+
+        wsClient.on("error", (err) => {
+            console.error('WS local error:', err && err.message ? err.message : err);
+            // el close event disparará la reconexión
+        });
+    }
+    catch (e) {
+        console.error('Error creando WS client:', e);
+        setTimeout(connectWebSocketClient, wsReconnectTimeout);
+    }
+}
+
+// Iniciar la conexión al levantar el proceso
+connectWebSocketClient();
 
 
 
@@ -63,11 +89,15 @@ const redisPub = new Redis();  // Para publicar / set / get
 */
 
 function enviarALaravelPorWS(data) {
-  if (ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify(data));
-  } else {
-    console.log("WebSocket no disponible, no se pudo enviar:", data);
-  }
+    if (wsClient && wsClient.readyState === WebSocket.OPEN) {
+        try {
+            wsClient.send(JSON.stringify(data));
+        } catch (e) {
+            console.error('Error enviando por WS local:', e);
+        }
+    } else {
+        console.log("WebSocket no disponible, no se pudo enviar:", data);
+    }
 }
 function getSocket(imei) {
     for (var i = 0; i < socketArray.length; i++) {
@@ -667,14 +697,14 @@ function onClientConnected(socket) {
                                                 fecha: document.value.fecha,
                                                 evento: document.value.evento,
                                                 sentido: document.value.sentido || null,
-                                                cooperativa_id: document.value.cooperativa_id || null
+                                                cooperativa_id: (document.value.cooperativa_id ? String(document.value.cooperativa_id) : null)
                                             };
 
                                             let recorrido = {
                                                 imei: data[imei],
                                                 latitud: document.value.latitud,
                                                 longitud: document.value.longitud,
-                                                cooperativa_id: document.value.cooperativa_id || null,
+                                                cooperativa_id: (document.value.cooperativa_id ? String(document.value.cooperativa_id) : null),
                                                 unidad: unidadPayload
                                             };
 
