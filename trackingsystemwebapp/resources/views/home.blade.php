@@ -1,6 +1,12 @@
 @extends('layouts.app')
 @section('styles')
 <style>
+    .comandos-v .btn {
+        min-width: 160px; /* ancho uniforme */
+    }
+</style>
+
+<style>
 .dir-wrap {
     white-space: normal !important;
     word-break: break-word !important;
@@ -345,7 +351,9 @@ Dashboard
                         <i class="fa fa-paper-plane"></i> Enviar comando
                     </button>
                 </div>
-                 <div class="btn-group btn-group-justified" role="group" aria-label="Comandos">
+
+                
+                <div class="btn-group btn-group-justified" role="group" aria-label="Comandos">
                     <a id="btnApagar" class="btn btn-danger" role="button">
                         <i class="fa fa-lock"></i> Bloquear Vehículo
                     </a>
@@ -356,12 +364,16 @@ Dashboard
                         <i class="fa fa-refresh"></i> Reset
                     </a>
                 </div>
-
-                <!-- Botón flotado a la derecha -->
-                <div class="clearfix" style="margin-top:10px;">
-                    <a id="btnCompartir" class="btn btn-info pull-left" role="button" target="_blank">
-                        <i class="fa fa-map-marker"></i> Compartir Ubicación
-                    </a>
+                <br>
+                <div class="text-left">
+                    <div class="btn-group comandos-v">
+                        <a id="btnCompartir" class="btn btn-info ">
+                            <i class="fa fa-map-marker"></i> Compartir Ubicación
+                        </a>
+                        <a id="btnFoto" class="btn btn-primary ">
+                            <i class="fa fa-camera"></i> Foto
+                        </a>
+                    </div>
                 </div>
 
             </div>
@@ -2684,6 +2696,21 @@ $("#velocimetro").myfunc({divFact:10});
             var url = `https://www.google.com/maps?q=${lat},${lng}`;
             window.open(url, '_blank');
         });
+
+         $('#btnFoto').click(function (e) {
+            var imei = $('#commandImei').val();
+            var message = 'AT+GTTAP=gv300,0,,,2,,,,,FFFF$';
+            $.post('{{ url("/api/command") }}', {
+                imei : imei,
+                message : message
+            }, function (data) {
+                if (data.error)
+                alert('Hubo un error al ejecutar el comando.');
+                else
+                alert('Comando ejecutado exitosamente.');
+            }, 'json');
+        });
+
         
 
         $('#ruta').change(function () {
