@@ -1091,17 +1091,42 @@ class DespachoController extends Controller
         // -----------------------------------------------------
         // Obtener fecha GPS REAL del punto de retorno
         // -----------------------------------------------------
-        $retornoGPS = null;
+        $retornoGPS_Real = null;
 
-        if ($indiceRetorno !== null && !empty($despacho->puntos_control[$indiceRetorno]['marca'])) {
-            $retornoGPS = new UTCDateTime(
-                Carbon::parse($despacho->puntos_control[$indiceRetorno]['marca'])->getTimestamp() * 1000
-            );
+        if ($indiceRetorno !== null) {
+
+            $pRet = $despacho->puntos_control[$indiceRetorno];
+            $puntoControlRet = PuntoControl::find($pRet['id']);
+
+            if ($puntoControlRet) {
+
+                $tEsperadoRet = Carbon::instance($pRet['tiempo_esperado']->toDateTime())
+                    ->addHours(10);
+
+                $gpsRet = $this->buscarGPSMasCercanoPunto(
+                    $despacho->unidad_id,
+                    (int)$puntoControlRet->pdi,
+                    $pRet['calculo'] ?? 'E',
+                    $finiGlobal,
+                    new UTCDateTime($tEsperadoRet->getTimestamp() * 1000),
+                    $ffinGlobal,
+                    false,
+                    true,
+                    false,
+                    null // AÚN NO HAY RETORNO
+                );
+
+                if ($gpsRet) {
+                    $retornoGPS_Real = new UTCDateTime(
+                        $gpsRet->fecha_gps->toDateTime()->getTimestamp() * 1000
+                    );
+                }
+            }
         }
 
 
+
         // Parámetros de corte y marcas
-        $retornoGPS_Real = null;
         $array_final   = [];
         $multa         = 0.0;
         $finiDinamico  = $finiGlobal;
