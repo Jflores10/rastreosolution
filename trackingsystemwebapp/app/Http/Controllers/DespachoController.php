@@ -1088,6 +1088,17 @@ class DespachoController extends Controller
         }
         // ---------------------------------------------------------------------
 
+        // -----------------------------------------------------
+        // Obtener fecha GPS REAL del punto de retorno
+        // -----------------------------------------------------
+        $retornoGPS = null;
+
+        if ($indiceRetorno !== null && !empty($despacho->puntos_control[$indiceRetorno]['marca'])) {
+            $retornoGPS = new UTCDateTime(
+                Carbon::parse($despacho->puntos_control[$indiceRetorno]['marca'])->getTimestamp() * 1000
+            );
+        }
+
 
         // Parámetros de corte y marcas
         $retornoGPS_Real = null;
@@ -1112,74 +1123,73 @@ class DespachoController extends Controller
                 continue;
             }
 
-            // CORRECCIÓN: convertir tiempo esperado a Carbon correctamente
+            // -------------------------------------------------
+            // Tiempo esperado
+            // -------------------------------------------------
             $tiempoEsperado = Carbon::instance($punto_control['tiempo_esperado']->toDateTime());
-
-            // Igual que tu código: +10 horas
             $tiempoEsperadoConsulta = $tiempoEsperado->copy()->addHours(10);
             $tiempoEsperadoUTC = new UTCDateTime($tiempoEsperadoConsulta->getTimestamp() * 1000);
 
-            // Primer punto = siempre SALIDA
+            // Primer punto = salida
             $modoCalculo = ($index == 0) ? 'S' : ($punto_control['calculo'] ?? 'S');
-            // ---------------------------------------------------------------------
-            $modoRecorrido = 1;
-            if ($indiceRetorno !== null && $index > $indiceRetorno) {
-                $modoRecorrido = 2;
-            }
-            // ---------------------------------------------------------------------
-            // Buscar GPS respetando entrada/salida
+
+            // -------------------------------------------------
+            // Determinar tramo según punto de retorno
+            // -------------------------------------------------
+            $esAntesRetorno    = ($indiceRetorno !== null && $index < $indiceRetorno);
+            $esPuntoRetorno   = ($indiceRetorno !== null && $index == $indiceRetorno);
+            $esDespuesRetorno = ($indiceRetorno !== null && $index > $indiceRetorno);
+
+            // -------------------------------------------------
+            // Buscar GPS (SIN ventana, SIN cruzar retorno)
+            // -------------------------------------------------
             $gps = $this->buscarGPSMasCercanoPunto(
                 $despacho->unidad_id,
-                (int)$puntoControlObj->pdi,
+                (int) $puntoControlObj->pdi,
                 $modoCalculo,
                 $finiDinamico,
                 $tiempoEsperadoUTC,
                 $ffinGlobal,
-                $modoRecorrido,
-                $retornoGPS_Real 
+                $esAntesRetorno,
+                $esPuntoRetorno,
+                $esDespuesRetorno,
+                $retornoGPS_Real
             );
 
-            if ($indiceRetorno !== null && $index == $indiceRetorno && $gps) {
-                $retornoGPS_Real = new UTCDateTime(
-                    $gps->fecha_gps->toDateTime()->getTimestamp() * 1000
-                );
-            }
-
-            //--------------------------------------------------------------------
+            // -------------------------------------------------
+            // Validar secuencia (no permitir retrocesos)
+            // -------------------------------------------------
             if ($gps) {
                 $fechaGPSOriginal = $gps->fecha_gps->toDateTime();
 
                 if ($ultimaMarcaValida && $fechaGPSOriginal < $ultimaMarcaValida) {
 
-                    // 1) Restar multa del punto anterior
+                    // Quitar multa del punto anterior
                     if (isset($multasPorPunto[$index - 1])) {
                         $multa -= $multasPorPunto[$index - 1];
                         unset($multasPorPunto[$index - 1]);
                     }
-                    
-                    // Invalida el punto anterior:
-                    $array_final[count($array_final) - 1] = $this->procesarPuntoSinGPS(
-                        $despacho->puntos_control[$index - 1]
-                    );
 
-                    // Aceptar esta marca como correcta
+                    // Invalidar punto anterior
+                    $array_final[count($array_final) - 1] =
+                        $this->procesarPuntoSinGPS($despacho->puntos_control[$index - 1]);
+
+                    // Aceptar esta como válida
                     $ultimaMarcaValida = $fechaGPSOriginal;
 
                 } else {
-                    // Secuencia correcta
                     $ultimaMarcaValida = $fechaGPSOriginal;
                 }
             }
-            //--------------------------------------------------------------------
 
-
+            // -------------------------------------------------
+            // Procesar resultado
+            // -------------------------------------------------
             if ($gps) {
 
-                // CORRECCIÓN: convertir fecha GPS original
                 $fechaGPSOriginal = $gps->fecha_gps->toDateTime();
                 $fechaGPSMostrar  = Carbon::instance($fechaGPSOriginal)->subHours(10);
 
-                // Intervalo de minutos con signo
                 $intervaloMin = $this->calcularIntervaloMinutos(
                     $tiempoEsperado,
                     $fechaGPSMostrar,
@@ -1187,12 +1197,12 @@ class DespachoController extends Controller
                     $cooperativa
                 );
 
-
-
-                $arrayTiempoE[]=$intervaloMin ;
+                $arrayTiempoE[] = $intervaloMin;
 
                 if (abs($intervaloMin) > $maxAtrasoMin) {
+
                     $array_final[] = $this->procesarPuntoSinGPS($punto_control);
+
                 } else {
 
                     $multaPunto = ($intervaloMin < 0)
@@ -1217,16 +1227,18 @@ class DespachoController extends Controller
                         $salidaMarca = $itemProcesado['marca'];
                     }
 
-                    // CORRECCIÓN: actualizar f_ini dinámico
+                    // Avanzar inicio dinámico
                     $finiDinamico = new UTCDateTime($fechaGPSOriginal->getTimestamp() * 1000);
                 }
 
             } else {
+
                 $array_final[] = $this->procesarPuntoSinGPS($punto_control);
             }
 
             $index++;
         }
+
 
         // Corte de tubo (igual que original)
         $corteTubo = 'No';
@@ -1310,84 +1322,83 @@ class DespachoController extends Controller
      * $calculo: 'E' = entrada (entrada = 1), otro valor = salida (entrada != 1)
      */
     protected function buscarGPSMasCercanoPunto(
-        $unidadID,
-        $pdi,
-        $calculo,
-        UTCDateTime $fini,
-        UTCDateTime $tiempoEsperado,
-        UTCDateTime $ffinGlobal,
-        $modoRecorrido = 1,
-         UTCDateTime $retornoGPS_Real = null
+    $unidadID,
+    $pdi,
+    $calculo,
+    UTCDateTime $fini,
+    UTCDateTime $tiempoEsperadoUTC,
+    UTCDateTime $ffinGlobal,
+    bool $esAntesRetorno,
+    bool $esPuntoRetorno,
+    bool $esDespuesRetorno,
+    ?UTCDateTime $retornoGPS
     ) {
         $isEntrada = ($calculo === 'E');
 
+        // -------------------------------------------------
         // Query base
+        // -------------------------------------------------
         $baseQuery = Recorrido::where('tipo', 'GTGEO')
             ->where('unidad_id', new ObjectID($unidadID))
-            ->where('pdi', (int)$pdi);
+            ->where('pdi', (int) $pdi);
 
         if ($isEntrada) {
-            $baseQuery = $baseQuery->where('entrada', 1);
+            $baseQuery->where('entrada', 1);
         } else {
-            $baseQuery = $baseQuery->where('entrada', '!=', 1);
+            $baseQuery->where('entrada', '!=', 1);
         }
-        /*
-        if ($modoRecorrido == 2 && $retornoGPS_Real) {
-            $baseQuery = $baseQuery->where('fecha_gps', '>', $retornoGPS_Real);
-        }
-            */
 
-        if ($retornoGPS_Real) {
+        // -------------------------------------------------
+        // Restricción por punto de RETORNO
+        // -------------------------------------------------
+        if ($retornoGPS) {
 
-            // ANTES del retorno → solo GPS anteriores
-            if ($modoRecorrido == 1) {
-                $baseQuery = $baseQuery->where('fecha_gps', '<', $retornoGPS_Real);
+            // Puntos ANTES del retorno
+            if ($esAntesRetorno) {
+                $baseQuery->where('fecha_gps', '<', $retornoGPS);
             }
 
-            // DESPUÉS del retorno → solo GPS posteriores
-            if ($modoRecorrido == 2) {
-                $baseQuery = $baseQuery->where('fecha_gps', '>', $retornoGPS_Real);
+            // Puntos DESPUÉS del retorno
+            if ($esDespuesRetorno) {
+                $baseQuery->where('fecha_gps', '>', $retornoGPS);
             }
+
+            // Punto retorno → sin restricción adicional
         }
 
-
-
-        // --------------------------------------------------------
+        // -------------------------------------------------
+        // Búsqueda respetando SECUENCIA del recorrido
+        // -------------------------------------------------
         $antes = (clone $baseQuery)
-            ->where('fecha_gps','>', $fini)
-            ->where('fecha_gps','<=', $tiempoEsperado)
-            ->orderBy('fecha_gps','desc')
+            ->where('fecha_gps', '>=', $fini)
+            ->where('fecha_gps', '<=', $tiempoEsperadoUTC)
+            ->orderBy('fecha_gps', 'desc')
             ->first();
 
-        // --------------------------------------------------------
         $despues = (clone $baseQuery)
-        ->where('fecha_gps','>', $tiempoEsperado)
-        ->where('fecha_gps','<=', $ffinGlobal)
-        ->orderBy('fecha_gps','asc')
-        ->first();
+            ->where('fecha_gps', '>', $tiempoEsperadoUTC)
+            ->where('fecha_gps', '<=', $ffinGlobal)
+            ->orderBy('fecha_gps', 'asc')
+            ->first();
 
-      
-
-        // --------------------------------------------------------
-        // --------------------------------------------------------
+        // -------------------------------------------------
+        // Elegir el GPS más cercano al tiempo esperado
+        // -------------------------------------------------
         if ($antes && $despues) {
-            $tEsperado = $tiempoEsperado->toDateTime()->getTimestamp();
+            $tEsperado = $tiempoEsperadoUTC->toDateTime()->getTimestamp();
 
-            $tAntes = $antes->fecha_gps->toDateTime()->getTimestamp();
-            $tDespues = $despues->fecha_gps->toDateTime()->getTimestamp();
+            $dAntes = abs($tEsperado - $antes->fecha_gps->toDateTime()->getTimestamp());
+            $dDesp  = abs($despues->fecha_gps->toDateTime()->getTimestamp() - $tEsperado);
 
-            $diffAntes = abs($tEsperado - $tAntes);
-            $diffDespues = abs($tDespues - $tEsperado);
-
-            return ($diffAntes <= $diffDespues) ? $antes : $despues;
+            return ($dAntes <= $dDesp) ? $antes : $despues;
         }
 
         if ($antes)   return $antes;
         if ($despues) return $despues;
-        
 
         return null;
     }
+
 
 
     /**
