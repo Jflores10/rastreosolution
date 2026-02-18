@@ -1,6 +1,8 @@
 // websocket.js
 const WebSocket = require('ws');
 const redis = require('redis');
+const fs = require('fs');
+const https = require('https');
 
 /* =========================
  * Redis
@@ -17,11 +19,38 @@ redisSub.on('error', err => {
 });
 
 /* =========================
- * WebSocket Server
+ * WebSocket Server (optional TLS)
+ * If SSL_KEY_PATH and SSL_CERT_PATH env vars are set and files exist,
+ * create an HTTPS server and attach the WebSocket server to it (wss).
+ * Otherwise start plain ws server on port 6001.
  * ========================= */
-const wss = new WebSocket.Server({ port: 6001 }, () => {
-  console.log('✅ WebSocket escuchando en ws://127.0.0.1:6001');
-});
+let wss;
+try {
+  const keyPath = process.env.SSL_KEY_PATH;
+  const certPath = process.env.SSL_CERT_PATH;
+  const useTLS = keyPath && certPath && fs.existsSync(keyPath) && fs.existsSync(certPath);
+
+  if (useTLS) {
+    const server = https.createServer({
+      key: fs.readFileSync(keyPath),
+      cert: fs.readFileSync(certPath)
+    });
+    wss = new WebSocket.Server({ server });
+    server.listen(6001, () => {
+      console.log(`✅ WSS escuchando en wss://127.0.0.1:6001 (certs from env)`);
+    });
+  } else {
+    wss = new WebSocket.Server({ port: 6001 }, () => {
+      console.log('✅ WebSocket escuchando en ws://127.0.0.1:6001');
+      if (process.env.FORCE_TLS === '1') {
+        console.warn('⚠️ FORCE_TLS=1 está activo pero no se encontraron claves/certs en SSL_KEY_PATH/SSL_CERT_PATH');
+      }
+    });
+  }
+} catch (err) {
+  console.error('❌ Error inicializando WebSocket server:', err);
+  process.exit(1);
+}
 
 /* =========================
  * Frontends conectados
