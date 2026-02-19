@@ -543,8 +543,8 @@ function conectarWebSocket(coopId) {
     }
 
     const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
-    // Conectar directamente al servidor WS en el puerto 6001 (no requiere proxy /ws/)
-    const wsUrl = `${protocol}://${location.hostname}:6001`;
+    // Conectar vía path /ws/ del host (permite que nginx termine TLS y haga proxy a 127.0.0.1:6001)
+    const wsUrl = `${protocol}://${location.host}/ws/`;
 
     console.log('🔌 Conectando WS a:', wsUrl);
 
