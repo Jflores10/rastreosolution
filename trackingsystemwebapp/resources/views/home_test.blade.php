@@ -580,10 +580,12 @@ function conectarWebSocket(coopId) {
                 const payload = data.payload || {};
                 const unidad = payload.unidad || payload;
                 if (unidad) {
-                    // normalizar campos esperados por setMarcadorUnidad
-                    const fakeFecha = { fecha_gps: unidad.fecha_gps || unidad.fecha || null, fecha_servidor: unidad.fecha || null };
+                    // Construir objetos con la misma estructura que usa home.blade.php
+                    // setMarcadorUnidad espera fecha_gps_.fecha_gps.date y fecha_servidor.fecha_servidor.date cuando _is==0
+                    const fakeFechaGps = { fecha_gps: { date: unidad.fecha_gps || unidad.fecha || null } };
+                    const fakeFechaServidor = { fecha_servidor: { date: unidad.fecha || unidad.fecha_gps || null } };
                     try {
-                        setMarcadorUnidad(unidad, fakeFecha, fakeFecha, 0);
+                        setMarcadorUnidad(unidad, fakeFechaGps, fakeFechaServidor, 0);
                         // También actualizar la lista lateral en tiempo real
                         try { updateUnidadInList(unidad); } catch(e) { console.error('Error actualizando lista desde WS', e); }
                     } catch (e) {
