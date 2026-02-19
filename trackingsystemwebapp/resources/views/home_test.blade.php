@@ -533,6 +533,8 @@ Dashboard
 
 <script>
 let ws = null;
+// Ajuste fijo de horas (usar valor entero, puede ser negativo). Ajusta las fechas que vienen del servidor.
+const FIXED_HOUR_OFFSET = 5; // <-- aplica el ajuste fijo que pediste (cambiar si es necesario)
 
 function conectarWebSocket(coopId) {
 
@@ -581,9 +583,28 @@ function conectarWebSocket(coopId) {
                 const unidad = payload.unidad || payload;
                 if (unidad) {
                     // Construir objetos con la misma estructura que usa home.blade.php
-                    // setMarcadorUnidad espera fecha_gps_.fecha_gps.date y fecha_servidor.fecha_servidor.date cuando _is==0
-                    const fakeFechaGps = { fecha_gps: { date: unidad.fecha_gps || unidad.fecha || null } };
-                    const fakeFechaServidor = { fecha_servidor: { date: unidad.fecha || unidad.fecha_gps || null } };
+                    // Aplicar ajuste horario fijo antes de pasar a setMarcadorUnidad
+                    let gpsDateRaw = unidad.fecha_gps || unidad.fecha || null;
+                    let srvDateRaw = unidad.fecha || unidad.fecha_gps || null;
+                    let gpsIso = null;
+                    let srvIso = null;
+                    try {
+                        if (gpsDateRaw) {
+                            let d = new Date(gpsDateRaw);
+                            if (typeof d.addHours === 'function') d = d.addHours(FIXED_HOUR_OFFSET);
+                            gpsIso = d.toISOString();
+                        }
+                    } catch(e) { gpsIso = gpsDateRaw; }
+                    try {
+                        if (srvDateRaw) {
+                            let d2 = new Date(srvDateRaw);
+                            if (typeof d2.addHours === 'function') d2 = d2.addHours(FIXED_HOUR_OFFSET);
+                            srvIso = d2.toISOString();
+                        }
+                    } catch(e) { srvIso = srvDateRaw; }
+
+                    const fakeFechaGps = { fecha_gps: { date: gpsIso } };
+                    const fakeFechaServidor = { fecha_servidor: { date: srvIso } };
                     try {
                         setMarcadorUnidad(unidad, fakeFechaGps, fakeFechaServidor, 0);
                         // También actualizar la lista lateral en tiempo real
@@ -657,9 +678,21 @@ function updateUnidadInList(unidad) {
     // Construir campos paralelos a los usados en appendUnidades
     var fecha_gps = unidad.fecha_gps || unidad.fecha || null;
     var fecha_gps_marker = '-';
-    try { if (fecha_gps) fecha_gps_marker = new Date(fecha_gps).format('H:i:s'); } catch(e) { fecha_gps_marker = fecha_gps || '-'; }
+    try {
+        if (fecha_gps) {
+            let d = new Date(fecha_gps);
+            if (typeof d.addHours === 'function') d = d.addHours(FIXED_HOUR_OFFSET);
+            fecha_gps_marker = d.format('H:i:s');
+        }
+    } catch(e) { fecha_gps_marker = fecha_gps || '-'; }
     var fecha_servidor = '-';
-    try { if (unidad.fecha) fecha_servidor = new Date(unidad.fecha).format('d-m-Y H:i:s'); } catch(e) { fecha_servidor = unidad.fecha || '-'; }
+    try {
+        if (unidad.fecha) {
+            let d2 = new Date(unidad.fecha);
+            if (typeof d2.addHours === 'function') d2 = d2.addHours(FIXED_HOUR_OFFSET);
+            fecha_servidor = d2.format('d-m-Y H:i:s');
+        }
+    } catch(e) { fecha_servidor = unidad.fecha || '-'; }
 
     var voltaje = (unidad.voltaje != null) ? String(unidad.voltaje).substring(0,2) : '--';
     var velocidad_num = Number(unidad.velocidad_actual) || 0;
@@ -805,7 +838,14 @@ function updateUnidadInList(unidad) {
     li.onclick = function () { selectUnidad(this.currentU,this.currentFechagps,this.currentFecha,1); };
 
     // Actualizar marcador en mapa
-    try { setMarcadorUnidad(unidad, {fecha_gps: fecha_gps}, {fecha_servidor: unidad.fecha}, 0); } catch(e) { /* ignore */ }
+    // Solo actualizar marcador si lat/lon son válidos
+    var latValid = unidad.latitud != undefined && unidad.longitud != undefined && !isNaN(parseFloat(unidad.latitud)) && !isNaN(parseFloat(unidad.longitud));
+    if (latValid) {
+        try { setMarcadorUnidad(unidad, {fecha_gps: fecha_gps}, {fecha_servidor: unidad.fecha}, 0); } catch(e) { /* ignore */ }
+    } else {
+        // Si no hay coordenadas, no llamar al setMarcadorUnidad; el alert original se mostraba en esa función
+        console.warn('Unidad sin coordenadas: ' + unidad._id);
+    }
 }
 
 // Pequeña utilidad para devolver un icono por ángulo (puede ser simple por ahora)
