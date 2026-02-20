@@ -759,6 +759,29 @@ function updateUnidadInList(unidad) {
     var fecha_puerta_abierta_trasera = unidad.fecha_puerta_abierta_trasera || '';
     var fecha_puerta_cerrada_trasera = unidad.fecha_puerta_cerrada_trasera || '';
 
+    // Normalizar/formatear fechas de puertas según HistoricoController: restar 10 horas y mostrar 'd-m-Y H:i:s'
+    function formatDoorDate(raw) {
+        if (!raw) return '';
+        try {
+            let d = new Date(raw);
+            if (!isNaN(d.getTime())) {
+                // aplicar offset igual que en servidor (restar 10 horas)
+                d.setHours(d.getHours() + GPS_HOUR_OFFSET);
+                if (typeof d.format === 'function') return d.format('d-m-Y H:i:s');
+                // fallback legible
+                return d.toISOString().replace('T', ' ').split('.')[0];
+            }
+            return raw;
+        } catch (e) {
+            return raw;
+        }
+    }
+
+    fecha_puerta_abierta = formatDoorDate(fecha_puerta_abierta);
+    fecha_puerta_cerrada = formatDoorDate(fecha_puerta_cerrada);
+    fecha_puerta_abierta_trasera = formatDoorDate(fecha_puerta_abierta_trasera);
+    fecha_puerta_cerrada_trasera = formatDoorDate(fecha_puerta_cerrada_trasera);
+
     var html = '';
 
     // Generar exactamente el HTML con el mismo look según estado
