@@ -533,8 +533,10 @@ Dashboard
 
 <script>
 let ws = null;
-// Ajuste fijo de horas (usar valor entero, puede ser negativo). Ajusta las fechas que vienen del servidor.
-const FIXED_HOUR_OFFSET = 5; // <-- aplica el ajuste fijo que pediste (cambiar si es necesario)
+// Ajustes horarios para fechas que vienen del servidor:
+// Según HistoricoController: fecha_gps => restar 10 horas, fecha (servidor) => restar 5 horas
+const GPS_HOUR_OFFSET = -10; // restar 10 horas a fecha_gps
+const SERVER_HOUR_OFFSET = -5; // restar 5 horas a fecha (servidor)
 
 function conectarWebSocket(coopId) {
 
@@ -591,15 +593,23 @@ function conectarWebSocket(coopId) {
                     try {
                         if (gpsDateRaw) {
                             let d = new Date(gpsDateRaw);
-                            if (typeof d.addHours === 'function') d = d.addHours(FIXED_HOUR_OFFSET);
-                            gpsIso = d.toISOString();
+                            if (!isNaN(d.getTime())) {
+                                d.setHours(d.getHours() + GPS_HOUR_OFFSET);
+                                gpsIso = d.toISOString();
+                            } else {
+                                gpsIso = gpsDateRaw;
+                            }
                         }
                     } catch(e) { gpsIso = gpsDateRaw; }
                     try {
                         if (srvDateRaw) {
                             let d2 = new Date(srvDateRaw);
-                            if (typeof d2.addHours === 'function') d2 = d2.addHours(FIXED_HOUR_OFFSET);
-                            srvIso = d2.toISOString();
+                            if (!isNaN(d2.getTime())) {
+                                d2.setHours(d2.getHours() + SERVER_HOUR_OFFSET);
+                                srvIso = d2.toISOString();
+                            } else {
+                                srvIso = srvDateRaw;
+                            }
                         }
                     } catch(e) { srvIso = srvDateRaw; }
 
@@ -700,16 +710,24 @@ function updateUnidadInList(unidad) {
     try {
         if (fecha_gps) {
             let d = new Date(fecha_gps);
-            if (typeof d.addHours === 'function') d = d.addHours(FIXED_HOUR_OFFSET);
-            fecha_gps_marker = d.format('H:i:s');
+            if (!isNaN(d.getTime())) {
+                d.setHours(d.getHours() + GPS_HOUR_OFFSET);
+                fecha_gps_marker = d.format('H:i:s');
+            } else {
+                fecha_gps_marker = fecha_gps;
+            }
         }
     } catch(e) { fecha_gps_marker = fecha_gps || '-'; }
     var fecha_servidor = '-';
     try {
         if (unidad.fecha) {
             let d2 = new Date(unidad.fecha);
-            if (typeof d2.addHours === 'function') d2 = d2.addHours(FIXED_HOUR_OFFSET);
-            fecha_servidor = d2.format('d-m-Y H:i:s');
+            if (!isNaN(d2.getTime())) {
+                d2.setHours(d2.getHours() + SERVER_HOUR_OFFSET);
+                fecha_servidor = d2.format('d-m-Y H:i:s');
+            } else {
+                fecha_servidor = unidad.fecha;
+            }
         }
     } catch(e) { fecha_servidor = unidad.fecha || '-'; }
 
