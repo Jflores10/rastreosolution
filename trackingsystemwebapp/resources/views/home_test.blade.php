@@ -901,6 +901,7 @@ function updateUnidadInList(unidad) {
     li.currentU = unidad;
     li.currentFechagps = fecha_gps_marker;
     li.currentFecha = fecha_servidor;
+    console.log(li)
     li.onclick = function () { selectUnidad(this.currentU,this.currentFechagps,this.currentFecha,1); };
 
     // Actualizar marcador en mapa
