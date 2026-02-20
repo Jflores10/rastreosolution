@@ -2691,8 +2691,9 @@ $("#velocimetro").myfunc({divFact:10});
                     estado = 'no_envia_trama';
                     
                 var iId = 'i' + data.unidades[i]._id; 
-                var gId = 'i' + data.unidades[i]._id; 
-                var bId = 'i' + data.unidades[i]._id; 
+                // use distinct prefixes so each element has a unique id
+                var gId = 'g' + data.unidades[i]._id; 
+                var bId = 'b' + data.unidades[i]._id; 
                 console.log(data.unidades[i].climatizada);
 
                 sentido='';
@@ -2836,21 +2837,23 @@ $("#velocimetro").myfunc({divFact:10});
                         );
                         break;
                 }
-                console.log("Hola")
                 var currentLi = document.getElementById(iId);
-                console.log(currentLi);
                 var currentU = data.unidades[i];
                 var currentFechagps = fecha_gps_marker;
                 var currentFecha = fecha_servidor;
-                if (currentLi != null && currentLi != undefined)
+                if (currentLi)
                 {
+                    // attach the actual unit object and dates to the element
                     currentLi.currentU = currentU;
                     currentLi.currentFechagps = currentFechagps;
                     currentLi.currentFecha = currentFecha;
-                    currentLi.onclick = function () {
-                        selectUnidad(this.currentU,this.currentFechagps,this.currentFecha,1);
-                        //velocimetro_change(data.unidades[i].velocidad_actual);
-                    };
+                    // remove any inline onclick attribute to avoid conflicts
+                    try { currentLi.removeAttribute('onclick'); } catch(e){}
+                    // use addEventListener so we don't accidentally overwrite other handlers
+                    currentLi.addEventListener('click', function (evt) {
+                        evt.preventDefault();
+                        selectUnidad(this.currentU, this.currentFechagps, this.currentFecha, 1);
+                    });
                 }
             }
     
