@@ -535,7 +535,7 @@ Dashboard
 let ws = null;
 // Ajustes horarios para fechas que vienen del servidor:
 // Según HistoricoController: fecha_gps => restar 10 horas, fecha (servidor) => restar 5 horas
-const GPS_HOUR_OFFSET = -10; // restar 10 horas a fecha_gps
+const GPS_HOUR_OFFSET = -5; // restar 10 horas a fecha_gps
 const SERVER_HOUR_OFFSET = -5; // restar 5 horas a fecha (servidor)
 
 function conectarWebSocket(coopId) {
