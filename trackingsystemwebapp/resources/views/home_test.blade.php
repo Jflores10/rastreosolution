@@ -267,7 +267,7 @@ Dashboard
               </div>
               <div class="col-md-6 text-right">
                 <div class="btn-group " role="group" >
-                    <button class="btn btn-info" type="button" onclick="//$('#progress').modal('show');playClick();"><i class="fa fa-play"></i></button>
+                    <button class="btn btn-info" type="button" onclick="$('#progress').modal('show');playClick();"><i class="fa fa-play"></i></button>
                     <button class="btn btn-info" type="button" onclick="pauseClick();"><i class="fa fa-pause"></i></button>
                     <button class="btn btn-info" type="button" onclick="stopClick();"><i class="fa fa-stop"></i></button>
                     <button class="btn btn-info" type="button" onclick="eraseClick();"><i class="fa fa-eraser"></i></button>
@@ -902,7 +902,7 @@ function updateUnidadInList(unidad) {
     li.currentFecha = fecha_servidor;
   
     li.onclick = function () {
-        selectUnidad(this.currentU,this.currentFechagps,this.currentFecha,1); 
+        //selectUnidad(this.currentU,this.currentFechagps,this.currentFecha,1); 
     };
 
     // Actualizar marcador en mapa
@@ -2165,7 +2165,7 @@ $("#velocimetro").myfunc({divFact:10});
     function setUnidadConteo(unidad_id){
        
        var url='{{ url("/unidad/conteo") }}';
-       //$('#progress').modal('show');
+       $('#progress').modal('show');
        param={
            unidad_id : unidad_id
        };
@@ -2184,7 +2184,7 @@ $("#velocimetro").myfunc({divFact:10});
     function searchUnidad(modalLoad)
     {
         if(modalLoad)
-            //$('#progress').modal('show');
+            $('#progress').modal('show');
         var url = '{{url('/home-test')}}';
         var cooperativa_id=document.getElementById('cooperativa').value;
 
@@ -2243,7 +2243,7 @@ $("#velocimetro").myfunc({divFact:10});
     {
 
         if(load)
-            //$('#progress').modal('show');
+            $('#progress').modal('show');
 
 		if(estaReproduciendo==false)
 		{
@@ -3093,7 +3093,7 @@ $("#velocimetro").myfunc({divFact:10});
         
 
         $('#ruta').change(function () {
-            //$('#progress').modal('show');
+            $('#progress').modal('show');
             $.get('{{ url("/puntos") }}', { rutas : $('#ruta').val() }, function (data) {
                 var puntos = data.puntos;
 
@@ -3326,7 +3326,7 @@ $("#velocimetro").myfunc({divFact:10});
 
 
         $('#ruta_general').change(function () {
-            //$('#progress').modal('show');
+            $('#progress').modal('show');
             $.get('{{ url("/puntos") }}', {
                 rutas : $('#ruta_general').val()
             }, function (data) {
