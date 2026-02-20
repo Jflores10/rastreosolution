@@ -757,7 +757,7 @@ function updateUnidadInList(unidad) {
     var fecha_puerta_abierta = '--';
     var fecha_puerta_cerrada = '--';
     var fecha_puerta_abierta_trasera =  '--';
-    var fecha_puerta_cerrada_trasera = '';
+    var fecha_puerta_cerrada_trasera = '--';
     /*
     var fecha_puerta_abierta = unidad.fecha_puerta_abierta || '';
     var fecha_puerta_cerrada = unidad.fecha_puerta_cerrada || '';
@@ -1982,6 +1982,7 @@ $("#velocimetro").myfunc({divFact:10});
 
     function setMarcadorUnidad(unidad,fecha_gps_,fecha_servidor,_is)
     {
+        console.log("Hola"+unidad)
         var estado;
         switch(unidad.estado_movil)
         {
