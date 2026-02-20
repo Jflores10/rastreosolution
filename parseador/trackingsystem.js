@@ -189,8 +189,14 @@ function hexToBitPosition(hexString) {
 
 // === FUNCIÓN PARA ACTUALIZAR SENTIDO ===
 // === FUNCIÓN PARA ACTUALIZAR SENTIDO ===
-function actualizarSentidoUnidad(dbTrackingSystem, unidad, pdiActual, entrada) {
-  if (entrada !== 1) return; // Solo procesar entrada
+function actualizarSentidoUnidad(dbTrackingSystem, unidad, pdiActual, entrada, cb) {
+    // cb optional callback executed after the function finishes (success or not)
+    if (typeof cb !== 'function') cb = function() {};
+
+    if (entrada !== 1) {
+        cb(); // nothing to do
+        return; // Solo procesar entrada
+    }
 
   const tz = 'America/Guayaquil';
   const fechaBase = moment().tz(tz).format('YYYY-MM-DD');
@@ -214,36 +220,43 @@ function actualizarSentidoUnidad(dbTrackingSystem, unidad, pdiActual, entrada) {
       }
     }
   ]).toArray(function (err, despachos) {
-    if (err) {
-      console.error('❌ Error buscando despacho:', err);
-      return;
-    }
+        if (err) {
+            console.error('❌ Error buscando despacho:', err);
+            cb();
+            return;
+        }
 
     // === No hay despachos activos → resetear sentido ===
-    if (!Array.isArray(despachos) || despachos.length === 0) {
-      dbTrackingSystem.collection('unidads').updateOne(
-        { _id: unidad._id },
-        { $set: { sentido: null } }
-      );
-      console.warn('⚠️ No se encontró despacho activo para unidad', unidad._id);
-      return;
-    }
+        if (!Array.isArray(despachos) || despachos.length === 0) {
+            dbTrackingSystem.collection('unidads').updateOne(
+                { _id: unidad._id },
+                { $set: { sentido: null } },
+                function(err){
+                    if (err) console.error('❌ Error al resetear sentido:', err);
+                    console.warn('⚠️ No se encontró despacho activo para unidad', unidad._id);
+                    cb();
+                }
+            );
+            return;
+        }
 
 
 
-    if (!despachos[0].puntos_control || !Array.isArray(despachos[0].puntos_control) || despachos[0].puntos_control.length === 0) {
-      console.warn('⚠️ Despacho sin ruta activa para unidad', unidad._id);
-      return;
-    }
+        if (!despachos[0].puntos_control || !Array.isArray(despachos[0].puntos_control) || despachos[0].puntos_control.length === 0) {
+            console.warn('⚠️ Despacho sin ruta activa para unidad', unidad._id);
+            cb();
+            return;
+        }
 
     const puntosRuta = despachos[0].puntos_control || [];
 
     const puntoRetorno = puntosRuta.find(p => p.retorno === '1');
 
-    if (!puntoRetorno) {
-      console.warn('⚠️ Ruta sin punto de retorno para unidad', unidad.imei);
-      return;
-    }
+        if (!puntoRetorno) {
+            console.warn('⚠️ Ruta sin punto de retorno para unidad', unidad.imei);
+            cb();
+            return;
+        }
 
     // === Buscar punto real ===
     const ids = [];
@@ -254,18 +267,20 @@ function actualizarSentidoUnidad(dbTrackingSystem, unidad, pdiActual, entrada) {
       return;
     }
 
-    dbTrackingSystem.collection('punto_controls')
-      .find({ _id: { $in: ids } })
-      .toArray(function (err, puntosReal) {
-        if (err) {
-          console.error('❌ Error buscando punto_controls:', err);
-          return;
-        }
+        dbTrackingSystem.collection('punto_controls')
+            .find({ _id: { $in: ids } })
+            .toArray(function (err, puntosReal) {
+                if (err) {
+                    console.error('❌ Error buscando punto_controls:', err);
+                    cb();
+                    return;
+                }
 
-        if (!Array.isArray(puntosReal) || puntosReal.length === 0) {
-          console.warn('⚠️ No se encontraron puntos reales para la ruta');
-          return;
-        }
+                if (!Array.isArray(puntosReal) || puntosReal.length === 0) {
+                    console.warn('⚠️ No se encontraron puntos reales para la ruta');
+                    cb();
+                    return;
+                }
 
         const ptoRet = puntosReal.find(p => p._id.equals(ObjectId(puntoRetorno.id)));
         const pdiRetorno = ptoRet ? ptoRet.pdi : null;
@@ -285,24 +300,44 @@ function actualizarSentidoUnidad(dbTrackingSystem, unidad, pdiActual, entrada) {
         }
 
         if (nuevoSentido !== unidad.sentido) {
-          dbTrackingSystem.collection('unidads').updateOne(
-            { _id: unidad._id },
-            { $set: { sentido: nuevoSentido } },
-            function (err) {
-              if (err) {
-                console.error('❌ Error actualizando sentido:', err);
-              } else {
-                console.log(`✅ Unidad ${unidad.imei} cambió a sentido ${nuevoSentido === 'i' ? 'IDA' : 'RETORNO'}`);
-                dbTrackingSystem.collection('historial_sentido').insertOne({
-                  unidad_id: unidad._id,
-                  imei: unidad.imei,
-                  nuevo_sentido: nuevoSentido,
-                  pdi: pdiActual,
-                  fecha: new Date()
-                });
-              }
-            }
-          );
+                dbTrackingSystem.collection('unidads').updateOne(
+                        { _id: unidad._id },
+                        { $set: { sentido: nuevoSentido } },
+                        function (err) {
+                            if (err) {
+                                console.error('❌ Error actualizando sentido:', err);
+                                cb();
+                            } else {
+                                console.log(`✅ Unidad ${unidad.imei} cambió a sentido ${nuevoSentido === 'i' ? 'IDA' : 'RETORNO'}`);
+                                                dbTrackingSystem.collection('historial_sentido').insertOne({
+                                                    unidad_id: unidad._id,
+                                                    imei: unidad.imei,
+                                                    nuevo_sentido: nuevoSentido,
+                                                    pdi: pdiActual,
+                                                    fecha: new Date()
+                                                }, function(histErr){
+                                                    if (histErr) console.error('❌ Error insertando historial_sentido:', histErr);
+                                                    // Notificar cambio de sentido con evento ligero para evitar duplicar
+                                                    // el envío completo de datos del dispositivo (que provienen de GTFRI).
+                                                    // Enviamos sólo unidad_id, imei y nuevo_sentido; el frontend seguirá
+                                                    // usando los datos del dispositivo cuando reciba la siguiente trama.
+                                                    try {
+                                                        let sentidoEvent = {
+                                                            type: 'unidad.sentido.changed',
+                                                            unidad_id: unidad._id,
+                                                            imei: unidad.imei || null,
+                                                            nuevo_sentido: nuevoSentido,
+                                                            cooperativa_id: (unidad.cooperativa_id ? String(unidad.cooperativa_id) : null)
+                                                        };
+                                                        enviarALaravelPorWS(sentidoEvent);
+                                                    } catch (e) {
+                                                        console.error('❌ Error enviando evento de sentido:', e);
+                                                    }
+                                                    cb();
+                                                });
+                            }
+                        }
+                    );
         }
       });
   });
@@ -673,7 +708,9 @@ function onClientConnected(socket) {
                                         }
                                         else {
                                             // 🔹 Notificar a WebSocket (Laravel recibirá por Redis)
-                                            // Construir payload más completo para el frontend
+                                            // El payload debe provenir de los datos reales del dispositivo
+                                            // (document.value). El sentido seguirá siendo calculado por
+                                            // la función existente `actualizarSentidoUnidad`.
                                             let unidadPayload = {
                                                 _id: document.value._id,
                                                 imei: document.value.imei || data[imei],
@@ -696,7 +733,18 @@ function onClientConnected(socket) {
                                                 fecha_gps: document.value.fecha_gps,
                                                 fecha: document.value.fecha,
                                                 evento: document.value.evento,
-                                                sentido: document.value.sentido || null,
+                                                // No sobreescribimos sentido aquí; respetamos la fuente del dispositivo
+                                                sentido: (document.value.sentido !== undefined) ? document.value.sentido : null,
+                                                puerta: (document.value.puerta !== undefined) ? document.value.puerta : null,
+                                                puerta_trasera: (document.value.puerta_trasera !== undefined) ? document.value.puerta_trasera : null,
+                                                alerta_puerta_message: (document.value.alerta_puerta_message !== undefined) ? document.value.alerta_puerta_message : null,
+                                                alerta_puerta_fecha: (document.value.alerta_puerta_fecha !== undefined) ? document.value.alerta_puerta_fecha : null,
+                                                alerta_puerta_message_trasera: (document.value.alerta_puerta_message_trasera !== undefined) ? document.value.alerta_puerta_message_trasera : null,
+                                                alerta_puerta_fecha_trasera: (document.value.alerta_puerta_fecha_trasera !== undefined) ? document.value.alerta_puerta_fecha_trasera : null,
+                                                fecha_puerta_abierta: (document.value.fecha_puerta_abierta !== undefined) ? document.value.fecha_puerta_abierta : null,
+                                                fecha_puerta_abierta_trasera: (document.value.fecha_puerta_abierta_trasera !== undefined) ? document.value.fecha_puerta_abierta_trasera : null,
+                                                fecha_puerta_cerrada: (document.value.fecha_puerta_cerrada !== undefined) ? document.value.fecha_puerta_cerrada : null,
+                                                fecha_puerta_cerrada_trasera: (document.value.fecha_puerta_cerrada_trasera !== undefined) ? document.value.fecha_puerta_cerrada_trasera : null,
                                                 cooperativa_id: (document.value.cooperativa_id ? String(document.value.cooperativa_id) : null)
                                             };
 

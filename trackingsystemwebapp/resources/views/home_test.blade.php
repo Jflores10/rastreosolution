@@ -613,6 +613,25 @@ function conectarWebSocket(coopId) {
                         console.error('Error actualizando marcador desde WS', e);
                     }
                 }
+                else if (data.type === 'unidad.sentido.changed') {
+                    // Evento ligero: actualizar solo el sentido en la UI sin reemplazar datos del dispositivo
+                    try {
+                        const unidadId = data.unidad_id || data.unidadId || (data.payload && data.payload.unidad_id);
+                        const nuevoSentido = data.nuevo_sentido || (data.payload && data.payload.nuevo_sentido);
+                        if (unidadId) {
+                            const li = document.getElementById(unidadId);
+                            if (li && li.currentU) {
+                                li.currentU.sentido = nuevoSentido;
+                                try { updateUnidadInList(li.currentU); } catch (e) { console.error('Error aplicando sentido en lista', e); }
+                            } else {
+                                // si no existe el LI, no hacemos nada; el siguiente GTFRI traerá la data completa
+                                console.warn('Evento sentido recibido para unidad no cargada:', unidadId);
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Error procesando unidad.sentido.changed', e);
+                    }
+                }
             }
         } catch (err) {
             console.error('❌ WS mensaje inválido', event.data);
