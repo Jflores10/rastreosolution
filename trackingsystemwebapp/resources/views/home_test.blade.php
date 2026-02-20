@@ -754,6 +754,11 @@ function updateUnidadInList(unidad) {
     var ruta_conductor = unidad.ruta_conductor || '';
     var ruta_hora_fin = unidad.ruta_hora_fin || '';
 
+    var fecha_puerta_abierta = '';
+    var fecha_puerta_cerrada = '';
+    var fecha_puerta_abierta_trasera =  '';
+    var fecha_puerta_cerrada_trasera = '';
+    /*
     var fecha_puerta_abierta = unidad.fecha_puerta_abierta || '';
     var fecha_puerta_cerrada = unidad.fecha_puerta_cerrada || '';
     var fecha_puerta_abierta_trasera = unidad.fecha_puerta_abierta_trasera || '';
@@ -781,7 +786,7 @@ function updateUnidadInList(unidad) {
     fecha_puerta_cerrada = formatDoorDate(fecha_puerta_cerrada);
     fecha_puerta_abierta_trasera = formatDoorDate(fecha_puerta_abierta_trasera);
     fecha_puerta_cerrada_trasera = formatDoorDate(fecha_puerta_cerrada_trasera);
-
+    */
     var html = '';
 
     // Generar exactamente el HTML con el mismo look según estado
