@@ -887,7 +887,6 @@ function updateUnidadInList(unidad) {
 
     // Insertar o actualizar el LI sin alterar la interfaz externa
     var li = document.getElementById(unidad._id);
-    console.log(li)
     if (!li) {
         var ul = document.getElementById('ul_unidades');
         if (!ul) return;
