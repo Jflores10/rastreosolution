@@ -754,9 +754,9 @@ function updateUnidadInList(unidad) {
     var ruta_conductor = unidad.ruta_conductor || '';
     var ruta_hora_fin = unidad.ruta_hora_fin || '';
 
-    var fecha_puerta_abierta = '';
-    var fecha_puerta_cerrada = '';
-    var fecha_puerta_abierta_trasera =  '';
+    var fecha_puerta_abierta = '--';
+    var fecha_puerta_cerrada = '--';
+    var fecha_puerta_abierta_trasera =  '--';
     var fecha_puerta_cerrada_trasera = '';
     /*
     var fecha_puerta_abierta = unidad.fecha_puerta_abierta || '';
