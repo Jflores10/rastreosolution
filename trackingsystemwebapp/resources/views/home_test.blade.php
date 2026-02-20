@@ -2836,7 +2836,7 @@ $("#velocimetro").myfunc({divFact:10});
                         );
                         break;
                 }
-
+                console.log("Hola")
                 var currentLi = document.getElementById(iId);
                 console.log(currentLi);
                 var currentU = data.unidades[i];
