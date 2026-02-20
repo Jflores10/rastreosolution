@@ -2103,6 +2103,7 @@ $("#velocimetro").myfunc({divFact:10});
         zoomUnidad=true;
         zoomUnidadID=u._id;
         velocimetro_change(u.velocidad_actual);
+        console.log("Select"+JSON.stringify(u));
         setMarcadorUnidad(u,fecha_gps_,fecha_servidor,_is);
     }
 
