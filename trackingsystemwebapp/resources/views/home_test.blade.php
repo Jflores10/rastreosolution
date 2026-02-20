@@ -1982,7 +1982,6 @@ $("#velocimetro").myfunc({divFact:10});
 
     function setMarcadorUnidad(unidad,fecha_gps_,fecha_servidor,_is)
     {
-        console.log(JSON.stringify(unidad));
         var estado;
         switch(unidad.estado_movil)
         {
@@ -2839,6 +2838,7 @@ $("#velocimetro").myfunc({divFact:10});
                 }
 
                 var currentLi = document.getElementById(iId);
+                console.log(currentLi);
                 var currentU = data.unidades[i];
                 var currentFechagps = fecha_gps_marker;
                 var currentFecha = fecha_servidor;
