@@ -902,7 +902,7 @@ function updateUnidadInList(unidad) {
     li.currentFecha = fecha_servidor;
   
     li.onclick = function () {
-          console.log("click"+li)
+          console.log("click"+JSON.stringify(this.currentU))
         selectUnidad(this.currentU,this.currentFechagps,this.currentFecha,1); 
     };
 
