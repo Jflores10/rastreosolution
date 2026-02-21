@@ -203,15 +203,34 @@ class HistoricoController extends Controller
                 $ruta_descr = '';
                 $ruta_fecha = '';
                 $ruta_conductor = '';
+                $ruta_hora_final = '';
                 $tipo_bitacora = '';
 
                 if (isset($despByUnidad[$uid])) {
                     $r = $despByUnidad[$uid];
                     $ruta_descr = $r->ruta->descripcion ?? '';
+                    // ruta fecha (hora despacho ajustada)
                     $rf = $r->fecha;
                     date_add($rf, date_interval_create_from_date_string('5 hours'));
                     $ruta_fecha = $rf->format('H:i');
                     $ruta_conductor = $r->conductor->nombre ?? '';
+
+                    // calcular hora final estimada sumando los tiempos de llegada de los puntos de control
+                    $tiempo_final = 0;
+                    if (isset($r->ruta) && isset($r->ruta->puntos_control) && is_array($r->ruta->puntos_control)) {
+                        foreach ($r->ruta->puntos_control as $punto) {
+                            if (isset($punto['tiempo_llegada'])) $tiempo_final += (int)$punto['tiempo_llegada'];
+                        }
+                    }
+
+                    try {
+                        $rh = Carbon::parse($r->fecha);
+                        $rh->addHours(5);
+                        if ($tiempo_final > 0) $rh->addMinutes($tiempo_final);
+                        $ruta_hora_final = $rh->format('H:i');
+                    } catch (\Exception $ex) {
+                        $ruta_hora_final = '';
+                    }
                 }
 
                 if (isset($bitByUnidad[$uid])) {
@@ -222,6 +241,7 @@ class HistoricoController extends Controller
                     'ruta_actual' => $ruta_descr,
                     'ruta_fecha' => $ruta_fecha,
                     'ruta_conductor' => $ruta_conductor,
+                    'ruta_hora_final' => $ruta_hora_final,
                     'tipo_bitacora' => $tipo_bitacora
                 ];
 
