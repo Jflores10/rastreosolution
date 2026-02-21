@@ -20,6 +20,8 @@ use App\Ruta;
 use App\PuntoVirtual;
 use GuzzleHttp\Client;
 use App\Bitacora;
+use Illuminate\Support\Facades\Cache;
+use App\User;
 use Excel;
 use App\Helper\FunctionsHelper;
 
@@ -126,6 +128,116 @@ class HistoricoController extends Controller
                 $excel->download();
             });
         }
+    }
+    // New: return metadata (ruta_actual, ruta_fecha, ruta_conductor, tipo_bitacora) for one or many unidades
+    public function getUnidadesMeta(Request $request)
+    {
+        $this->validate($request, [
+            'unidad_ids' => 'required'
+        ]);
+
+        $ids = $request->input('unidad_ids');
+        if (!is_array($ids)) $ids = [$ids];
+        $result = [];
+        $desde = Carbon::createFromFormat('Y-m-d H:i:s', date('Y-m-d 00:00:00'));
+        $hasta = Carbon::createFromFormat('Y-m-d H:i:s', date('Y-m-d 23:59:59'));
+
+        // First, try to fill from cache
+        $toFetch = [];
+        foreach ($ids as $uid) {
+            $cached = Cache::get('unidades_meta_' . $uid);
+            if ($cached) {
+                $result[$uid] = $cached;
+            } else {
+                $toFetch[] = $uid;
+            }
+        }
+
+        if (count($toFetch) === 0) {
+            return response()->json($result);
+        }
+
+        try {
+            // Batch fetch despachos for the given unidades within today range
+            $despachos = Despacho::orderBy('fecha', 'asc')
+                ->where('estado', 'P')
+                ->whereIn('unidad_id', $toFetch)
+                ->where('fecha', '>=', $desde)
+                ->where('fecha', '<=', $hasta)
+                ->get();
+
+            // For bitacoras, apply visibility rules similar to BitacoraController
+            $user = Auth::user();
+            $bitacorasQuery = Bitacora::orderBy('fechaInicio', 'desc')
+                ->whereIn('unidad_id', $toFetch)
+                ->where('estado', 'P');
+
+            if ($user->tipo_usuario->valor != 1) {
+                $usuarios_distribuidores = User::where('tipo_usuario_id', '5827714b7b10202ff4485891')->get();
+                $usr_distribuidores = [];
+                foreach ($usuarios_distribuidores as $usr) array_push($usr_distribuidores, $usr->_id);
+
+                $bitacorasQuery->where(function ($q) use ($usr_distribuidores) {
+                    $q->whereNotIn('creador_id', $usr_distribuidores)
+                      ->orWhere('compartido', 'S');
+                });
+            }
+
+            $bitacoras = $bitacorasQuery->get();
+
+            // Map first despacho per unidad (ordered asc, so first is earliest)
+            $despByUnidad = [];
+            foreach ($despachos as $d) {
+                $uid = (string)$d->unidad_id;
+                if (!isset($despByUnidad[$uid])) $despByUnidad[$uid] = $d;
+            }
+
+            // Map first (most recent) bitacora per unidad (ordered desc)
+            $bitByUnidad = [];
+            foreach ($bitacoras as $b) {
+                $uid = (string)$b->unidad_id;
+                if (!isset($bitByUnidad[$uid])) $bitByUnidad[$uid] = $b;
+            }
+
+            foreach ($toFetch as $uid) {
+                $ruta_descr = '';
+                $ruta_fecha = '';
+                $ruta_conductor = '';
+                $tipo_bitacora = '';
+
+                if (isset($despByUnidad[$uid])) {
+                    $r = $despByUnidad[$uid];
+                    $ruta_descr = $r->ruta->descripcion ?? '';
+                    $rf = $r->fecha;
+                    date_add($rf, date_interval_create_from_date_string('5 hours'));
+                    $ruta_fecha = $rf->format('H:i');
+                    $ruta_conductor = $r->conductor->nombre ?? '';
+                }
+
+                if (isset($bitByUnidad[$uid])) {
+                    $tipo_bitacora = $bitByUnidad[$uid]->tipo_bitacora ?? '';
+                }
+
+                $meta = [
+                    'ruta_actual' => $ruta_descr,
+                    'ruta_fecha' => $ruta_fecha,
+                    'ruta_conductor' => $ruta_conductor,
+                    'tipo_bitacora' => $tipo_bitacora
+                ];
+
+                // cache short-term
+                try { Cache::put('unidades_meta_' . $uid, $meta, now()->addSeconds(15)); } catch (Exception $e) { /* ignore cache errors */ }
+
+                $result[$uid] = $meta;
+            }
+        } catch (Exception $e) {
+            // on error, ensure all toFetch keys exist
+            foreach ($toFetch as $uid) {
+                $result[$uid] = [ 'ruta_actual' => '', 'ruta_fecha' => '', 'ruta_conductor' => '', 'tipo_bitacora' => '' ];
+            }
+        }
+
+        return response()->json($result);
     }
     public function index()
     {

@@ -191,6 +191,7 @@ Route::group(['middleware' => ['auth', 'usuario']], function () {
     Route::post('/unidad/conteo', 'UnidadController@resetConteo');
 
     Route::match(['get', 'post'], 'historico-atm', 'HistoricoController@historicoAtm');
+    Route::post('historico/unidades-meta', 'HistoricoController@getUnidadesMeta');
    
     Route::match(['get', 'post'], 'comandos', 'ComandosController@index');
     Route::get('/comandos/unidades/{id}', 'ComandosController@unidades_by_cooperativa');
