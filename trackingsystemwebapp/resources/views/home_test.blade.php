@@ -571,6 +571,10 @@ function conectarWebSocket(coopId) {
         } catch (e) {
             console.error('Error enviando registro de cooperativa:', e);
         }
+        // Ejecutar inmediatamente el fetch batch para obtener meta (ruta/bitacora)
+        try {
+            if (typeof refreshVisibleUnidadesMeta === 'function') refreshVisibleUnidadesMeta();
+        } catch (e) { console.warn('refreshVisibleUnidadesMeta on open failed', e); }
     };
 
     socket.onmessage = (event) => {
@@ -619,6 +623,31 @@ function conectarWebSocket(coopId) {
                         setMarcadorUnidad(unidad, fakeFechaGps, fakeFechaServidor, 0);
                         // También actualizar la lista lateral en tiempo real
                         try { updateUnidadInList(unidad); } catch(e) { console.error('Error actualizando lista desde WS', e); }
+                        // Si la unidad llegada no tiene meta (ruta/bitacora) y no está en cache,
+                        // pedir el meta solo para esa unidad (rápido, para mostrar inicialmente)
+                        try {
+                            const li = document.getElementById(unidad._id);
+                            const cached = unidadesMetaCache[unidad._id];
+                            const hasMetaInLi = li && li.currentU && (li.currentU.ruta_actual || li.currentU.ruta_fecha || li.currentU.ruta_hora_fin || li.currentU.bitacora);
+                            const cachedFresh = cached && ((Date.now() - cached.ts) < META_TTL_MS);
+                            if (!hasMetaInLi && !cachedFresh) {
+                                fetchUnidadesMeta([unidad._id]).then(map => {
+                                    const m = map && map[unidad._id];
+                                    if (m) {
+                                        unidadesMetaCache[unidad._id] = { data: m, ts: Date.now() };
+                                        const targetLi = document.getElementById(unidad._id);
+                                        if (targetLi && targetLi.currentU) {
+                                            targetLi.currentU.ruta_actual = m.ruta_actual || targetLi.currentU.ruta_actual || '';
+                                            targetLi.currentU.ruta_fecha = m.ruta_fecha || targetLi.currentU.ruta_fecha || '';
+                                            targetLi.currentU.ruta_conductor = m.ruta_conductor || targetLi.currentU.ruta_conductor || '';
+                                            targetLi.currentU.ruta_hora_fin = m.ruta_hora_final || targetLi.currentU.ruta_hora_fin || '';
+                                            if (m.tipo_bitacora) targetLi.currentU.bitacora = m.tipo_bitacora;
+                                            try { updateUnidadInList(targetLi.currentU); } catch (e) { console.warn('updateUnidadInList after single meta fetch failed', e); }
+                                        }
+                                    }
+                                }).catch(e => { console.warn('single unidad meta fetch failed', e); });
+                            }
+                        } catch (e) { console.warn('post-WS meta check failed', e); }
                     } catch (e) {
                         console.error('Error actualizando marcador desde WS', e);
                     }
