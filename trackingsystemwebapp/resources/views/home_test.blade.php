@@ -704,6 +704,23 @@ function actualizarUnidadRealtime(unidad) {
 function updateUnidadInList(unidad) {
     if (!unidad || !unidad._id) return;
 
+    // Preserve previously-fetched meta (from unidades-meta) so WS updates that lack
+    // ruta_* or bitacora do not wipe the values. If there is an existing LI with
+    // saved meta, copy those values into the incoming unidad when missing.
+    try {
+        var existingLiForMerge = document.getElementById(unidad._id);
+        if (existingLiForMerge && existingLiForMerge.currentU) {
+            var prev = existingLiForMerge.currentU;
+            if ((!unidad.ruta_actual || unidad.ruta_actual === '') && prev.ruta_actual) unidad.ruta_actual = prev.ruta_actual;
+            if ((!unidad.ruta_fecha || unidad.ruta_fecha === '') && prev.ruta_fecha) unidad.ruta_fecha = prev.ruta_fecha;
+            if ((!unidad.ruta_conductor || unidad.ruta_conductor === '') && prev.ruta_conductor) unidad.ruta_conductor = prev.ruta_conductor;
+            if ((!unidad.ruta_hora_fin || unidad.ruta_hora_fin === '') && (prev.ruta_hora_fin || prev.ruta_hora_fin === '')) unidad.ruta_hora_fin = prev.ruta_hora_fin;
+            if ((!unidad.bitacora || unidad.bitacora === '') && prev.bitacora) unidad.bitacora = prev.bitacora;
+        }
+    } catch (e) {
+        console.warn('Merge existing meta failed', e);
+    }
+
     // Construir campos paralelos a los usados en appendUnidades
     var fecha_gps = unidad.fecha_gps || unidad.fecha || null;
     var fecha_gps_marker = '-';
@@ -960,6 +977,8 @@ function refreshVisibleUnidadesMeta() {
                     li.currentU.ruta_actual = map[uid].ruta_actual || '';
                     li.currentU.ruta_fecha = map[uid].ruta_fecha || '';
                     li.currentU.ruta_conductor = map[uid].ruta_conductor || '';
+                    // map server's ruta_hora_final into client's ruta_hora_fin
+                    li.currentU.ruta_hora_fin = map[uid].ruta_hora_final || '';
                     // only set tipo_bitacora if present
                     if (map[uid].tipo_bitacora) li.currentU.bitacora = map[uid].tipo_bitacora;
                     try { updateUnidadInList(li.currentU); } catch (e) { console.warn('Error updating li after meta fetch', e); }
