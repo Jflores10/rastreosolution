@@ -226,7 +226,15 @@ class HistoricoController extends Controller
                 ];
 
                 // cache short-term
-                try { Cache::put('unidades_meta_' . $uid, $meta, now()->addSeconds(15)); } catch (Exception $e) { /* ignore cache errors */ }
+                try {
+                    Cache::put(
+                        'unidades_meta_' . $uid,
+                        $meta,
+                        Carbon::now()->addSeconds(15)
+                    );
+                } catch (\Exception $e) {
+                    // ignorar errores de cache
+                }
 
                 $result[$uid] = $meta;
             }
