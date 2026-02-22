@@ -581,8 +581,8 @@ function conectarWebSocket(coopId) {
                 const payload = data.payload || {};
                 const unidad = payload.unidad || payload;
                 if (unidad) {
-                    let gpsDateRaw = unidad.fecha_gps || unidad.fecha || null;
-                    let srvDateRaw = unidad.fecha || unidad.fecha_gps || null;
+                    let gpsDateRaw = unidad.fecha_gps  || null;
+                    let srvDateRaw = unidad.fecha || null;
                     let gpsIso = null;
                     let srvIso = null;
                     try {
@@ -707,7 +707,7 @@ function updateUnidadInList(unidad) {
     }
 
     // Construir campos paralelos a los usados en appendUnidades
-    var fecha_gps = unidad.fecha_gps || unidad.fecha || null;
+    var fecha_gps = unidad.fecha_gps || null;
     var fecha_gps_marker = '-';
     try {
         if (fecha_gps) {
