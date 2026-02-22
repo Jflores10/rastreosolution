@@ -129,7 +129,7 @@
 <style>
     #reloj
     {
-        background: linear-gradient(45deg, #FC4439, #FC4439);
+        background: linear-gradient(45deg, #FC4439, #FC4439) !important;
 
     }
     #map
