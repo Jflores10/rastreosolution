@@ -576,16 +576,11 @@ function conectarWebSocket(coopId) {
     socket.onmessage = (event) => {
         try {
             const data = JSON.parse(event.data);
-
-            console.log('📥 WS mensaje:', data);
-
+            // Actualización inmediata y sincronizada de todas las unidades
             if (data.type === 'unidad.updated') {
-                // payload puede venir como { unidad: {...} } o directamente con la unidad
                 const payload = data.payload || {};
                 const unidad = payload.unidad || payload;
                 if (unidad) {
-                    // Construir objetos con la misma estructura que usa home.blade.php
-                    // Aplicar ajuste horario fijo antes de pasar a setMarcadorUnidad
                     let gpsDateRaw = unidad.fecha_gps || unidad.fecha || null;
                     let srvDateRaw = unidad.fecha || unidad.fecha_gps || null;
                     let gpsIso = null;
@@ -615,32 +610,22 @@ function conectarWebSocket(coopId) {
 
                     const fakeFechaGps = { fecha_gps: { date: gpsIso } };
                     const fakeFechaServidor = { fecha_servidor: { date: srvIso } };
-                    try {
-                        setMarcadorUnidad(unidad, fakeFechaGps, fakeFechaServidor, 0);
-                        // También actualizar la lista lateral en tiempo real
-                        try { updateUnidadInList(unidad); } catch(e) { console.error('Error actualizando lista desde WS', e); }
-                    } catch (e) {
-                        console.error('Error actualizando marcador desde WS', e);
-                    }
+                    setMarcadorUnidad(unidad, fakeFechaGps, fakeFechaServidor, 0);
+                    updateUnidadInList(unidad);
                 }
-                else if (data.type === 'unidad.sentido.changed') {
-                    // Evento ligero: actualizar solo el sentido en la UI sin reemplazar datos del dispositivo
-                    try {
-                        const unidadId = data.unidad_id || data.unidadId || (data.payload && data.payload.unidad_id);
-                        const nuevoSentido = data.nuevo_sentido || (data.payload && data.payload.nuevo_sentido);
-                        if (unidadId) {
-                            const li = document.getElementById(unidadId);
-                            if (li && li.currentU) {
-                                li.currentU.sentido = nuevoSentido;
-                                try { updateUnidadInList(li.currentU); } catch (e) { console.error('Error aplicando sentido en lista', e); }
-                            } else {
-                                // si no existe el LI, no hacemos nada; el siguiente GTFRI traerá la data completa
-                                console.warn('Evento sentido recibido para unidad no cargada:', unidadId);
-                            }
+            } else if (data.type === 'unidad.sentido.changed') {
+                try {
+                    const unidadId = data.unidad_id || data.unidadId || (data.payload && data.payload.unidad_id);
+                    const nuevoSentido = data.nuevo_sentido || (data.payload && data.payload.nuevo_sentido);
+                    if (unidadId) {
+                        const li = document.getElementById(unidadId);
+                        if (li && li.currentU) {
+                            li.currentU.sentido = nuevoSentido;
+                            updateUnidadInList(li.currentU);
                         }
-                    } catch (e) {
-                        console.error('Error procesando unidad.sentido.changed', e);
                     }
+                } catch (e) {
+                    console.error('Error procesando unidad.sentido.changed', e);
                 }
             }
         } catch (err) {
