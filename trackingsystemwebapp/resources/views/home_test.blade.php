@@ -185,10 +185,6 @@ footer {
 Dashboard
 @endsection
 @section('content')
-<div id="ws-status-indicator" style="position:fixed;top:10px;right:10px;z-index:99999;font-size:14px;font-weight:bold;padding:4px 10px;border-radius:6px;background:#eee;border:1px solid #ccc;color:#333;box-shadow:0 2px 8px rgba(0,0,0,0.08);display:inline-block;">
-  <span id="ws-status-dot" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#aaa;margin-right:6px;"></span>
-  <span id="ws-status-text">Desconectado</span>
-</div>
 <link href="css/speedometer.css" rel="stylesheet" type="text/css" />
 <div class="clearfix"></div>
 <!-- -->
@@ -548,18 +544,6 @@ const GPS_HOUR_OFFSET = -5; // restar 10 horas a fecha_gps
 const SERVER_HOUR_OFFSET = -5; // restar 5 horas a fecha (servidor)
 
 function conectarWebSocket(coopId) {
-    // Indicador visual de estado
-    function setWsStatus(connected) {
-        var dot = document.getElementById('ws-status-dot');
-        var txt = document.getElementById('ws-status-text');
-        if (connected) {
-            dot.style.background = '#2ecc40';
-            txt.textContent = 'Conectado';
-        } else {
-            dot.style.background = '#ff4136';
-            txt.textContent = 'Desconectado';
-        }
-    }
 
     // 🔴 Si ya hay conexión abierta o en proceso, cerrarla para evitar sockets huérfanos
     if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
@@ -577,7 +561,6 @@ function conectarWebSocket(coopId) {
     const socket = new WebSocket(wsUrl);
 
     socket.onopen = (event) => {
-        setWsStatus(true);
         console.log('%c🟢 WS CONECTADO', 'color:green;font-weight:bold');
         console.log('Cooperativa:' + coopId);
 
@@ -595,78 +578,68 @@ function conectarWebSocket(coopId) {
         }
     };
 
-    socket.onclose = () => {
-        setWsStatus(false);
-        handleClose(socket);
-    };
-
-    socket.onerror = (e) => {
-        setWsStatus(false);
-        console.error('❌ WS ERROR', e);
-    };
-
     socket.onmessage = (event) => {
         try {
             const data = JSON.parse(event.data);
+            // Actualización inmediata y sincronizada de todas las unidades
             if (data.type === 'unidad.updated') {
                 const payload = data.payload || {};
                 const unidad = payload.unidad || payload;
                 if (unidad) {
-                    // Log de latencia real
-                    if (unidad._ts_backend) {
-                        const now = Date.now();
-                        const latency = now - unidad._ts_backend;
-                        console.log('⏱️ Latencia evento unidad', unidad._id, ':', latency, 'ms');
-                    }
-                    // Actualización inmediata y sincronizada de todas las unidades
-                    if (data.type === 'unidad.updated') {
-                        const payload = data.payload || {};
-                        const unidad = payload.unidad || payload;
-                        if (unidad) {
-                            // Log de latencia real
-                            if (unidad._ts_backend) {
-                                const now = Date.now();
-                                const latency = now - unidad._ts_backend;
-                                console.log('⏱️ Latencia evento unidad', unidad._id, ':', latency, 'ms');
+                    let gpsDateRaw = unidad.fecha_gps  || null;
+                    let srvDateRaw = unidad.fecha || null;
+                    let gpsIso = null;
+                    let srvIso = null;
+                    try {
+                        if (gpsDateRaw) {
+                            let d = new Date(gpsDateRaw);
+                            if (!isNaN(d.getTime())) {
+                                d.setHours(d.getHours() + GPS_HOUR_OFFSET);
+                                gpsIso = d.toISOString();
+                            } else {
+                                gpsIso = gpsDateRaw;
                             }
-                            // Validar que la fecha GPS no sea muy antigua (más de 60s)
-                            if (unidad.fecha_gps) {
-                                try {
-                                    const fechaGps = new Date(unidad.fecha_gps);
-                                    const ahora = new Date();
-                                    const diffSeg = Math.abs((ahora.getTime() - fechaGps.getTime()) / 1000);
-                                    if (diffSeg > 60) {
-                                        console.warn('⏳ Ignorando update de unidad', unidad._id, 'por fecha_gps antigua:', unidad.fecha_gps, '(', diffSeg, 'segundos de diferencia)');
-                                        return;
-                                    }
-                                } catch(e) {}
+                        }
+                    } catch(e) { gpsIso = gpsDateRaw; }
+                    try {
+                        if (srvDateRaw) {
+                            let d2 = new Date(srvDateRaw);
+                            if (!isNaN(d2.getTime())) {
+                                d2.setHours(d2.getHours() + SERVER_HOUR_OFFSET);
+                                srvIso = d2.toISOString();
+                            } else {
+                                srvIso = srvDateRaw;
                             }
+                        }
+                    } catch(e) { srvIso = srvDateRaw; }
 
-                            const fakeFechaGps = { fecha_gps: { date: unidad.fecha_gps } };
-                            const fakeFechaServidor = { fecha_servidor: { date: unidad.fecha } };
-                            setMarcadorUnidad(unidad, fakeFechaGps, fakeFechaServidor, 0);
-                            updateUnidadInList(unidad);
-                        }
-                    } else if (data.type === 'unidad.sentido.changed') {
-                        try {
-                            const unidadId = data.unidad_id || data.unidadId || (data.payload && data.payload.unidad_id);
-                            const nuevoSentido = data.nuevo_sentido || (data.payload && data.payload.nuevo_sentido);
-                            if (unidadId) {
-                                const li = document.getElementById(unidadId);
-                                if (li && li.currentU) {
-                                    li.currentU.sentido = nuevoSentido;
-                                    updateUnidadInList(li.currentU);
-                                }
-                            }
-                        } catch (e) {
-                            console.error('Error procesando unidad.sentido.changed', e);
+                    const fakeFechaGps = { fecha_gps: { date: gpsIso } };
+                    const fakeFechaServidor = { fecha_servidor: { date: srvIso } };
+                    setMarcadorUnidad(unidad, fakeFechaGps, fakeFechaServidor, 0);
+                    updateUnidadInList(unidad);
+                }
+            } else if (data.type === 'unidad.sentido.changed') {
+                try {
+                    const unidadId = data.unidad_id || data.unidadId || (data.payload && data.payload.unidad_id);
+                    const nuevoSentido = data.nuevo_sentido || (data.payload && data.payload.nuevo_sentido);
+                    if (unidadId) {
+                        const li = document.getElementById(unidadId);
+                        if (li && li.currentU) {
+                            li.currentU.sentido = nuevoSentido;
+                            updateUnidadInList(li.currentU);
                         }
                     }
+                } catch (e) {
+                    console.error('Error procesando unidad.sentido.changed', e);
                 }
-            } 
+            }
         } catch (err) {
             console.error('❌ WS mensaje inválido', event.data);
         }
+    };
+
+    socket.onerror = (e) => {
+        console.error('❌ WS ERROR', e);
     };
 
     // Nota: esta función puede ser llamada tanto para el socket local como para la variable global
@@ -688,13 +661,11 @@ function conectarWebSocket(coopId) {
     if (typeof socket !== 'undefined') {
         socket.onclose = () => handleClose(socket);
         socket.onerror = (e) => {
-            setWsStatus(false);
             console.error('❌ WS ERROR', e);
         };
     } else {
         ws.onclose = () => handleClose(ws);
         ws.onerror = (e) => {
-            setWsStatus(false);
             console.error('❌ WS ERROR', e);
         };
     }
@@ -722,18 +693,6 @@ function actualizarUnidadRealtime(unidad) {
 // Buscar el <li> de la unidad en la lista lateral y actualizar sus campos.
 function updateUnidadInList(unidad) {
     if (!unidad || !unidad._id) return;
-    // Validar que la fecha GPS no sea muy antigua (más de 60s)
-    if (unidad.fecha_gps) {
-        try {
-            const fechaGps = new Date(unidad.fecha_gps);
-            const ahora = new Date();
-            const diffSeg = Math.abs((ahora.getTime() - fechaGps.getTime()) / 1000);
-            if (diffSeg > 60) {
-                console.warn('⏳ Ignorando update de unidad', unidad._id, 'por fecha_gps antigua:', unidad.fecha_gps, '(', diffSeg, 'segundos de diferencia)');
-                return;
-            }
-        } catch(e) {}
-    }
 
     // Preserve previously-fetched meta (from unidades-meta) so WS updates that lack
     // ruta_* or bitacora do not wipe the values. If there is an existing LI with
@@ -1452,7 +1411,7 @@ $("#velocimetro").myfunc({divFact:10});
                     else
                         icon2.strokeColor='green';
                 }
-                array_marcador[index-1].setIcon(icon2);
+                array_marcas[index-1].setIcon(icon2);
             }             
 
             velocimetro_change(recorrido.velocidad);
@@ -2840,8 +2799,12 @@ $("#velocimetro").myfunc({divFact:10});
                                 +'&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#F44336"></i>&nbsp'+data.unidades[i].contador_total+" | "+data.unidades[i].contador_diario
                                 +'&nbsp&nbsp&nbsp'+((data.unidades[i].is_atm !== "undefined")?((data.unidades[i].is_atm===0)?'':((data.unidades[i].is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'')):'')
                                 +'&nbsp&nbsp&nbsp|&nbsp&nbsp'
-                                +((data.unidades[i].puerta !== 'undefined')?((data.unidades[i].puerta==='PUERTA ABIERTA (DELANTERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta:
-                                    ((data.unidades[i].puerta==='PUERTA CERRADA (DELANTERA)')?'<img src="../images/closedoor.png" height="20" width="20">'+ fecha_puerta_cerrada :'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>')    
+                                @if(true)
+                                    +((data.unidades[i].puerta !== 'undefined')?((data.unidades[i].puerta==='PUERTA ABIERTA (DELANTERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta:
+                                        ((data.unidades[i].puerta==='PUERTA CERRADA (DELANTERA)')?'<img src="../images/closedoor.png" height="20" width="20">'+ fecha_puerta_cerrada :'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>')    
+                                @else 
+                                    +((data.unidades[i].puerta !== 'undefined')?((data.unidades[i].puerta==='PUERTA ABIERTA (DELANTERA)')?'<img src="../images/opendoor.png" height="20" width="20">':((data.unidades[i].puerta==='PUERTA CERRADA (DELANTERA)')?'<img src="../images/closedoor.png" height="20" width="20">':'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>')
+                                @endif
                                 @if(true)//Auth::user()->tipo_usuario->valor==1
                                     +((data.unidades[i].puerta_trasera !== 'undefined')?((data.unidades[i].puerta_trasera==='PUERTA ABIERTA (TRASERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta_trasera:
                                         ((data.unidades[i].puerta_trasera==='PUERTA CERRADA (TRASERA)')?'<img src="../images/closedoor.png" height="20" width="20">'+ fecha_puerta_cerrada_trasera :'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>')    
@@ -2857,75 +2820,271 @@ $("#velocimetro").myfunc({divFact:10});
 
                             
                     case 'E':
-                        html += '' +
-                            ((unidad.climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
-                            ((unidad.rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
-                            '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#f49a16"></i>&nbsp' + (unidad.descripcion||'') +
-                            '&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ (unidad.latitud||'') +'\',\''+ (unidad.longitud||'') +'\');" class="fa fa-map-marker" style="color:#f49a16"></i>&nbsp' + (fecha_gps_marker || '-') + '  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(velocidad_num) + '' +
-                            '&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#f49a16"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#f49a16"></i>&nbsp' + (unidad.contador_total||'') + " | " + (unidad.contador_diario||'') +
-                            '&nbsp&nbsp&nbsp|&nbsp&nbsp';
+                        unidad_e++;
+                        ul.append(
+                                '<li class="list-group-item" id=\''+ data.unidades[i]._id + '\'>'+
+                                    ((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
+                                    ((data.unidades[i].rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
+                                '<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1);" class="fa fa-bus" style="color:#f49a16"></i>&nbsp'+ data.unidades[i].descripcion
+                                +'&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ data.unidades[i].latitud+'\',\''+ data.unidades[i].longitud+'\');" class="fa fa-map-marker" style="color:#f49a16"></i>&nbsp'+fecha_gps+'  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp'+ Math.round(data.unidades[i].velocidad_actual)+''+'&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#f49a16"></i>&nbsp'+voltaje
+                                +'&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#f49a16"></i>&nbsp'+data.unidades[i].contador_total+" | "+data.unidades[i].contador_diario
+                                +'&nbsp&nbsp&nbsp'+((data.unidades[i].is_atm !== "undefined")?((data.unidades[i].is_atm===0)?'':((data.unidades[i].is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'')):'')
+                                +'&nbsp&nbsp&nbsp|&nbsp&nbsp'
+                                @if(true)
+                                    +((data.unidades[i].puerta !== 'undefined')?((data.unidades[i].puerta==='PUERTA ABIERTA (DELANTERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta:
+                                        ((data.unidades[i].puerta==='PUERTA CERRADA (DELANTERA)')?'<img src="../images/closedoor.png" height="20" width="20">'+ fecha_puerta_cerrada :'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>')    
+                                @else 
+                                    +((data.unidades[i].puerta !== 'undefined')?((data.unidades[i].puerta==='PUERTA ABIERTA (DELANTERA)')?'<img src="../images/opendoor.png" height="20" width="20">':((data.unidades[i].puerta==='PUERTA CERRADA (DELANTERA)')?'<img src="../images/closedoor.png" height="20" width="20">':'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>')
+                                @endif
+                                @if(true)
+                                    +((data.unidades[i].puerta_trasera !== 'undefined')?((data.unidades[i].puerta_trasera==='PUERTA ABIERTA (TRASERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta_trasera:
+                                        ((data.unidades[i].puerta_trasera==='PUERTA CERRADA (TRASERA)')?'<img src="../images/closedoor.png" height="20" width="20">'+ fecha_puerta_cerrada_trasera :'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>')    
+                                @else 
+                                    +((data.unidades[i].puerta_trasera !== 'undefined')?((data.unidades[i].puerta_trasera==='PUERTA ABIERTA (TRASERA)')?'<img src="../images/opendoor.png" height="20" width="20">':((data.unidades[i].puerta_trasera==='PUERTA CERRADA (TRASERA)')?'<img src="../images/closedoor.png" height="20" width="20">':'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>')
+                                @endif
+                                +'&nbsp&nbsp&nbsp|&nbsp&nbsp&nbsp<font color="black">'+ruta_actual+'</font>'
+                                // +((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">':'')
+                                +'&nbsp&nbsp<font color="black">('+ruta_fecha+')</font>-<font color="red">('+ruta_hora_fin+')</font>&nbsp&nbsp<font color="black">'+ruta_conductor+'</font>'
+                                +((data.array_bitacora[i].bitacora !="")?('&nbsp&nbsp&nbsp|&nbsp&nbsp <img id="' + bId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_Bitacora(\''+ data.unidades[i]._id+'\');" width="20" height="20" src="'+((data.array_bitacora[i].bitacora=="R")?'/images/police.png"':((data.array_bitacora[i].bitacora=="M")?'/images/mantenimiento.png"':((data.array_bitacora[i].bitacora=="O")?'/images/other.png"':'#"')))+'/>'):'&nbsp&nbsp&nbsp')
+                                +'</li>'
+                        );
+                        break;
 
-                html += (unidad.puerta ? ((unidad.puerta==='PUERTA ABIERTA (DELANTERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta:
-                    ((unidad.puerta==='PUERTA CERRADA (DELANTERA)')?'<img src="../images/closedoor.png" height="20" width="20">'+ fecha_puerta_cerrada :'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>');
+                    case 'M':
+                        unidad_movimiento++;
+                        ul.append(
+                                '<li class="list-group-item" id=\''+ data.unidades[i]._id + '\'>'+
+                                    ((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
+                                    ((data.unidades[i].rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
+                                sentido+'<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1);" class="fa fa-bus" style="color:#00AA88"></i>&nbsp'+ data.unidades[i].descripcion
+                                +'&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ data.unidades[i].latitud+'\',\''+ data.unidades[i].longitud+'\');" class="fa fa-map-marker" style="color:#00AA88"></i>&nbsp'+fecha_gps+'  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp'+ Math.round(data.unidades[i].velocidad_actual)+''+'&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#00AA88"></i>&nbsp'+voltaje+'&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#00AA88"></i>&nbsp'
+                                +data.unidades[i].contador_total+" | "+data.unidades[i].contador_diario
+                                +'&nbsp&nbsp&nbsp'+((data.unidades[i].is_atm !== "undefined")?((data.unidades[i].is_atm===0)?'':((data.unidades[i].is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'')):'')
+                                +'&nbsp&nbsp&nbsp|&nbsp&nbsp'
+                                @if(true)
+                                    +((data.unidades[i].puerta !== 'undefined')?((data.unidades[i].puerta==='PUERTA ABIERTA (DELANTERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta:
+                                        ((data.unidades[i].puerta==='PUERTA CERRADA (DELANTERA)')?'<img src="../images/closedoor.png" height="20" width="20">'+ fecha_puerta_cerrada :'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>')    
+                                @else 
+                                    +((data.unidades[i].puerta !== 'undefined')?((data.unidades[i].puerta==='PUERTA ABIERTA (DELANTERA)')?'<img src="../images/opendoor.png" height="20" width="20">':((data.unidades[i].puerta==='PUERTA CERRADA (DELANTERA)')?'<img src="../images/closedoor.png" height="20" width="20">':'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>')
+                                @endif
+                                @if(true)
+                                    +((data.unidades[i].puerta_trasera !== 'undefined')?((data.unidades[i].puerta_trasera==='PUERTA ABIERTA (TRASERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta_trasera:
+                                        ((data.unidades[i].puerta_trasera==='PUERTA CERRADA (TRASERA)')?'<img src="../images/closedoor.png" height="20" width="20">'+ fecha_puerta_cerrada_trasera :'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>')    
+                                @else 
+                                    +((data.unidades[i].puerta_trasera !== 'undefined')?((data.unidades[i].puerta_trasera==='PUERTA ABIERTA (TRASERA)')?'<img src="../images/opendoor.png" height="20" width="20">':((data.unidades[i].puerta_trasera==='PUERTA CERRADA (TRASERA)')?'<img src="../images/closedoor.png" height="20" width="20">':'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>')
+                                @endif
+                                +'&nbsp&nbsp&nbsp|&nbsp&nbsp&nbsp<font color="black">'+ruta_actual+'</font>'
+                                // +((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">':'')
+                                +'&nbsp&nbsp<font color="black">('+ruta_fecha+')</font>-<font color="red">('+ruta_hora_fin+')</font>&nbsp&nbsp<font color="black">'+ruta_conductor+'</font>'
+                                +((data.array_bitacora[i].bitacora !="")?('&nbsp&nbsp&nbsp|&nbsp&nbsp <img id="' + bId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_Bitacora(\''+ data.unidades[i]._id+'\');" width="20" height="20" src="'+((data.array_bitacora[i].bitacora=="R")?'/images/police.png"':((data.array_bitacora[i].bitacora=="M")?'/images/mantenimiento.png"':((data.array_bitacora[i].bitacora=="O")?'/images/other.png"':'#"')))+'/>'):'&nbsp&nbsp&nbsp')
+                                +'</li>'
+                        );
+                        break;
 
-                html += (unidad.puerta_trasera ? ((unidad.puerta_trasera==='PUERTA ABIERTA (TRASERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta_trasera:
-                    ((unidad.puerta_trasera==='PUERTA CERRADA (TRASERA)')?'<img src="../images/closedoor.png" height="20" width="20">'+ fecha_puerta_cerrada_trasera :'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>');
 
-                html += '&nbsp&nbsp&nbsp|&nbsp&nbsp&nbsp<font color="black">' + ruta_actual + '</font>' + '&nbsp&nbsp<font color="black">(' + ruta_fecha + ')</font>-<font color="red">(' + ruta_hora_fin + ')</font>&nbsp&nbsp<font color="black">' + ruta_conductor + '</font>';
 
-                if (unidad.bitacora && unidad.bitacora != "") {
-                    var img2 = (unidad.bitacora=="R")?'/images/police.png':((unidad.bitacora=="M")?'/images/mantenimiento.png':'/images/other.png');
-                    html += '&nbsp&nbsp&nbsp|&nbsp&nbsp <img id="' + bId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_Bitacora(\''+ unidad._id + '\');" width="20" height="20" src="'+ img2 + '"/>';
+                    default:
+                        
+                        unidad_no++;
+                      
+                        
+                        ul.append(
+                                '<li class="list-group-item" id=\'' + data.unidades[i]._id + '\'>' +
+                                ((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
+                                ((data.unidades[i].rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
+                                '<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1);" class="fa fa-bus" style="color:#990073"></i>&nbsp' + data.unidades[i].descripcion 
+                                + '&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ data.unidades[i].latitud+'\',\''+ data.unidades[i].longitud+'\');" class="fa fa-map-marker" style="color:#990073"></i>&nbsp' + fecha_gps + '  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(data.unidades[i].velocidad_actual) + '' + '&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#990073"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#990073"></i>&nbsp' + data.unidades[i].contador_total 
+                                + " | " + data.unidades[i].contador_diario
+                                +'&nbsp&nbsp&nbsp'+((data.unidades[i].is_atm !== "undefined")?((data.unidades[i].is_atm===0)?'':((data.unidades[i].is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'')):'')
+                                +'&nbsp&nbsp&nbsp|&nbsp&nbsp'
+                                @if(true)
+                                    +((data.unidades[i].puerta !== 'undefined')?((data.unidades[i].puerta==='PUERTA ABIERTA (DELANTERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta:
+                                        ((data.unidades[i].puerta==='PUERTA CERRADA (DELANTERA)')?'<img src="../images/closedoor.png" height="20" width="20">'+ fecha_puerta_cerrada :'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>')    
+                                @else 
+                                    +((data.unidades[i].puerta !== 'undefined')?((data.unidades[i].puerta==='PUERTA ABIERTA (DELANTERA)')?'<img src="../images/opendoor.png" height="20" width="20">':((data.unidades[i].puerta==='PUERTA CERRADA (DELANTERA)')?'<img src="../images/closedoor.png" height="20" width="20">':'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>')
+                                @endif
+                                @if(true)
+                                    +((data.unidades[i].puerta_trasera !== 'undefined')?((data.unidades[i].puerta_trasera==='PUERTA ABIERTA (TRASERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta_trasera:
+                                        ((data.unidades[i].puerta_trasera==='PUERTA CERRADA (TRASERA)')?'<img src="../images/closedoor.png" height="20" width="20">'+ fecha_puerta_cerrada_trasera :'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>')    
+                                @else 
+                                    +((data.unidades[i].puerta_trasera !== 'undefined')?((data.unidades[i].puerta_trasera==='PUERTA ABIERTA (TRASERA)')?'<img src="../images/opendoor.png" height="20" width="20">':((data.unidades[i].puerta_trasera==='PUERTA CERRADA (TRASERA)')?'<img src="../images/closedoor.png" height="20" width="20">':'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>')
+                                @endif
+                                +'&nbsp&nbsp&nbsp|&nbsp&nbsp&nbsp<font color="black">'+ruta_actual+'</font>'
+                                // +((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">':'')
+                                +'&nbsp&nbsp<font color="black">('+ruta_fecha+')</font>-<font color="red">('+ruta_hora_fin+')</font>&nbsp&nbsp<font color="black">'+ruta_conductor+'</font>'
+                                +((data.array_bitacora[i].bitacora !="")?('&nbsp&nbsp&nbsp|&nbsp&nbsp <img id="' + bId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_Bitacora(\''+ data.unidades[i]._id+'\');" width="20" height="20" src="'+((data.array_bitacora[i].bitacora=="R")?'/images/police.png"':((data.array_bitacora[i].bitacora=="M")?'/images/mantenimiento.png"':((data.array_bitacora[i].bitacora=="O")?'/images/other.png"':'#"')))+'/>'):'&nbsp&nbsp&nbsp')
+                                +'</li>'
+                        );
+                        break;
                 }
-                break;
 
-            case 'M':
-                html += '' +
-                    ((unidad.climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
-                    ((unidad.rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
-                    sentido + '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#00AA88"></i>&nbsp' + (unidad.descripcion||'') +
-                    '&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ (unidad.latitud||'') +'\',\''+ (unidad.longitud||'') +'\');" class="fa fa-map-marker" style="color:#00AA88"></i>&nbsp' + (fecha_gps_marker || '-') + '  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(velocidad_num) + '' +
-                    '&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#00AA88"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#00AA88"></i>&nbsp' + (unidad.contador_total||'') + " | " + (unidad.contador_diario||'') +
-                    '&nbsp&nbsp&nbsp|&nbsp&nbsp';
-
-                html += (unidad.puerta ? ((unidad.puerta==='PUERTA ABIERTA (DELANTERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta:
-                    ((unidad.puerta==='PUERTA CERRADA (DELANTERA)')?'<img src="../images/closedoor.png" height="20" width="20">'+ fecha_puerta_cerrada :'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>');
-
-                html += (unidad.puerta_trasera ? ((unidad.puerta_trasera==='PUERTA ABIERTA (TRASERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta_trasera:
-                    ((unidad.puerta_trasera==='PUERTA CERRADA (TRASERA)')?'<img src="../images/closedoor.png" height="20" width="20">'+ fecha_puerta_cerrada_trasera :'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>');
-
-                html += '&nbsp&nbsp&nbsp|&nbsp&nbsp&nbsp<font color="black">' + ruta_actual + '</font>' + '&nbsp&nbsp<font color="black">(' + ruta_fecha + ')</font>-<font color="red">(' + ruta_hora_fin + ')</font>&nbsp&nbsp<font color="black">' + ruta_conductor + '</font>';
-
-                if (unidad.bitacora && unidad.bitacora != "") {
-                    var img3 = (unidad.bitacora=="R")?'/images/police.png':((unidad.bitacora=="M")?'/images/mantenimiento.png':'/images/other.png');
-                    html += '&nbsp&nbsp&nbsp|&nbsp&nbsp <img id="' + bId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_Bitacora(\''+ unidad._id + '\');" width="20" height="20" src="'+ img3 + '"/>';
+                var currentLi = document.getElementById(iId);
+                var currentU = data.unidades[i];
+                var currentFechagps = fecha_gps_marker;
+                var currentFecha = fecha_servidor;
+                if (currentLi != null && currentLi != undefined)
+                {
+                    currentLi.currentU = currentU;
+                    currentLi.currentFechagps = currentFechagps;
+                    currentLi.currentFecha = currentFecha;
+                    currentLi.onclick = function () {
+                        selectUnidad(this.currentU,this.currentFechagps,this.currentFecha,1);
+                        //velocimetro_change(data.unidades[i].velocidad_actual);
+                    };
                 }
-                break;
-
-            default:
-                html += '' +
-                    ((unidad.climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
-                    ((unidad.rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
-                    '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#990073"></i>&nbsp' + (unidad.descripcion||'') +
-                    '&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ (unidad.latitud||'') +'\',\''+ (unidad.longitud||'') +'\');" class="fa fa-map-marker" style="color:#990073"></i>&nbsp' + (fecha_gps_marker || '-') + '  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(velocidad_num) + '' +
-                    '&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#990073"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#990073"></i>&nbsp' + (unidad.contador_total||'') + " | " + (unidad.contador_diario||'') +
-                    '&nbsp&nbsp&nbsp|&nbsp&nbsp';
-
-                html += (unidad.puerta ? ((unidad.puerta==='PUERTA ABIERTA (DELANTERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta:
-                    ((unidad.puerta==='PUERTA CERRADA (DELANTERA)')?'<img src="../images/closedoor.png" height="20" width="20">'+ fecha_puerta_cerrada :'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>');
-
-                html += (unidad.puerta_trasera ? ((unidad.puerta_trasera==='PUERTA ABIERTA (TRASERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta_trasera:
-                    ((unidad.puerta_trasera==='PUERTA CERRADA (TRASERA)')?'<img src="../images/closedoor.png" height="20" width="20">'+ fecha_puerta_cerrada_trasera :'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>');
-
-                html += '&nbsp&nbsp&nbsp|&nbsp&nbsp&nbsp<font color="black">' + ruta_actual + '</font>' + '&nbsp&nbsp<font color="black">(' + ruta_fecha + ')</font>-<font color="red">(' + ruta_hora_fin + ')</font>&nbsp&nbsp<font color="black">' + ruta_conductor + '</font>';
-
-                if (unidad.bitacora && unidad.bitacora != "") {
-                    var img4 = (unidad.bitacora=="R")?'/images/police.png':((unidad.bitacora=="M")?'/images/mantenimiento.png':'/images/other.png');
-                    html += '&nbsp&nbsp&nbsp|&nbsp&nbsp <img id="' + bId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_Bitacora(\''+ unidad._id + '\');" width="20" height="20" src="'+ img4 + '"/>';
-                }
-                break;
+            }
+    
+            $('#cantidad_no').text(unidad_no);
+            $('#cantidad_movimiento').text(unidad_movimiento);
+            $('#cantidad_e').text(unidad_e);
+            $('#cantidad_stop').text(unidad_stop);
         }
+
     }
+	function cargarTodasLasUnidades()
+	{
+		currentUnidad = null;
+        @if(isset($id_coop))
+		    setUnidadesOnMap('{{$id_coop}}',true);
+        @endif
+	}
+
+
+ function addMarker(html, latitude, longitude, id, angulo, placa,velocidad, sentido = false)
+    {
+        var icon;
+        var mk;
+        var colorFlecha='red';
+        if (sentido === 'i' || sentido === 'r') {
+            colorFlecha = (sentido === 'r') ? '#0022AB' : '#1FA463';
+        }
+        if (zoomUnidad)
+        {
+            if(id == zoomUnidadID){
+                for(var i=0;i<array_marcador.length;i++)
+                {
+                    array_marcador[i].setMap(null);
+                }
+                
+                if(map.getZoom()<=13 )
+                    icon = {
+                        url: '{{url("/images/autobu.png")}}',
+                        scale: 1,
+                        labelOrigin: new google.maps.Point(4, 25)
+                    };
+                else
+                    icon = {
+                        path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+                        scale: 3,
+                        fillColor: colorFlecha, 
+                        fillOpacity: 1.0,   
+                        strokeColor: '#000000',  
+                        strokeOpacity: 1.0,
+                        strokeWeight: 1.0,
+                        rotation:angulo,
+                        labelOrigin: new google.maps.Point(1, 10)
+                    };
+
+               mk = new google.maps.Marker({
+                    position : { lat: parseFloat(latitude), lng : parseFloat(longitude) },
+                    map : map,
+                    icon:icon,
+                    label : {text : placa},
+                    title : id,
+                    animation : google.maps.Animation.DROP
+                });
+                mk.sentido = sentido;         
+                
+                array_marcador.push(mk);
+
+                console.log('se puso el marcador');
+
+                google.maps.event.clearInstanceListeners(mk);
+                var indice_actual=array_marcador.length-1;
+                array_marcador_angulos[indice_actual]={rotacion:angulo,indice:indice_actual};
+                var infoWindow = new google.maps.InfoWindow({
+                    content : html
+                });
+            
+                mk.addListener('click', function () {
+                    infoWindow.open(map, mk);
+                    velocimetro_change(velocidad);
+                });
+                if (currentUnidad != null)
+                {
+                    map.setCenter(mk.getPosition());
+                    map.setZoom(20);
+                    currentUnidad=null;
+                }
+                return mk;
+                
+            }
+        }else{
+
+            mk = getMarkerById(id);
+            if(map.getZoom()<=13)
+                icon = {
+                    url: '{{url("/images/autobu.png")}}',
+                    scale: 1,
+                    labelOrigin: new google.maps.Point(4, 25)
+                };
+            else
+                icon = {
+                    path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+                    scale: 3,
+                    fillColor: colorFlecha, 
+                    fillOpacity: 1.0,   
+                    strokeColor: '#000000',  
+                    strokeOpacity: 1.0,
+                    strokeWeight: 1.0,
+                    rotation:angulo,
+                    labelOrigin: new google.maps.Point(1, 10)
+                };
+            if (mk != null)
+            {
+                mk.setPosition({ lat: parseFloat(latitude), lng: parseFloat(longitude)});
+                mk.setIcon(icon);
+                mk.setMap(map);
+            }
+            else 
+            {
+                mk = new google.maps.Marker({
+                    position : { lat: parseFloat(latitude), lng : parseFloat(longitude) },
+                    map : map,
+                    icon:icon,
+                    label : {text : placa},
+                    title : id,
+                    animation : google.maps.Animation.DROP
+                });
+                array_marcador.push(mk);
+            }
+
+            google.maps.event.clearInstanceListeners(mk);
+            var indice_actual=array_marcador.length-1;
+            array_marcador_angulos[indice_actual]={rotacion:angulo,indice:indice_actual};
+            var infoWindow = new google.maps.InfoWindow({
+                content : html
+            });
+        
+            mk.addListener('click', function () {
+                infoWindow.open(map, mk);
+                velocimetro_change(velocidad);
+            });
+            if (currentUnidad != null)
+            {
+                map.setCenter(mk.getPosition());
+                map.setZoom(20);
+                currentUnidad=null;
+            }
+            return mk;
+        }
+        
+       
+    }
+
+
+
+
 
     $('#fecha_inicio').datetimepicker();
     $('#fecha_fin').datetimepicker();
