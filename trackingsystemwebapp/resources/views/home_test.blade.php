@@ -663,9 +663,7 @@ function conectarWebSocket(coopId) {
                         }
                     }
                 }
-            } catch (err) {
-                console.error('❌ WS mensaje inválido', event.data);
-            }
+            } 
         } catch (err) {
             console.error('❌ WS mensaje inválido', event.data);
         }
