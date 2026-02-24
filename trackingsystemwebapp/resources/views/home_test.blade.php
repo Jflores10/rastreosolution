@@ -565,6 +565,36 @@ function conectarWebSocket(coopId) {
     const prelimCache = {};
     // lastTsByUnit guarda el último _ts_backend definitivo procesado por unidad
     const lastTsByUnit = {};
+    // pendingMarkerUpdates almacena la última unidad a aplicar en el mapa por unidad
+    const pendingMarkerUpdates = {};
+    let markerFlushRequested = false;
+    // lastListUpdateByUnit para throttling de actualizaciones de lista (ms)
+    const lastListUpdateByUnit = {};
+
+    function scheduleMarkerFlush() {
+        if (markerFlushRequested) return;
+        markerFlushRequested = true;
+        requestAnimationFrame(() => {
+            markerFlushRequested = false;
+            try {
+                const keys = Object.keys(pendingMarkerUpdates);
+                for (let i = 0; i < keys.length; i++) {
+                    const k = keys[i];
+                    const p = pendingMarkerUpdates[k];
+                    if (!p) continue;
+                    try {
+                        // aplicar marcador usando la estructura fake ya preparada
+                        setMarcadorUnidad(p.unidad, p.fakeFechaGps, p.fakeFechaServidor, 0);
+                    } catch (e) {
+                        // swallow individual errors
+                    }
+                    delete pendingMarkerUpdates[k];
+                }
+            } catch (e) {
+                console.error('Marker flush error', e);
+            }
+        });
+    }
 
     socket.onopen = (event) => {
         console.log('%c🟢 WS CONECTADO', 'color:green;font-weight:bold');
@@ -628,13 +658,18 @@ function conectarWebSocket(coopId) {
                         try {
                             const fakeFechaGps = { fecha_gps: { date: gpsIso } };
                             const fakeFechaServidor = { fecha_servidor: { date: srvIso } };
-                            setMarcadorUnidad(unidad, fakeFechaGps, fakeFechaServidor, 0);
+                            // Encolar marcador para flush por requestAnimationFrame
+                            try {
+                                pendingMarkerUpdates[unitKey || unidad._id || unidad.imei] = { unidad: unidad, fakeFechaGps: fakeFechaGps, fakeFechaServidor: fakeFechaServidor };
+                                scheduleMarkerFlush();
+                            } catch (e) { console.warn('enqueue marker prelim', e); }
                             // Registrar timestamp preliminar para posible comparación
                             if (unitKey) prelimCache[unitKey] = unidad._ts_backend_prelim || Date.now();
                             // También actualizar la lista lateral para reflejar la posición rápida
-                            try {
+                                try {
                                 unidad.preliminar = true; // marcar unidad en la lista
-                                updateUnidadInList(unidad);
+                                // fast path: update minimal fields to keep UI responsive
+                                try { updateUnidadInListFast(unidad); } catch(e) { updateUnidadInList(unidad); }
                                 // marcar visualmente el LI como preliminar
                                 if (unitKey) {
                                     const li = document.getElementById(unitKey);
@@ -662,8 +697,24 @@ function conectarWebSocket(coopId) {
 
                             const fakeFechaGps = { fecha_gps: { date: gpsIso } };
                             const fakeFechaServidor = { fecha_servidor: { date: srvIso } };
-                            // Actualizar marcador y lista (definitivo)
-                            setMarcadorUnidad(unidad, fakeFechaGps, fakeFechaServidor, 0);
+                            // Encolar marcador para flush por requestAnimationFrame
+                            try {
+                                pendingMarkerUpdates[unitKey || unidad._id || unidad.imei] = { unidad: unidad, fakeFechaGps: fakeFechaGps, fakeFechaServidor: fakeFechaServidor };
+                                scheduleMarkerFlush();
+                            } catch (e) { console.warn('enqueue marker final', e); }
+
+                            // Throttle list updates per unit (200ms)
+                            try {
+                                const now = Date.now();
+                                const last = unitKey ? (lastListUpdateByUnit[unitKey] || 0) : 0;
+                                if (!unitKey || now - last > 200) {
+                                    try { updateUnidadInList(unidad); } catch(e) { console.warn('final list update fail', e); }
+                                    if (unitKey) lastListUpdateByUnit[unitKey] = now;
+                                } else {
+                                    // schedule a delayed update to ensure list eventually reflects final state
+                                    setTimeout(() => { try { updateUnidadInList(unidad); } catch(e){} }, 220);
+                                }
+                            } catch (e) { console.warn('throttle list update error', e); }
                             try {
                                 updateUnidadInList(unidad);
                             } catch (e) {
@@ -984,6 +1035,60 @@ function updateUnidadInList(unidad) {
     } else {
         // Si no hay coordenadas, no llamar al setMarcadorUnidad; el alert original se mostraba en esa función
         console.warn('Unidad sin coordenadas: ' + unidad._id);
+    }
+}
+
+// Versión optimizada para actualizaciones rápidas (preliminares):
+function updateUnidadInListFast(unidad) {
+    if (!unidad || !unidad._id) return;
+    var li = document.getElementById(unidad._id);
+    if (!li) {
+        // si no existe, caer al flujo completo
+        updateUnidadInList(unidad);
+        return;
+    }
+
+    try {
+        // actualizar campos críticos: fecha_gps, velocidad y icono color
+        var fecha_gps = unidad.fecha_gps || null;
+        var fecha_gps_marker = '-';
+        if (fecha_gps) {
+            let d = new Date(fecha_gps);
+            if (!isNaN(d.getTime())) {
+                d.setHours(d.getHours() + GPS_HOUR_OFFSET);
+                fecha_gps_marker = (d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0') + ':' + d.getSeconds().toString().padStart(2,'0'));
+            } else fecha_gps_marker = fecha_gps;
+        }
+
+        // velocidad
+        var velocidad_num = Number(unidad.velocidad_actual) || 0;
+
+        // actualizar solo el innerText de partes conocidas para minimizar layout
+        // buscar iconos/elementos por id construidos (i{_id} y g{_id})
+        try {
+            var iId = 'i' + unidad._id;
+            var gId = 'i' + unidad._id;
+            var icon = document.getElementById(iId);
+            var gicon = document.getElementById(gId);
+            if (icon) {
+                // actualizar tooltip/valor asociado (velocímetro onclick mantiene)
+                icon.title = 'Vel: ' + Math.round(velocidad_num);
+            }
+            if (gicon) {
+                // actualizar texto cercano (fecha) que se renderiza en li.innerHTML
+                // fallback: reemplazar la primera ocurrencia del tiempo en innerHTML
+                try {
+                    li.innerHTML = li.innerHTML.replace(/(\d{2}:\d{2}:\d{2})/, fecha_gps_marker);
+                } catch(e){}
+            }
+        } catch (e) {}
+
+        // mantener currentU actualizado para posteriores merges
+        li.currentU = Object.assign({}, li.currentU || {}, unidad);
+        li.currentFechagps = fecha_gps_marker;
+    } catch (e) {
+        // fallback al camino completo si algo falla
+        try { updateUnidadInList(unidad); } catch (err) { console.error('fast update fallback', err); }
     }
 }
 
