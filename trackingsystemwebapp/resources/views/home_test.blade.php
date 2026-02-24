@@ -623,8 +623,14 @@ function conectarWebSocket(coopId) {
                 const payload = data.payload || {};
                 const unidad = payload.unidad || payload;
                 if (unidad) {
-                    // Identificador de unidad (puede venir como _id o imei)
-                    const unitKey = unidad._id || unidad.imei || null;
+                    // Identificador de unidad (puede venir como _id objeto, { $oid: '...' } o imei)
+                    let rawKey = unidad._id || unidad.imei || null;
+                    let unitKey = null;
+                    try {
+                        if (rawKey && typeof rawKey === 'object' && rawKey.$oid) unitKey = String(rawKey.$oid);
+                        else if (rawKey) unitKey = String(rawKey);
+                        else unitKey = null;
+                    } catch (e) { unitKey = rawKey ? String(rawKey) : null; }
 
                     let gpsDateRaw = unidad.fecha_gps  || null;
                     let srvDateRaw = unidad.fecha || null;
@@ -804,7 +810,6 @@ function actualizarUnidadRealtime(unidad) {
 // Buscar el <li> de la unidad en la lista lateral y actualizar sus campos.
 function updateUnidadInList(unidad) {
     if (!unidad || !unidad._id) return;
-
     // Preserve previously-fetched meta (from unidades-meta) so WS updates that lack
     // ruta_* or bitacora do not wipe the values. If there is an existing LI with
     // saved meta, copy those values into the incoming unidad when missing.
@@ -821,6 +826,36 @@ function updateUnidadInList(unidad) {
     } catch (e) {
         console.warn('Merge existing meta failed', e);
     }
+
+    // If we have a previous LI and only light fields changed (fecha_gps, velocidad_actual, voltaje, contador values),
+    // apply a fast partial update to avoid full innerHTML rewrites.
+    try {
+        var existingLi = document.getElementById(unidad._id);
+        if (existingLi && existingLi.currentU) {
+            var prevU = existingLi.currentU;
+            // fields considered light (safe to update with fast path)
+            var lightFields = ['fecha_gps','velocidad_actual','voltaje','contador_total','contador_diario','mileage','bateria','estado_movil','angulo'];
+            var heavyChange = false;
+            for (var i = 0; i < lightFields.length; i++) {
+                var k = lightFields[i];
+                var prevVal = prevU[k] === undefined ? null : String(prevU[k]);
+                var newVal = unidad[k] === undefined ? null : String(unidad[k]);
+                if (prevVal !== newVal) continue; // only note heavy if non-light differ
+            }
+            // Determine heavy differences by checking a few heavy keys
+            var heavyKeys = ['descripcion','placa','ruta_actual','ruta_fecha','ruta_conductor','ruta_hora_fin','bitacora','puerta','puerta_trasera','alerta_puerta_message'];
+            for (var j = 0; j < heavyKeys.length; j++) {
+                var hk = heavyKeys[j];
+                var pv = prevU[hk] === undefined ? null : String(prevU[hk]);
+                var nv = unidad[hk] === undefined ? null : String(unidad[hk]);
+                if (pv !== nv) { heavyChange = true; break; }
+            }
+            if (!heavyChange) {
+                // Fast-path update
+                try { updateUnidadInListFast(unidad); existingLi.currentU = Object.assign({}, existingLi.currentU || {}, unidad); return; } catch(e) { /* fallback below */ }
+            }
+        }
+    } catch(e) { console.warn('partial update detect error', e); }
 
     // Construir campos paralelos a los usados en appendUnidades
     var fecha_gps = unidad.fecha_gps || null;
@@ -1005,6 +1040,7 @@ function updateUnidadInList(unidad) {
 
     // Insertar o actualizar el LI sin alterar la interfaz externa
     var li = document.getElementById(unidad._id);
+    var doReplace = true;
     if (!li) {
         var ul = document.getElementById('ul_unidades');
         if (!ul) return;
@@ -1012,13 +1048,25 @@ function updateUnidadInList(unidad) {
         li.className = 'list-group-item';
         li.id = unidad._id;
         ul.prepend(li);
+        doReplace = true;
+    } else {
+        // If we have cached lastHtml and it's identical, skip full replace
+        try {
+            if (li.dataset && li.dataset.lastHtml) {
+                if (li.dataset.lastHtml === html) doReplace = false;
+            }
+        } catch(e) {}
     }
 
-    li.innerHTML = html;
-    li.currentU = unidad;
+    if (doReplace) {
+        li.innerHTML = html;
+        try { li.dataset.lastHtml = html; } catch(e) {}
+    }
+
+    li.currentU = Object.assign({}, li.currentU || {}, unidad);
     li.currentFechagps = fecha_gps_marker;
     li.currentFecha = fecha_servidor;
-  
+
     li.onclick = function () {
         selectUnidad(this.currentU,this.currentFechagps,this.currentFecha,1); 
     };
