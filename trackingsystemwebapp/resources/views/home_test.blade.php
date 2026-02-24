@@ -703,23 +703,19 @@ function conectarWebSocket(coopId) {
                                 scheduleMarkerFlush();
                             } catch (e) { console.warn('enqueue marker final', e); }
 
-                            // Throttle list updates per unit (200ms)
+                            // Throttle list updates per unit (100ms)
                             try {
                                 const now = Date.now();
-                                const last = unitKey ? (lastListUpdateByUnit[unitKey] || 0) : 0;
-                                if (!unitKey || now - last > 200) {
+                                const lastUpdate = unitKey ? (lastListUpdateByUnit[unitKey] || 0) : 0;
+                                // If we've never updated this unit before, apply immediately.
+                                if (!unitKey || lastUpdate === 0 || now - lastUpdate > 100) {
                                     try { updateUnidadInList(unidad); } catch(e) { console.warn('final list update fail', e); }
                                     if (unitKey) lastListUpdateByUnit[unitKey] = now;
                                 } else {
                                     // schedule a delayed update to ensure list eventually reflects final state
-                                    setTimeout(() => { try { updateUnidadInList(unidad); } catch(e){} }, 220);
+                                    setTimeout(() => { try { updateUnidadInList(unidad); } catch(e){} }, 120);
                                 }
                             } catch (e) { console.warn('throttle list update error', e); }
-                            try {
-                                updateUnidadInList(unidad);
-                            } catch (e) {
-                                console.warn('Error actualizando lista unidad (final)', e);
-                            }
                             // Limpiar cache preliminar y quitar marca visual si existía
                             if (unitKey) {
                                 if (prelimCache[unitKey]) delete prelimCache[unitKey];

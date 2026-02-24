@@ -64,34 +64,47 @@ const frontendClients = new Map();
  * ========================= */
 redisSub.subscribe('gps-realtime', 'gps-channel');
 
-redisSub.on('message', (channel, message) => {
-  try {
-    console.log(`📡 Mensaje Redis en canal ${channel}`);
+// Buffer incoming Redis messages and coalesce by unidad (or imei) to avoid burst forwarding.
+const pendingMessages = new Map();
+let pendingFlushTimer = null;
+const FLUSH_MS = 40; // coalesce window
 
-    const data = JSON.parse(message);
-
-    const coopMsg = String(data.cooperativa_id || '').trim();
-
-    console.log('📦 Redis coop:', coopMsg || '<ninguna>');
-    console.log('👥 Fronts registrados:', [...frontendClients.values()]);
-
-    frontendClients.forEach((coopId, ws) => {
-      const coopFront = String(coopId || '').trim();
-
-      // Si no hay coopMsg (o es vacío), hacemos broadcast a todos los frontends conectados
-      const shouldSend = (coopMsg === '' || coopMsg === null) ? (ws.readyState === WebSocket.OPEN) : (ws.readyState === WebSocket.OPEN && coopFront === coopMsg);
-
-      if (shouldSend) {
-        console.log('✅ ENVIANDO DATA A FRONT ->', coopFront || '<broadcast>');
-        ws.send(JSON.stringify({
-          type: 'unidad.updated',
-          payload: data
-        }));
+function schedulePendingFlush() {
+  if (pendingFlushTimer) return;
+  pendingFlushTimer = setTimeout(() => {
+    pendingFlushTimer = null;
+    const items = Array.from(pendingMessages.values());
+    pendingMessages.clear();
+    // Broadcast each latest item to matching frontends
+    items.forEach((data) => {
+      try {
+        const coopMsg = String(data.cooperativa_id || '').trim();
+        const sendType = data.type || 'unidad.updated';
+        frontendClients.forEach((coopId, ws) => {
+          if (ws.readyState !== WebSocket.OPEN) return;
+          const coopFront = String(coopId || '').trim();
+          const shouldSend = (coopMsg === '' || coopMsg === null) ? true : (coopFront === coopMsg);
+          if (shouldSend) {
+            ws.send(JSON.stringify({ type: sendType, payload: data }));
+          }
+        });
+      } catch (err) {
+        console.error('❌ Error al enviar item coalescido:', err);
       }
     });
+  }, FLUSH_MS);
+}
 
+redisSub.on('message', (channel, message) => {
+  try {
+    const data = JSON.parse(message);
+    // Key by provided _id, unidad_id, imei or fallback to unique id
+    const key = String(data._id || data.unidad_id || data.imei || (Date.now() + Math.random()));
+    // Keep the latest message for that key (prelim/final ordering: later messages overwrite earlier)
+    pendingMessages.set(key, data);
+    schedulePendingFlush();
   } catch (err) {
-    console.error('❌ Error procesando mensaje Redis:', err);
+    console.error('❌ Error procesando mensaje Redis (parse):', err);
   }
 });
 
