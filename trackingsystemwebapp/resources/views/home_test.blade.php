@@ -560,6 +560,12 @@ function conectarWebSocket(coopId) {
     // Usar variable local para evitar condición de carrera en los handlers
     const socket = new WebSocket(wsUrl);
 
+    // Caches para manejo preliminar/definitivo
+    // prelimCache guarda timestamps preliminares por unidad
+    const prelimCache = {};
+    // lastTsByUnit guarda el último _ts_backend definitivo procesado por unidad
+    const lastTsByUnit = {};
+
     socket.onopen = (event) => {
         console.log('%c🟢 WS CONECTADO', 'color:green;font-weight:bold');
         console.log('Cooperativa:' + coopId);
@@ -586,6 +592,9 @@ function conectarWebSocket(coopId) {
                 const payload = data.payload || {};
                 const unidad = payload.unidad || payload;
                 if (unidad) {
+                    // Identificador de unidad (puede venir como _id o imei)
+                    const unitKey = unidad._id || unidad.imei || null;
+
                     let gpsDateRaw = unidad.fecha_gps  || null;
                     let srvDateRaw = unidad.fecha || null;
                     let gpsIso = null;
@@ -613,10 +622,64 @@ function conectarWebSocket(coopId) {
                         }
                     } catch(e) { srvIso = srvDateRaw; }
 
-                    const fakeFechaGps = { fecha_gps: { date: gpsIso } };
-                    const fakeFechaServidor = { fecha_servidor: { date: srvIso } };
-                    setMarcadorUnidad(unidad, fakeFechaGps, fakeFechaServidor, 0);
-                    updateUnidadInList(unidad);
+                    // Si es un mensaje preliminar (rápido): actualizar marcador pero no la lista
+                    if (unidad.preliminar) {
+                        try {
+                            const fakeFechaGps = { fecha_gps: { date: gpsIso } };
+                            const fakeFechaServidor = { fecha_servidor: { date: srvIso } };
+                            setMarcadorUnidad(unidad, fakeFechaGps, fakeFechaServidor, 0);
+                            // Registrar timestamp preliminar para posible comparación
+                            if (unitKey) prelimCache[unitKey] = unidad._ts_backend_prelim || Date.now();
+                            // También actualizar la lista lateral para reflejar la posición rápida
+                            try {
+                                unidad.preliminar = true; // marcar unidad en la lista
+                                updateUnidadInList(unidad);
+                                // marcar visualmente el LI como preliminar
+                                if (unitKey) {
+                                    const li = document.getElementById(unitKey);
+                                    if (li) {
+                                        li.classList.add('prelim');
+                                        try { li.dataset.prelimTs = unidad._ts_backend_prelim || Date.now(); } catch(e){}
+                                    }
+                                }
+                            } catch (e) {
+                                console.warn('Error actualizando lista en preliminar', e);
+                            }
+                            console.debug('WS PRELIM', unitKey, unidad._ts_backend_prelim || '-');
+                        } catch (e) {
+                            console.warn('Error aplicando preliminar', e);
+                        }
+                    } else {
+                        // Mensaje definitivo: priorizar por _ts_backend
+                        const ts = unidad._ts_backend || Date.now();
+                        const last = unitKey ? (lastTsByUnit[unitKey] || 0) : 0;
+                        if (unitKey && ts <= last) {
+                            // Descarta si ya procesamos un evento más nuevo o igual
+                            console.debug('WS IGNORAR (no más nuevo)', unitKey, ts, last);
+                        } else {
+                            if (unitKey) lastTsByUnit[unitKey] = ts;
+
+                            const fakeFechaGps = { fecha_gps: { date: gpsIso } };
+                            const fakeFechaServidor = { fecha_servidor: { date: srvIso } };
+                            // Actualizar marcador y lista (definitivo)
+                            setMarcadorUnidad(unidad, fakeFechaGps, fakeFechaServidor, 0);
+                            try {
+                                updateUnidadInList(unidad);
+                            } catch (e) {
+                                console.warn('Error actualizando lista unidad (final)', e);
+                            }
+                            // Limpiar cache preliminar y quitar marca visual si existía
+                            if (unitKey) {
+                                if (prelimCache[unitKey]) delete prelimCache[unitKey];
+                                const li = document.getElementById(unitKey);
+                                if (li) {
+                                    li.classList.remove('prelim');
+                                    try { delete li.dataset.prelimTs; } catch(e){}
+                                }
+                            }
+                            console.debug('WS FINAL', unitKey, ts);
+                        }
+                    }
                 }
             } else if (data.type === 'unidad.sentido.changed') {
                 try {

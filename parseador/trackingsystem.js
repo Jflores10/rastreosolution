@@ -487,6 +487,36 @@ function onClientConnected(socket) {
                             console.log(err);
                         else //If there is no error
                         {
+
+                            // Envío preliminar rápido al WebSocket para reducir latencia visible.
+                            // Este evento es ligero y marcado como preliminar; se enviará
+                            // un evento definitivo luego de que el insertOne confirme.
+                            try {
+                                const tsPre = Date.now();
+                                // Envío preliminar: solo datos de la unidad (ligero)
+                                let unidadPrelim = {
+                                    _id: document.value._id,
+                                    imei: document.value.imei || data[imei],
+                                    descripcion: document.value.descripcion || '',
+                                    placa: document.value.placa || '',
+                                    latitud: document.value.latitud,
+                                    longitud: document.value.longitud,
+                                    velocidad_actual: document.value.velocidad_actual || document.value.velocidad || 0,
+                                    voltaje: document.value.voltaje,
+                                    mileage: document.value.mileage,
+                                    bateria: document.value.bateria,
+                                    estado_movil: document.value.estado_movil,
+                                    angulo: document.value.angulo,
+                                    fecha_gps: document.value.fecha_gps,
+                                    fecha: document.value.fecha,
+                                    evento: document.value.evento,
+                                    cooperativa_id: (document.value.cooperativa_id ? String(document.value.cooperativa_id) : null),
+                                    preliminar: true,
+                                    _ts_backend_prelim: tsPre
+                                };
+                                enviarALaravelPorWS(unidadPrelim);
+                            } catch (e) { console.error('Error enviando preliminar WS:', e); }
+
                             if (document != undefined && document != null) //If unidad was updated and taken
                             {
                                 /*
@@ -707,56 +737,40 @@ function onClientConnected(socket) {
                                             console.log(err);
                                         }
                                         else {
-                                            // 🔹 Notificar a WebSocket (Laravel recibirá por Redis)
-                                            // El payload debe provenir de los datos reales del dispositivo
-                                            // (document.value). El sentido seguirá siendo calculado por
-                                            // la función existente `actualizarSentidoUnidad`.
-                                            let unidadPayload = {
-                                                _id: document.value._id,
-                                                imei: document.value.imei || data[imei],
-                                                descripcion: document.value.descripcion || '',
-                                                placa: document.value.placa || '',
-                                                latitud: document.value.latitud,
-                                                longitud: document.value.longitud,
-                                                velocidad_actual: document.value.velocidad_actual || document.value.velocidad || 0,
-                                                voltaje: document.value.voltaje,
-                                                mileage: document.value.mileage,
-                                                bateria: document.value.bateria,
-                                                contador_total: document.value.contador_total,
-                                                contador_diario: document.value.contador_diario,
-                                                contador_total_sensor_2: document.value.contador_total_sensor_2,
-                                                contador_diario_sensor_2: document.value.contador_diario_sensor_2,
-                                                contador_total_sensor_3: document.value.contador_total_sensor_3,
-                                                contador_diario_sensor_3: document.value.contador_diario_sensor_3,
-                                                estado_movil: document.value.estado_movil,
-                                                angulo: document.value.angulo,
-                                                fecha_gps: document.value.fecha_gps,
-                                                fecha: document.value.fecha,
-                                                evento: document.value.evento,
-                                                // No sobreescribimos sentido aquí; respetamos la fuente del dispositivo
-                                                sentido: (document.value.sentido !== undefined) ? document.value.sentido : null,
-                                                puerta: (document.value.puerta !== undefined) ? document.value.puerta : null,
-                                                puerta_trasera: (document.value.puerta_trasera !== undefined) ? document.value.puerta_trasera : null,
-                                                alerta_puerta_message: (document.value.alerta_puerta_message !== undefined) ? document.value.alerta_puerta_message : null,
-                                                alerta_puerta_fecha: (document.value.alerta_puerta_fecha !== undefined) ? document.value.alerta_puerta_fecha : null,
-                                                alerta_puerta_message_trasera: (document.value.alerta_puerta_message_trasera !== undefined) ? document.value.alerta_puerta_message_trasera : null,
-                                                alerta_puerta_fecha_trasera: (document.value.alerta_puerta_fecha_trasera !== undefined) ? document.value.alerta_puerta_fecha_trasera : null,
-                                                fecha_puerta_abierta: (document.value.fecha_puerta_abierta !== undefined) ? document.value.fecha_puerta_abierta : null,
-                                                fecha_puerta_abierta_trasera: (document.value.fecha_puerta_abierta_trasera !== undefined) ? document.value.fecha_puerta_abierta_trasera : null,
-                                                fecha_puerta_cerrada: (document.value.fecha_puerta_cerrada !== undefined) ? document.value.fecha_puerta_cerrada : null,
-                                                fecha_puerta_cerrada_trasera: (document.value.fecha_puerta_cerrada_trasera !== undefined) ? document.value.fecha_puerta_cerrada_trasera : null,
-                                                cooperativa_id: (document.value.cooperativa_id ? String(document.value.cooperativa_id) : null)
-                                            };
+                                            // Envío definitivo: payload construido desde la inserción confirmada
+                                            try {
+                                                let unidadPayloadFinal = {
+                                                        _id: document.value._id,
+                                                        imei: document.value.imei || data[imei],
+                                                        descripcion: document.value.descripcion || '',
+                                                        placa: document.value.placa || '',
+                                                        latitud: document.value.latitud,
+                                                        longitud: document.value.longitud,
+                                                        velocidad_actual: document.value.velocidad_actual || document.value.velocidad || 0,
+                                                        voltaje: document.value.voltaje,
+                                                        mileage: document.value.mileage,
+                                                        bateria: document.value.bateria,
+                                                        contador_total: document.value.contador_total,
+                                                        contador_diario: document.value.contador_diario,
+                                                        contador_total_sensor_2: document.value.contador_total_sensor_2,
+                                                        contador_diario_sensor_2: document.value.contador_diario_sensor_2,
+                                                        contador_total_sensor_3: document.value.contador_total_sensor_3,
+                                                        contador_diario_sensor_3: document.value.contador_diario_sensor_3,
+                                                        estado_movil: document.value.estado_movil,
+                                                        angulo: document.value.angulo,
+                                                        fecha_gps: document.value.fecha_gps,
+                                                        fecha: document.value.fecha,
+                                                        evento: document.value.evento,
+                                                        sentido: (document.value.sentido !== undefined) ? document.value.sentido : null,
+                                                        cooperativa_id: (document.value.cooperativa_id ? String(document.value.cooperativa_id) : null)
+                                                    };
 
-                                            let recorrido = {
-                                                imei: data[imei],
-                                                latitud: document.value.latitud,
-                                                longitud: document.value.longitud,
-                                                cooperativa_id: (document.value.cooperativa_id ? String(document.value.cooperativa_id) : null),
-                                                unidad: unidadPayload
-                                            };
+                                                    // Añadir timestamp backend y enviar SOLO los datos de la unidad
+                                                    const ts = Date.now();
+                                                    unidadPayloadFinal._ts_backend = ts;
 
-                                            enviarALaravelPorWS(recorrido);
+                                                    enviarALaravelPorWS(unidadPayloadFinal);
+                                            } catch (e) { console.error('Error enviando final WS:', e); }
                                         }
                                     });
                                 }
