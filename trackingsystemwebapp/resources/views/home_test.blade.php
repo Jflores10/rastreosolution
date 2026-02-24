@@ -587,6 +587,7 @@ function conectarWebSocket(coopId) {
     socket.onmessage = (event) => {
         try {
             const data = JSON.parse(event.data);
+            console.log(data)
             // Actualización inmediata y sincronizada de todas las unidades
             if (data.type === 'unidad.updated') {
                 const payload = data.payload || {};
