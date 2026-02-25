@@ -616,7 +616,7 @@ function conectarWebSocket(coopId) {
 
                     // Encolar actualización de marcador (se vacía por requestAnimationFrame)
                     pendingMarkerUpdates.set(unidad._id, unidad);
-                    scheduleMarkerFlush();
+                    //scheduleMarkerFlush();
 
                     // Throttled list update: evita actualizar DOM por unidad más frecuentemente que LIST_THROTTLE_MS
                     const last = lastListUpdateByUnit.get(unidad._id) || 0;
