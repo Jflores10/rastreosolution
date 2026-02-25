@@ -75,6 +75,9 @@ redisSub.on('message', (channel, message) => {
     console.log('📦 Redis coop:', coopMsg || '<ninguna>');
     console.log('👥 Fronts registrados:', [...frontendClients.values()]);
 
+    // marcar cuando el WS-server recibe el mensaje desde Redis (diagnóstico)
+    try { data._ts_recv = Date.now(); } catch (e) {}
+
     frontendClients.forEach((coopId, ws) => {
       const coopFront = String(coopId || '').trim();
 
@@ -83,10 +86,23 @@ redisSub.on('message', (channel, message) => {
 
       if (shouldSend) {
         console.log('✅ ENVIANDO DATA A FRONT ->', coopFront || '<broadcast>');
-        ws.send(JSON.stringify({
-          type: 'unidad.updated',
-          payload: data
-        }));
+
+        // Si el mensaje recibido parece ser una unidad (tiene _id o imei),
+        // lo envolvemos en payload.unidad para que el frontend siempre lo lea
+        // como `payload.unidad`. Mantenemos _ts_recv a nivel de payload
+        // para que el frontend lo pueda medir como antes.
+        try {
+          const isUnit = data && (data._id || data.imei);
+          if (isUnit) {
+            const payload = { unidad: data };
+            try { payload._ts_recv = data._ts_recv; } catch (e) {}
+            ws.send(JSON.stringify({ type: 'unidad.updated', payload }));
+          } else {
+            ws.send(JSON.stringify({ type: 'unidad.updated', payload: data }));
+          }
+        } catch (e) {
+          console.error('❌ Error enviando data al front:', e);
+        }
       }
     });
 

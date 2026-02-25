@@ -46,9 +46,20 @@ var logsAdmin = [];
 const { ObjectId } = require('mongodb'); 
 const WebSocket = require("ws");
 
-// WebSocket cliente con reconexión automática
+// Redis publisher (parser -> websocket server uses Redis pub/sub)
+const redis = require('redis');
+const redisPub = redis.createClient();
+redisPub.on('error', err => {
+    console.error('Redis PUB Error (parser):', err);
+});
+
+// WebSocket cliente con reconexión automática (fallback)
 let wsClient = null;
 let wsReconnectTimeout = 3000;
+
+// Throttle control: evita enviar demasiados mensajes por unidad en ráfaga
+const lastSentByUnit = new Map(); // key = imei or _id -> timestamp ms
+const MIN_SEND_MS = 100; // tiempo mínimo entre envíos por unidad (ajustable)
 
 function connectWebSocketClient() {
     try {
@@ -89,14 +100,62 @@ const redisPub = new Redis();  // Para publicar / set / get
 */
 
 function enviarALaravelPorWS(data) {
-    if (wsClient && wsClient.readyState === WebSocket.OPEN) {
-        try {
-            wsClient.send(JSON.stringify(data));
-        } catch (e) {
-            console.error('Error enviando por WS local:', e);
+    try {
+        if (!data) return;
+
+        // Si nos pasan un evento (p.ej. unidad.sentido.changed), publicar tal cual
+        // Si nos pasan wrappers con `unidad` o `recorrido.unidad`, extraer la unidad
+        let unit = null;
+        if (data.unidad && typeof data.unidad === 'object') unit = data.unidad;
+        else if (data.recorrido && data.recorrido.unidad && typeof data.recorrido.unidad === 'object') unit = data.recorrido.unidad;
+        else if (data._id || data.imei) unit = data; // ya es unidad-like
+
+        // Enviar el objeto completo de la unidad (unidadPayload) cuando esté presente
+        let payloadToPublish = data;
+        if (unit) {
+            // Hacemos una copia superficial para evitar mutar el objeto original
+            payloadToPublish = Object.assign({}, unit);
+            try { payloadToPublish._ts_sent = Date.now(); } catch (e) {}
+
+            // Throttle por unidad (evita ráfagas que puedan sobrecargar el front)
+            const key = payloadToPublish.imei || payloadToPublish._id || JSON.stringify(payloadToPublish);
+            const now = Date.now();
+            const last = (typeof lastSentByUnit !== 'undefined' && lastSentByUnit.get) ? lastSentByUnit.get(key) || 0 : 0;
+            if ((now - last) < (typeof MIN_SEND_MS !== 'undefined' ? MIN_SEND_MS : 0)) {
+                return; // demasiado pronto desde el último envío para esta unidad
+            }
+            if (typeof lastSentByUnit !== 'undefined' && lastSentByUnit.set) lastSentByUnit.set(key, now);
+        } else {
+            // para eventos no-unit, añadimos timestamp diagnóstico
+            try { payloadToPublish._ts_sent = Date.now(); } catch (e) {}
         }
-    } else {
-        console.log("WebSocket no disponible, no se pudo enviar:", data);
+
+        // Publicar en Redis (gps-channel) para que websocket.js lo reemita a los frontends
+        if (redisPub && typeof redisPub.publish === 'function') {
+            try {
+                redisPub.publish('gps-channel', JSON.stringify(payloadToPublish), (err) => {
+                    if (err) console.error('❌ Error publicando en Redis (gps-channel):', err);
+                });
+                return; // publicado por Redis con éxito (o en cola)
+            } catch (e) {
+                console.error('❌ Excepción publicando en Redis:', e);
+                // seguir al fallback wsClient
+            }
+        }
+
+        // Fallback: enviar directamente al WS local si Redis no está disponible
+        if (wsClient && wsClient.readyState === WebSocket.OPEN) {
+            try {
+                wsClient.send(JSON.stringify(payloadToPublish));
+            } catch (e) {
+                console.error('Error enviando por WS local (fallback):', e);
+            }
+        } else {
+            try { console.log('WS no disponible y Redis no funcional, payload skip:', payloadToPublish.imei || payloadToPublish._id); } catch (e) {}
+        }
+
+    } catch (err) {
+        console.error('Error en enviarALaravelPorWS:', err);
     }
 }
 function getSocket(imei) {
@@ -748,15 +807,9 @@ function onClientConnected(socket) {
                                                 cooperativa_id: (document.value.cooperativa_id ? String(document.value.cooperativa_id) : null)
                                             };
 
-                                            let recorrido = {
-                                                imei: data[imei],
-                                                latitud: document.value.latitud,
-                                                longitud: document.value.longitud,
-                                                cooperativa_id: (document.value.cooperativa_id ? String(document.value.cooperativa_id) : null),
-                                                unidad: unidadPayload
-                                            };
+                                          
 
-                                            enviarALaravelPorWS(recorrido);
+                                            enviarALaravelPorWS(unidadPayload);
                                         }
                                     });
                                 }
