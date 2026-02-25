@@ -64,86 +64,34 @@ const frontendClients = new Map();
  * ========================= */
 redisSub.subscribe('gps-realtime', 'gps-channel');
 
-// Buffer incoming Redis messages and coalesce by unidad (or imei) to avoid burst forwarding.
-const pendingMessages = new Map();
-let pendingFlushTimer = null;
-const FLUSH_MS = 20; // coalesce window (reduced)
-const MAX_PENDING = 2000; // safety limit: flush when too many pending messages
-
-function extractKeyFromData(data) {
-  if (!data) return String(Date.now() + Math.random());
-  const raw = data._id || data.unidad_id || data.imei;
-  if (!raw) return String(Date.now() + Math.random());
-  if (typeof raw === 'string') return raw;
-  try {
-    if (raw.$oid) return String(raw.$oid);
-  } catch (e) {}
-  try {
-    if (typeof raw.toString === 'function') return raw.toString();
-  } catch (e) {}
-  try {
-    return JSON.stringify(raw);
-  } catch (e) {
-    return String(raw);
-  }
-}
-
-function broadcastItemToFrontends(data) {
-  try {
-    const coopMsg = String(data.cooperativa_id || '').trim();
-    const sendType = data.type || 'unidad.updated';
-    frontendClients.forEach((coopId, ws) => {
-      if (ws.readyState !== WebSocket.OPEN) return;
-      const coopFront = String(coopId || '').trim();
-      const shouldSend = (coopMsg === '' || coopMsg === null) ? true : (coopFront === coopMsg);
-      if (shouldSend) {
-        try { ws.send(JSON.stringify({ type: sendType, payload: data })); } catch (e) { /* swallow send errors for a client */ }
-      }
-    });
-  } catch (err) {
-    console.error('❌ Error al enviar item coalescido:', err);
-  }
-}
-
-function schedulePendingFlush() {
-  if (pendingFlushTimer) return;
-  pendingFlushTimer = setTimeout(() => {
-    pendingFlushTimer = null;
-    const items = Array.from(pendingMessages.values());
-    pendingMessages.clear();
-    items.forEach(broadcastItemToFrontends);
-  }, FLUSH_MS);
-}
-
 redisSub.on('message', (channel, message) => {
   try {
+    console.log(`📡 Mensaje Redis en canal ${channel}`);
+
     const data = JSON.parse(message);
-    const key = extractKeyFromData(data);
 
-    // If this is an authoritative message from backend, prefer immediate send
-    if (data && data._ts_backend) {
-      // send immediately
-      broadcastItemToFrontends(data);
-      // remove any stale pending older message for same key
-      if (pendingMessages.has(key)) pendingMessages.delete(key);
-      return;
-    }
+    const coopMsg = String(data.cooperativa_id || '').trim();
 
-    // otherwise coalesce prelim messages
-    pendingMessages.set(key, data);
+    console.log('📦 Redis coop:', coopMsg || '<ninguna>');
+    console.log('👥 Fronts registrados:', [...frontendClients.values()]);
 
-    // safety: if queue grows too big, flush now to avoid delays
-    if (pendingMessages.size > MAX_PENDING) {
-      const items = Array.from(pendingMessages.values());
-      pendingMessages.clear();
-      items.forEach(broadcastItemToFrontends);
-      if (pendingFlushTimer) { clearTimeout(pendingFlushTimer); pendingFlushTimer = null; }
-      return;
-    }
+    frontendClients.forEach((coopId, ws) => {
+      const coopFront = String(coopId || '').trim();
 
-    schedulePendingFlush();
+      // Si no hay coopMsg (o es vacío), hacemos broadcast a todos los frontends conectados
+      const shouldSend = (coopMsg === '' || coopMsg === null) ? (ws.readyState === WebSocket.OPEN) : (ws.readyState === WebSocket.OPEN && coopFront === coopMsg);
+
+      if (shouldSend) {
+        console.log('✅ ENVIANDO DATA A FRONT ->', coopFront || '<broadcast>');
+        ws.send(JSON.stringify({
+          type: 'unidad.updated',
+          payload: data
+        }));
+      }
+    });
+
   } catch (err) {
-    console.error('❌ Error procesando mensaje Redis (parse):', err);
+    console.error('❌ Error procesando mensaje Redis:', err);
   }
 });
 

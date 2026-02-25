@@ -560,42 +560,6 @@ function conectarWebSocket(coopId) {
     // Usar variable local para evitar condición de carrera en los handlers
     const socket = new WebSocket(wsUrl);
 
-    // Caches para manejo preliminar/definitivo
-    // prelimCache guarda timestamps preliminares por unidad
-    const prelimCache = {};
-    // lastTsByUnit guarda el último _ts_backend definitivo procesado por unidad
-    const lastTsByUnit = {};
-    // pendingMarkerUpdates almacena la última unidad a aplicar en el mapa por unidad
-    const pendingMarkerUpdates = {};
-    let markerFlushRequested = false;
-    // lastListUpdateByUnit para throttling de actualizaciones de lista (ms)
-    const lastListUpdateByUnit = {};
-
-    function scheduleMarkerFlush() {
-        if (markerFlushRequested) return;
-        markerFlushRequested = true;
-        requestAnimationFrame(() => {
-            markerFlushRequested = false;
-            try {
-                const keys = Object.keys(pendingMarkerUpdates);
-                for (let i = 0; i < keys.length; i++) {
-                    const k = keys[i];
-                    const p = pendingMarkerUpdates[k];
-                    if (!p) continue;
-                    try {
-                        // aplicar marcador usando la estructura fake ya preparada
-                        setMarcadorUnidad(p.unidad, p.fakeFechaGps, p.fakeFechaServidor, 0);
-                    } catch (e) {
-                        // swallow individual errors
-                    }
-                    delete pendingMarkerUpdates[k];
-                }
-            } catch (e) {
-                console.error('Marker flush error', e);
-            }
-        });
-    }
-
     socket.onopen = (event) => {
         console.log('%c🟢 WS CONECTADO', 'color:green;font-weight:bold');
         console.log('Cooperativa:' + coopId);
@@ -617,21 +581,11 @@ function conectarWebSocket(coopId) {
     socket.onmessage = (event) => {
         try {
             const data = JSON.parse(event.data);
-            console.log(data)
             // Actualización inmediata y sincronizada de todas las unidades
             if (data.type === 'unidad.updated') {
                 const payload = data.payload || {};
                 const unidad = payload.unidad || payload;
                 if (unidad) {
-                    // Identificador de unidad (puede venir como _id objeto, { $oid: '...' } o imei)
-                    let rawKey = unidad._id || unidad.imei || null;
-                    let unitKey = null;
-                    try {
-                        if (rawKey && typeof rawKey === 'object' && rawKey.$oid) unitKey = String(rawKey.$oid);
-                        else if (rawKey) unitKey = String(rawKey);
-                        else unitKey = null;
-                    } catch (e) { unitKey = rawKey ? String(rawKey) : null; }
-
                     let gpsDateRaw = unidad.fecha_gps  || null;
                     let srvDateRaw = unidad.fecha || null;
                     let gpsIso = null;
@@ -659,81 +613,10 @@ function conectarWebSocket(coopId) {
                         }
                     } catch(e) { srvIso = srvDateRaw; }
 
-                    // Si es un mensaje preliminar (rápido): actualizar marcador pero no la lista
-                    if (unidad.preliminar) {
-                        try {
-                            const fakeFechaGps = { fecha_gps: { date: gpsIso } };
-                            const fakeFechaServidor = { fecha_servidor: { date: srvIso } };
-                            // Encolar marcador para flush por requestAnimationFrame
-                            try {
-                                pendingMarkerUpdates[unitKey || unidad._id || unidad.imei] = { unidad: unidad, fakeFechaGps: fakeFechaGps, fakeFechaServidor: fakeFechaServidor };
-                                scheduleMarkerFlush();
-                            } catch (e) { console.warn('enqueue marker prelim', e); }
-                            // Registrar timestamp preliminar para posible comparación
-                            if (unitKey) prelimCache[unitKey] = unidad._ts_backend_prelim || Date.now();
-                            // También actualizar la lista lateral para reflejar la posición rápida
-                                try {
-                                unidad.preliminar = true; // marcar unidad en la lista
-                                // fast path: update minimal fields to keep UI responsive
-                                try { updateUnidadInListFast(unidad); } catch(e) { updateUnidadInList(unidad); }
-                                // marcar visualmente el LI como preliminar
-                                if (unitKey) {
-                                    const li = document.getElementById(unitKey);
-                                    if (li) {
-                                        li.classList.add('prelim');
-                                        try { li.dataset.prelimTs = unidad._ts_backend_prelim || Date.now(); } catch(e){}
-                                    }
-                                }
-                            } catch (e) {
-                                console.warn('Error actualizando lista en preliminar', e);
-                            }
-                            console.debug('WS PRELIM', unitKey, unidad._ts_backend_prelim || '-');
-                        } catch (e) {
-                            console.warn('Error aplicando preliminar', e);
-                        }
-                    } else {
-                        // Mensaje definitivo: priorizar por _ts_backend
-                        const ts = unidad._ts_backend || Date.now();
-                        const last = unitKey ? (lastTsByUnit[unitKey] || 0) : 0;
-                        if (unitKey && ts <= last) {
-                            // Descarta si ya procesamos un evento más nuevo o igual
-                            console.debug('WS IGNORAR (no más nuevo)', unitKey, ts, last);
-                        } else {
-                            if (unitKey) lastTsByUnit[unitKey] = ts;
-
-                            const fakeFechaGps = { fecha_gps: { date: gpsIso } };
-                            const fakeFechaServidor = { fecha_servidor: { date: srvIso } };
-                            // Encolar marcador para flush por requestAnimationFrame
-                            try {
-                                pendingMarkerUpdates[unitKey || unidad._id || unidad.imei] = { unidad: unidad, fakeFechaGps: fakeFechaGps, fakeFechaServidor: fakeFechaServidor };
-                                scheduleMarkerFlush();
-                            } catch (e) { console.warn('enqueue marker final', e); }
-
-                            // Throttle list updates per unit (100ms)
-                            try {
-                                const now = Date.now();
-                                const lastUpdate = unitKey ? (lastListUpdateByUnit[unitKey] || 0) : 0;
-                                // If we've never updated this unit before, apply immediately.
-                                if (!unitKey || lastUpdate === 0 || now - lastUpdate > 100) {
-                                    try { updateUnidadInList(unidad); } catch(e) { console.warn('final list update fail', e); }
-                                    if (unitKey) lastListUpdateByUnit[unitKey] = now;
-                                } else {
-                                    // schedule a delayed update to ensure list eventually reflects final state
-                                    setTimeout(() => { try { updateUnidadInList(unidad); } catch(e){} }, 120);
-                                }
-                            } catch (e) { console.warn('throttle list update error', e); }
-                            // Limpiar cache preliminar y quitar marca visual si existía
-                            if (unitKey) {
-                                if (prelimCache[unitKey]) delete prelimCache[unitKey];
-                                const li = document.getElementById(unitKey);
-                                if (li) {
-                                    li.classList.remove('prelim');
-                                    try { delete li.dataset.prelimTs; } catch(e){}
-                                }
-                            }
-                            console.debug('WS FINAL', unitKey, ts);
-                        }
-                    }
+                    const fakeFechaGps = { fecha_gps: { date: gpsIso } };
+                    const fakeFechaServidor = { fecha_servidor: { date: srvIso } };
+                    setMarcadorUnidad(unidad, fakeFechaGps, fakeFechaServidor, 0);
+                    updateUnidadInList(unidad);
                 }
             } else if (data.type === 'unidad.sentido.changed') {
                 try {
@@ -810,6 +693,7 @@ function actualizarUnidadRealtime(unidad) {
 // Buscar el <li> de la unidad en la lista lateral y actualizar sus campos.
 function updateUnidadInList(unidad) {
     if (!unidad || !unidad._id) return;
+
     // Preserve previously-fetched meta (from unidades-meta) so WS updates that lack
     // ruta_* or bitacora do not wipe the values. If there is an existing LI with
     // saved meta, copy those values into the incoming unidad when missing.
@@ -826,36 +710,6 @@ function updateUnidadInList(unidad) {
     } catch (e) {
         console.warn('Merge existing meta failed', e);
     }
-
-    // If we have a previous LI and only light fields changed (fecha_gps, velocidad_actual, voltaje, contador values),
-    // apply a fast partial update to avoid full innerHTML rewrites.
-    try {
-        var existingLi = document.getElementById(unidad._id);
-        if (existingLi && existingLi.currentU) {
-            var prevU = existingLi.currentU;
-            // fields considered light (safe to update with fast path)
-            var lightFields = ['fecha_gps','velocidad_actual','voltaje','contador_total','contador_diario','mileage','bateria','estado_movil','angulo'];
-            var heavyChange = false;
-            for (var i = 0; i < lightFields.length; i++) {
-                var k = lightFields[i];
-                var prevVal = prevU[k] === undefined ? null : String(prevU[k]);
-                var newVal = unidad[k] === undefined ? null : String(unidad[k]);
-                if (prevVal !== newVal) continue; // only note heavy if non-light differ
-            }
-            // Determine heavy differences by checking a few heavy keys
-            var heavyKeys = ['descripcion','placa','ruta_actual','ruta_fecha','ruta_conductor','ruta_hora_fin','bitacora','puerta','puerta_trasera','alerta_puerta_message'];
-            for (var j = 0; j < heavyKeys.length; j++) {
-                var hk = heavyKeys[j];
-                var pv = prevU[hk] === undefined ? null : String(prevU[hk]);
-                var nv = unidad[hk] === undefined ? null : String(unidad[hk]);
-                if (pv !== nv) { heavyChange = true; break; }
-            }
-            if (!heavyChange) {
-                // Fast-path update
-                try { updateUnidadInListFast(unidad); existingLi.currentU = Object.assign({}, existingLi.currentU || {}, unidad); return; } catch(e) { /* fallback below */ }
-            }
-        }
-    } catch(e) { console.warn('partial update detect error', e); }
 
     // Construir campos paralelos a los usados en appendUnidades
     var fecha_gps = unidad.fecha_gps || null;
@@ -1040,7 +894,6 @@ function updateUnidadInList(unidad) {
 
     // Insertar o actualizar el LI sin alterar la interfaz externa
     var li = document.getElementById(unidad._id);
-    var doReplace = true;
     if (!li) {
         var ul = document.getElementById('ul_unidades');
         if (!ul) return;
@@ -1048,25 +901,13 @@ function updateUnidadInList(unidad) {
         li.className = 'list-group-item';
         li.id = unidad._id;
         ul.prepend(li);
-        doReplace = true;
-    } else {
-        // If we have cached lastHtml and it's identical, skip full replace
-        try {
-            if (li.dataset && li.dataset.lastHtml) {
-                if (li.dataset.lastHtml === html) doReplace = false;
-            }
-        } catch(e) {}
     }
 
-    if (doReplace) {
-        li.innerHTML = html;
-        try { li.dataset.lastHtml = html; } catch(e) {}
-    }
-
-    li.currentU = Object.assign({}, li.currentU || {}, unidad);
+    li.innerHTML = html;
+    li.currentU = unidad;
     li.currentFechagps = fecha_gps_marker;
     li.currentFecha = fecha_servidor;
-
+  
     li.onclick = function () {
         selectUnidad(this.currentU,this.currentFechagps,this.currentFecha,1); 
     };
@@ -1079,60 +920,6 @@ function updateUnidadInList(unidad) {
     } else {
         // Si no hay coordenadas, no llamar al setMarcadorUnidad; el alert original se mostraba en esa función
         console.warn('Unidad sin coordenadas: ' + unidad._id);
-    }
-}
-
-// Versión optimizada para actualizaciones rápidas (preliminares):
-function updateUnidadInListFast(unidad) {
-    if (!unidad || !unidad._id) return;
-    var li = document.getElementById(unidad._id);
-    if (!li) {
-        // si no existe, caer al flujo completo
-        updateUnidadInList(unidad);
-        return;
-    }
-
-    try {
-        // actualizar campos críticos: fecha_gps, velocidad y icono color
-        var fecha_gps = unidad.fecha_gps || null;
-        var fecha_gps_marker = '-';
-        if (fecha_gps) {
-            let d = new Date(fecha_gps);
-            if (!isNaN(d.getTime())) {
-                d.setHours(d.getHours() + GPS_HOUR_OFFSET);
-                fecha_gps_marker = (d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0') + ':' + d.getSeconds().toString().padStart(2,'0'));
-            } else fecha_gps_marker = fecha_gps;
-        }
-
-        // velocidad
-        var velocidad_num = Number(unidad.velocidad_actual) || 0;
-
-        // actualizar solo el innerText de partes conocidas para minimizar layout
-        // buscar iconos/elementos por id construidos (i{_id} y g{_id})
-        try {
-            var iId = 'i' + unidad._id;
-            var gId = 'i' + unidad._id;
-            var icon = document.getElementById(iId);
-            var gicon = document.getElementById(gId);
-            if (icon) {
-                // actualizar tooltip/valor asociado (velocímetro onclick mantiene)
-                icon.title = 'Vel: ' + Math.round(velocidad_num);
-            }
-            if (gicon) {
-                // actualizar texto cercano (fecha) que se renderiza en li.innerHTML
-                // fallback: reemplazar la primera ocurrencia del tiempo en innerHTML
-                try {
-                    li.innerHTML = li.innerHTML.replace(/(\d{2}:\d{2}:\d{2})/, fecha_gps_marker);
-                } catch(e){}
-            }
-        } catch (e) {}
-
-        // mantener currentU actualizado para posteriores merges
-        li.currentU = Object.assign({}, li.currentU || {}, unidad);
-        li.currentFechagps = fecha_gps_marker;
-    } catch (e) {
-        // fallback al camino completo si algo falla
-        try { updateUnidadInList(unidad); } catch (err) { console.error('fast update fallback', err); }
     }
 }
 

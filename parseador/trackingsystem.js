@@ -45,23 +45,6 @@ var socketArray = [];//Declaring socket array for all default clients
 var logsAdmin = [];
 const { ObjectId } = require('mongodb'); 
 const WebSocket = require("ws");
-// Redis publisher (fast non-blocking publish path). Falls back to wsClient if Redis not available.
-let Redis;
-try {
-    Redis = require('ioredis');
-} catch (e) {
-    Redis = null;
-}
-let redisPub = null;
-if (Redis) {
-    try {
-        redisPub = new Redis();
-        redisPub.on('error', (err) => console.error('Redis pub error', err));
-    } catch (e) {
-        console.warn('No se pudo inicializar redisPub, se usará wsClient como fallback');
-        redisPub = null;
-    }
-}
 
 // WebSocket cliente con reconexión automática
 let wsClient = null;
@@ -106,32 +89,15 @@ const redisPub = new Redis();  // Para publicar / set / get
 */
 
 function enviarALaravelPorWS(data) {
-    // Prefer Redis publish (fast, non-blocking). If not available, use local wsClient.
-    try {
-        if (redisPub) {
-            // publish as string to channel 'gps-channel'
-            try {
-                redisPub.publish('gps-channel', JSON.stringify(data));
-                return;
-            } catch (e) {
-                console.warn('Redis publish falló, intentando wsClient', e && e.message ? e.message : e);
-            }
-        }
-    } catch (e) {
-        console.warn('Error en path redisPub:', e && e.message ? e.message : e);
-    }
-
-    // Fallback: local WS client
     if (wsClient && wsClient.readyState === WebSocket.OPEN) {
         try {
             wsClient.send(JSON.stringify(data));
-            return;
         } catch (e) {
             console.error('Error enviando por WS local:', e);
         }
+    } else {
+        console.log("WebSocket no disponible, no se pudo enviar:", data);
     }
-    // Last resort: log
-    try { console.log("No se pudo enviar por WS ni Redis (offline):", (data && data._id) ? data._id : JSON.stringify(data).substr(0,200)); } catch(e){}
 }
 function getSocket(imei) {
     for (var i = 0; i < socketArray.length; i++) {
@@ -521,36 +487,6 @@ function onClientConnected(socket) {
                             console.log(err);
                         else //If there is no error
                         {
-
-                            // Envío preliminar rápido al WebSocket para reducir latencia visible.
-                            // Este evento es ligero y marcado como preliminar; se enviará
-                            // un evento definitivo luego de que el insertOne confirme.
-                            try {
-                                const tsPre = Date.now();
-                                // Envío preliminar: solo datos de la unidad (ligero)
-                                let unidadPrelim = {
-                                    _id: document.value._id,
-                                    imei: document.value.imei || data[imei],
-                                    descripcion: document.value.descripcion || '',
-                                    placa: document.value.placa || '',
-                                    latitud: document.value.latitud,
-                                    longitud: document.value.longitud,
-                                    velocidad_actual: document.value.velocidad_actual || document.value.velocidad || 0,
-                                    voltaje: document.value.voltaje,
-                                    mileage: document.value.mileage,
-                                    bateria: document.value.bateria,
-                                    estado_movil: document.value.estado_movil,
-                                    angulo: document.value.angulo,
-                                    fecha_gps: document.value.fecha_gps,
-                                    fecha: document.value.fecha,
-                                    evento: document.value.evento,
-                                    cooperativa_id: (document.value.cooperativa_id ? String(document.value.cooperativa_id) : null),
-                                    preliminar: true,
-                                    _ts_backend_prelim: tsPre
-                                };
-                                enviarALaravelPorWS(unidadPrelim);
-                            } catch (e) { console.error('Error enviando preliminar WS:', e); }
-
                             if (document != undefined && document != null) //If unidad was updated and taken
                             {
                                 /*
@@ -771,50 +707,56 @@ function onClientConnected(socket) {
                                             console.log(err);
                                         }
                                         else {
-                                            // Envío definitivo: payload construido desde la inserción confirmada
-                                            try {
-                                                let unidadPayloadFinal = {
-                                                        _id: document.value._id,
-                                                        imei: document.value.imei || data[imei],
-                                                        descripcion: document.value.descripcion || '',
-                                                        placa: document.value.placa || '',
-                                                        latitud: document.value.latitud,
-                                                        longitud: document.value.longitud,
-                                                        velocidad_actual: document.value.velocidad_actual || document.value.velocidad || 0,
-                                                        voltaje: document.value.voltaje,
-                                                        mileage: document.value.mileage,
-                                                        bateria: document.value.bateria,
-                                                        contador_total: document.value.contador_total,
-                                                        contador_diario: document.value.contador_diario,
-                                                        contador_total_sensor_2: document.value.contador_total_sensor_2,
-                                                        contador_diario_sensor_2: document.value.contador_diario_sensor_2,
-                                                        contador_total_sensor_3: document.value.contador_total_sensor_3,
-                                                        contador_diario_sensor_3: document.value.contador_diario_sensor_3,
-                                                        estado_movil: document.value.estado_movil,
-                                                        angulo: document.value.angulo,
-                                                        fecha_gps: document.value.fecha_gps,
-                                                        fecha: document.value.fecha,
-                                                        evento: document.value.evento,
-                                                        sentido: (document.value.sentido !== undefined) ? document.value.sentido : null,
-                                                        puerta: (document.value.puerta !== undefined) ? document.value.puerta : null,
-                                                        puerta_trasera: (document.value.puerta_trasera !== undefined) ? document.value.puerta_trasera : null,
-                                                        alerta_puerta_message: (document.value.alerta_puerta_message !== undefined) ? document.value.alerta_puerta_message : null,
-                                                        alerta_puerta_fecha: (document.value.alerta_puerta_fecha !== undefined) ? document.value.alerta_puerta_fecha : null,
-                                                        alerta_puerta_message_trasera: (document.value.alerta_puerta_message_trasera !== undefined) ? document.value.alerta_puerta_message_trasera : null,
-                                                        alerta_puerta_fecha_trasera: (document.value.alerta_puerta_fecha_trasera !== undefined) ? document.value.alerta_puerta_fecha_trasera : null,
-                                                        fecha_puerta_abierta: (document.value.fecha_puerta_abierta !== undefined) ? document.value.fecha_puerta_abierta : null,
-                                                        fecha_puerta_abierta_trasera: (document.value.fecha_puerta_abierta_trasera !== undefined) ? document.value.fecha_puerta_abierta_trasera : null,
-                                                        fecha_puerta_cerrada: (document.value.fecha_puerta_cerrada !== undefined) ? document.value.fecha_puerta_cerrada : null,
-                                                        fecha_puerta_cerrada_trasera: (document.value.fecha_puerta_cerrada_trasera !== undefined) ? document.value.fecha_puerta_cerrada_trasera : null,
-                                                        cooperativa_id: (document.value.cooperativa_id ? String(document.value.cooperativa_id) : null)
-                                                    };
+                                            // 🔹 Notificar a WebSocket (Laravel recibirá por Redis)
+                                            // El payload debe provenir de los datos reales del dispositivo
+                                            // (document.value). El sentido seguirá siendo calculado por
+                                            // la función existente `actualizarSentidoUnidad`.
+                                            let unidadPayload = {
+                                                _id: document.value._id,
+                                                imei: document.value.imei || data[imei],
+                                                descripcion: document.value.descripcion || '',
+                                                placa: document.value.placa || '',
+                                                latitud: document.value.latitud,
+                                                longitud: document.value.longitud,
+                                                velocidad_actual: document.value.velocidad_actual || document.value.velocidad || 0,
+                                                voltaje: document.value.voltaje,
+                                                mileage: document.value.mileage,
+                                                bateria: document.value.bateria,
+                                                contador_total: document.value.contador_total,
+                                                contador_diario: document.value.contador_diario,
+                                                contador_total_sensor_2: document.value.contador_total_sensor_2,
+                                                contador_diario_sensor_2: document.value.contador_diario_sensor_2,
+                                                contador_total_sensor_3: document.value.contador_total_sensor_3,
+                                                contador_diario_sensor_3: document.value.contador_diario_sensor_3,
+                                                estado_movil: document.value.estado_movil,
+                                                angulo: document.value.angulo,
+                                                fecha_gps: document.value.fecha_gps,
+                                                fecha: document.value.fecha,
+                                                evento: document.value.evento,
+                                                // No sobreescribimos sentido aquí; respetamos la fuente del dispositivo
+                                                sentido: (document.value.sentido !== undefined) ? document.value.sentido : null,
+                                                puerta: (document.value.puerta !== undefined) ? document.value.puerta : null,
+                                                puerta_trasera: (document.value.puerta_trasera !== undefined) ? document.value.puerta_trasera : null,
+                                                alerta_puerta_message: (document.value.alerta_puerta_message !== undefined) ? document.value.alerta_puerta_message : null,
+                                                alerta_puerta_fecha: (document.value.alerta_puerta_fecha !== undefined) ? document.value.alerta_puerta_fecha : null,
+                                                alerta_puerta_message_trasera: (document.value.alerta_puerta_message_trasera !== undefined) ? document.value.alerta_puerta_message_trasera : null,
+                                                alerta_puerta_fecha_trasera: (document.value.alerta_puerta_fecha_trasera !== undefined) ? document.value.alerta_puerta_fecha_trasera : null,
+                                                fecha_puerta_abierta: (document.value.fecha_puerta_abierta !== undefined) ? document.value.fecha_puerta_abierta : null,
+                                                fecha_puerta_abierta_trasera: (document.value.fecha_puerta_abierta_trasera !== undefined) ? document.value.fecha_puerta_abierta_trasera : null,
+                                                fecha_puerta_cerrada: (document.value.fecha_puerta_cerrada !== undefined) ? document.value.fecha_puerta_cerrada : null,
+                                                fecha_puerta_cerrada_trasera: (document.value.fecha_puerta_cerrada_trasera !== undefined) ? document.value.fecha_puerta_cerrada_trasera : null,
+                                                cooperativa_id: (document.value.cooperativa_id ? String(document.value.cooperativa_id) : null)
+                                            };
 
-                                                    // Añadir timestamp backend y enviar SOLO los datos de la unidad
-                                                    const ts = Date.now();
-                                                    unidadPayloadFinal._ts_backend = ts;
+                                            let recorrido = {
+                                                imei: data[imei],
+                                                latitud: document.value.latitud,
+                                                longitud: document.value.longitud,
+                                                cooperativa_id: (document.value.cooperativa_id ? String(document.value.cooperativa_id) : null),
+                                                unidad: unidadPayload
+                                            };
 
-                                                    enviarALaravelPorWS(unidadPayloadFinal);
-                                            } catch (e) { console.error('Error enviando final WS:', e); }
+                                            enviarALaravelPorWS(recorrido);
                                         }
                                     });
                                 }
@@ -1109,28 +1051,6 @@ function onClientConnected(socket) {
                             }
                         });
 
-                        // Envío preliminar rápido para GTGIN/GTGOT
-                        try {
-                            const tsPre = Date.now();
-                            let unidadPrelim = {
-                                _id: document._id,
-                                imei: document.imei || data[imei],
-                                descripcion: document.descripcion || '',
-                                placa: document.placa || '',
-                                latitud: latitud,
-                                longitud: longitud,
-                                velocidad_actual: toFloat(data[speed]) || (document.velocidad_actual || 0),
-                                estado_movil: estado_movil,
-                                angulo: toInteger(data[angle]),
-                                fecha_gps: fecha_gps,
-                                fecha: fecha_servidor,
-                                cooperativa_id: (document.cooperativa_id ? String(document.cooperativa_id) : null),
-                                preliminar: true,
-                                _ts_backend_prelim: tsPre
-                            };
-                            enviarALaravelPorWS(unidadPrelim);
-                        } catch (e) { console.error('Error enviando preliminar GTGOT/GTGIN:', e); }
-
                         // Determinar si es entrada o salida
                         let entrada = message.includes("GTGIN") ? 1 : 0;
                         let origen = message.includes("GTGIN") ? "GTGIN" : "GTGOT";
@@ -1160,24 +1080,6 @@ function onClientConnected(socket) {
                             } else {
                                 //  Llamar función para actualizar sentido automáticamente
                                 actualizarSentidoUnidad(dbTrackingSystem, document, pdi, entrada);
-                                try {
-                                    let unidadPayloadFinal = {
-                                        _id: document._id,
-                                        imei: document.imei || data[imei],
-                                        descripcion: document.descripcion || '',
-                                        placa: document.placa || '',
-                                        latitud: latitud,
-                                        longitud: longitud,
-                                        velocidad_actual: toFloat(data[speed]) || (document.velocidad_actual || 0),
-                                        estado_movil: estado_movil,
-                                        angulo: toInteger(data[angle]),
-                                        fecha_gps: fecha_gps,
-                                        fecha: fecha_servidor,
-                                        cooperativa_id: (document.cooperativa_id ? String(document.cooperativa_id) : null)
-                                    };
-                                    unidadPayloadFinal._ts_backend = Date.now();
-                                    enviarALaravelPorWS(unidadPayloadFinal);
-                                } catch (e) { console.error('Error enviando final GTGOT/GTGIN:', e); }
                             }
                         });
                     }
@@ -1249,28 +1151,6 @@ function onClientConnected(socket) {
                             if (err)
                                 console.log(err);
                         });
-
-                        // Envío preliminar rápido para actualizar lista y marcador (GTGEO)
-                        try {
-                            const tsPre = Date.now();
-                            let unidadPrelim = {
-                                _id: document._id,
-                                imei: document.imei || data[imei],
-                                descripcion: document.descripcion || '',
-                                placa: document.placa || '',
-                                latitud: latitud,
-                                longitud: longitud,
-                                velocidad_actual: toFloat(data[speed]) || (document.velocidad_actual || 0),
-                                estado_movil: estado_movil,
-                                angulo: toInteger(data[angle]),
-                                fecha_gps: fecha_gps,
-                                fecha: fecha_servidor,
-                                cooperativa_id: (document.cooperativa_id ? String(document.cooperativa_id) : null),
-                                preliminar: true,
-                                _ts_backend_prelim: tsPre
-                            };
-                            enviarALaravelPorWS(unidadPrelim);
-                        } catch (e) { console.error('Error enviando preliminar GTGEO:', e); }
                         /*
                             Creating new record for recorridos collection with GTGEO type
                         */
@@ -1297,25 +1177,6 @@ function onClientConnected(socket) {
                             } else {
                                 // sLlamada a la función después de insertar el recorrido
                                 actualizarSentidoUnidad(dbTrackingSystem, document, pdi, inout);
-                                // Envío definitivo: construir payload final y enviar con timestamp backend
-                                try {
-                                    let unidadPayloadFinal = {
-                                        _id: document._id,
-                                        imei: document.imei || data[imei],
-                                        descripcion: document.descripcion || '',
-                                        placa: document.placa || '',
-                                        latitud: latitud,
-                                        longitud: longitud,
-                                        velocidad_actual: toFloat(data[speed]) || (document.velocidad_actual || 0),
-                                        estado_movil: estado_movil,
-                                        angulo: toInteger(data[angle]),
-                                        fecha_gps: fecha_gps,
-                                        fecha: fecha_servidor,
-                                        cooperativa_id: (document.cooperativa_id ? String(document.cooperativa_id) : null)
-                                    };
-                                    unidadPayloadFinal._ts_backend = Date.now();
-                                    enviarALaravelPorWS(unidadPayloadFinal);
-                                } catch (e) { console.error('Error enviando final GTGEO:', e); }
                             }
 
                         });
@@ -1364,29 +1225,6 @@ function onClientConnected(socket) {
                             if (res === 0)
                                 entrada = 1;
                         }
-                        // Envío preliminar para GPRMC: publicar posición ligera antes de operaciones adicionales
-                        try {
-                            const lat = getCoordinates(mainArray[latitude], mainArray[cLatitude], true);
-                            const lon = getCoordinates(mainArray[longitude], mainArray[cLongitude], false);
-                            const tsPre = Date.now();
-                            let unidadPrelim = {
-                                _id: document._id,
-                                imei: deviceIMEI,
-                                descripcion: document.descripcion || '',
-                                placa: document.placa || '',
-                                latitud: lat,
-                                longitud: lon,
-                                velocidad_actual: getSpeed(mainArray[speed]) || 0,
-                                angulo: toFloat(mainArray[direction]) || 0,
-                                fecha_gps: moment(deviceDatetime, GPRMC_DATE_FORMAT).toDate(),
-                                fecha: serverDate,
-                                cooperativa_id: (document.cooperativa_id ? String(document.cooperativa_id) : null),
-                                preliminar: true,
-                                _ts_backend_prelim: tsPre
-                            };
-                            enviarALaravelPorWS(unidadPrelim);
-                        } catch (e) { console.error('Error enviando preliminar GPRMC:', e); }
-
                         dbTrackingSystem.collection('recorridos').insertOne({
                             tipo: GPRMC,
                             unidad_id: document._id,
@@ -1420,26 +1258,6 @@ function onClientConnected(socket) {
                                 }, function (err, result) {
                                     if (err)
                                         console.log(err);
-                                    else {
-                                        // Envío definitivo para GPRMC con timestamp backend
-                                        try {
-                                            let unidadFinal = {
-                                                _id: document._id,
-                                                imei: deviceIMEI,
-                                                descripcion: document.descripcion || '',
-                                                placa: document.placa || '',
-                                                latitud: getCoordinates(mainArray[latitude], mainArray[cLatitude], true),
-                                                longitud: getCoordinates(mainArray[longitude], mainArray[cLongitude], false),
-                                                velocidad_actual: getSpeed(mainArray[speed]) || 0,
-                                                angulo: toFloat(mainArray[direction]) || 0,
-                                                fecha_gps: moment(deviceDatetime, GPRMC_DATE_FORMAT).toDate(),
-                                                fecha: serverDate,
-                                                cooperativa_id: (document.cooperativa_id ? String(document.cooperativa_id) : null)
-                                            };
-                                            unidadFinal._ts_backend = Date.now();
-                                            enviarALaravelPorWS(unidadFinal);
-                                        } catch (e) { console.error('Error enviando final GPRMC:', e); }
-                                    }
                                 });
                             }
                         });
