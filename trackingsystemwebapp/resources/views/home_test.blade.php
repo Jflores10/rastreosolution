@@ -578,23 +578,6 @@ function conectarWebSocket(coopId) {
         }
     };
 
-    // --- Batching helpers to reduce DOM thrash ---
-    const pendingMarkerUpdates = new Map(); // unidad_id => unidad
-    const lastListUpdateByUnit = new Map(); // unidad_id => timestamp ms
-    const LIST_THROTTLE_MS = 100; // per-unit throttle for list updates
-
-    function scheduleMarkerFlush() {
-        if (scheduleMarkerFlush.scheduled) return;
-        scheduleMarkerFlush.scheduled = true;
-        requestAnimationFrame(() => {
-            scheduleMarkerFlush.scheduled = false;
-            pendingMarkerUpdates.forEach((u) => {
-                try { setMarcadorUnidad(u, { fecha_gps: u.fecha_gps }, { fecha_servidor: u.fecha }, 0); } catch (e) {}
-            });
-            pendingMarkerUpdates.clear();
-        });
-    }
-
     socket.onmessage = (event) => {
         try {
             const data = JSON.parse(event.data);
@@ -603,34 +586,6 @@ function conectarWebSocket(coopId) {
                 const payload = data.payload || {};
                 const unidad = payload.unidad || payload;
                 if (unidad) {
-                    // Log simple latency metrics when available (non-intrusive)
-                    try {
-                        const sent = payload._ts_sent || payload.unidad && payload.unidad._ts_sent;
-                        const recv = payload._ts_recv;
-                        const backend = payload._ts_backend || payload.unidad && payload.unidad._ts_backend;
-                        if (sent || recv || backend) {
-                            const now = Date.now();
-                            console.log('WS LATENCY', unidad._id, { sent: sent ? now - sent : null, recv: recv ? now - recv : null, backend: backend ? now - backend : null });
-                        }
-                    } catch (e) {}
-
-                    // Encolar actualización de marcador (se vacía por requestAnimationFrame)
-                    pendingMarkerUpdates.set(unidad._id, unidad);
-                    //scheduleMarkerFlush();
-
-                    // Throttled list update: evita actualizar DOM por unidad más frecuentemente que LIST_THROTTLE_MS
-                    const last = lastListUpdateByUnit.get(unidad._id) || 0;
-                    const now = Date.now();
-                    if ((now - last) >= LIST_THROTTLE_MS) {
-                        lastListUpdateByUnit.set(unidad._id, now);
-                        updateUnidadInList(unidad);
-                    } else {
-                        // programar actualización ligera tras la ventana
-                        setTimeout(() => {
-                            lastListUpdateByUnit.set(unidad._id, Date.now());
-                            updateUnidadInList(unidad);
-                        }, LIST_THROTTLE_MS - (now - last));
-                    }
                     let gpsDateRaw = unidad.fecha_gps  || null;
                     let srvDateRaw = unidad.fecha || null;
                     let gpsIso = null;
