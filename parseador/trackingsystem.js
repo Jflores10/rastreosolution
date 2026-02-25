@@ -99,7 +99,7 @@ const redisPub = new Redis();  // Para publicar / set / get
   This event is used to get a socket from the current array
 */
 
-function enviarALaravelPorWS(data) {
+function enviarALaravelPorWS(data, opts = false) {
     try {
         if (!data) return;
 
@@ -121,7 +121,8 @@ function enviarALaravelPorWS(data) {
             const key = payloadToPublish.imei || payloadToPublish._id || JSON.stringify(payloadToPublish);
             const now = Date.now();
             const last = (typeof lastSentByUnit !== 'undefined' && lastSentByUnit.get) ? lastSentByUnit.get(key) || 0 : 0;
-            if ((now - last) < (typeof MIN_SEND_MS !== 'undefined' ? MIN_SEND_MS : 0)) {
+            const force = opts && opts.force;
+            if (!force && (now - last) < (typeof MIN_SEND_MS !== 'undefined' ? MIN_SEND_MS : 0)) {
                 return; // demasiado pronto desde el último envío para esta unidad
             }
             if (typeof lastSentByUnit !== 'undefined' && lastSentByUnit.set) lastSentByUnit.set(key, now);
@@ -809,6 +810,8 @@ function onClientConnected(socket) {
 
                                           
 
+                                            // Enviar versión preliminar inmediatamente (fast-path) para reducir latencia
+                                            try { enviarALaravelPorWS(unidadPayload, { force: true }); } catch (e) { console.error('Error fast-path WS send:', e); }
                                             enviarALaravelPorWS(unidadPayload);
                                         }
                                     });
