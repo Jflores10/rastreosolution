@@ -120,7 +120,6 @@ redisSub.on('message', (channel, message) => {
 console.log('📥 REDIS RAW:', message);
         const coopMsg = String(data.cooperativa_id || '').trim();
         console.log('📡 SSE coopMsg=', coopMsg, ' subs=', [...sseClients.keys()]);
-        if (!coopMsg) return; // 🔥 evita broadcast accidental
 
         if (DEBUG_WS) {
             console.log(`📡 Redis → WS | type=${data.type} coop=${coopMsg}`);
