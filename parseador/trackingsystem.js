@@ -740,7 +740,7 @@ function onClientConnected(socket) {
                                         }
                                     }
 
-                                     const unidadPayload = {
+                                     let unidadPayload = {
                                         type: 'unidad.updated',
                                         _id: document.value._id,
                                         imei: document.value.imei || data[imei],
