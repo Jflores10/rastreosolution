@@ -1755,7 +1755,7 @@ $("#velocimetro").myfunc({divFact:10});
 
         @if(Auth::user()->tipo_usuario->valor==2 || Auth::user()->tipo_usuario->valor==3 || Auth::user()->tipo_usuario->valor==4
             || Auth::user()->tipo_usuario->valor==5)
-            conectarSSE('{{$id_coop}}');
+            conectarSSE('*');
             setUnidadesOnMap('', true);
 
             //setInterval(setUnidadesOnMap, 30000, null);
