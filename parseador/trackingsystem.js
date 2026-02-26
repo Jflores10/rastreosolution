@@ -59,7 +59,7 @@ let wsReconnectTimeout = 3000;
 
 // Throttle control: evita enviar demasiados mensajes por unidad en ráfaga
 const lastSentByUnit = new Map(); // key = imei or _id -> timestamp ms
-const MIN_SEND_MS = 100; // tiempo mínimo entre envíos por unidad (ajustable)
+const MIN_SEND_MS = 5000; // tiempo mínimo entre envíos por unidad (ajustable)
 
 function connectWebSocketClient() {
     try {
@@ -159,6 +159,7 @@ function enviarALaravelPorWS(data, opts = {}) {
         console.error('❌ Error en enviarALaravelPorWS:', err);
     }
 }
+
 function getSocket(imei) {
     for (var i = 0; i < socketArray.length; i++) {
         if (socketArray[i].imei === imei)
@@ -740,7 +741,8 @@ function onClientConnected(socket) {
                                         }
                                     }
 
-                                     let unidadPayload = {
+                                    // ===== ENVÍO OPTIMIZADO GTFRI (MAPA) =====
+                                    const unidadPayload = {
                                         type: 'unidad.updated',
                                         _id: document.value._id,
                                         imei: document.value.imei || data[imei],
@@ -749,7 +751,7 @@ function onClientConnected(socket) {
                                         velocidad_actual: document.value.velocidad_actual || 0,
                                         angulo: document.value.angulo,
                                         estado_movil: document.value.estado_movil,
-                                         sentido: (document.value.sentido !== undefined) ? document.value.sentido : null,
+                                        sentido: (document.value.sentido !== undefined) ? document.value.sentido : null,
                                         fecha_gps: document.value.fecha_gps,
                                         cooperativa_id: document.value.cooperativa_id
                                             ? String(document.value.cooperativa_id).trim()
@@ -757,8 +759,6 @@ function onClientConnected(socket) {
                                     };
 
                                     enviarALaravelPorWS(unidadPayload);
-                                    
-                                  
 
                                     dbTrackingSystem.collection('recorridos').insertOne({
                                         imei: data[imei],
@@ -1385,8 +1385,6 @@ function onClientConnected(socket) {
                                 if (err)
                                     console.log(err);
                             });
-
-
                             enviarALaravelPorWS({
                                 type: 'unidad.alerta.puerta',
                                 unidad_id: document._id,
@@ -1416,7 +1414,6 @@ function onClientConnected(socket) {
                                     console.log(err);
                             });
 
-                            
                             enviarALaravelPorWS({
                                     type: 'unidad.alerta.puerta',
                                     unidad_id: document._id,
@@ -1428,7 +1425,6 @@ function onClientConnected(socket) {
                                         ? String(document.cooperativa_id).trim()
                                         : null
                             });
-
                         }
                     }
                 });
