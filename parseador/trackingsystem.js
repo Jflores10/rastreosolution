@@ -749,7 +749,7 @@ function onClientConnected(socket) {
                                         velocidad_actual: document.value.velocidad_actual || 0,
                                         angulo: document.value.angulo,
                                         estado_movil: document.value.estado_movil,
-                                        sentido: document.value.sentido ?? null,
+                                         sentido: (document.value.sentido !== undefined) ? document.value.sentido : null,
                                         fecha_gps: document.value.fecha_gps,
                                         cooperativa_id: document.value.cooperativa_id
                                             ? String(document.value.cooperativa_id).trim()
