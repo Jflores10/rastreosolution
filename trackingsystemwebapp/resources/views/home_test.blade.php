@@ -543,112 +543,82 @@ let ws = null;
 const GPS_HOUR_OFFSET = -5; // restar 10 horas a fecha_gps
 const SERVER_HOUR_OFFSET = -5; // restar 5 horas a fecha (servidor)
 
-function conectarWebSocket(coopId) {
+let sse = null;
 
-    // ✅ Si ya está conectando u abierto, NO recrear
-    if (ws && (ws.readyState === 0 || ws.readyState === 1)) {
-        console.log('ℹ️ SSE ya activo, no se recrea');
+function conectarSSE(coopId) {
+
+    if (sse && sse.readyState === EventSource.OPEN) {
+        console.log('ℹ️ SSE ya conectado');
         return;
     }
 
-    const protocol = location.protocol === 'https:' ? 'https' : 'http';
-    const sseUrl = `${protocol}://${location.host}/sse?coop=${encodeURIComponent(String(coopId).trim())}`;
+    const url = `/sse?coop=${encodeURIComponent(String(coopId).trim())}`;
+    console.log('🔌 Conectando SSE:', url);
 
-    console.log('🔌 Conectando SSE a:', sseUrl);
+    sse = new EventSource(url);
 
-    try {
-        const es = new EventSource(sseUrl);
-        ws = es; // reuse global variable name
+    sse.addEventListener('open', () => {
+        console.log('🟢 SSE CONECTADO');
+    });
 
-        function handleMessageData(data) {
-            try {
-                if (!data) return;
-
-                // data may already be the unidad payload or wrapper
-                const msg = data;
-                if (!msg.type) {
-                    // if wrapped under payload
-                    const payload = msg.payload || msg;
-                    const unidad = payload.unidad || payload;
-                    if (unidad && unidad._id) {
-                        actualizarUnidadRealtime(unidad);
-                        updateUnidadInList(unidad);
-                    }
-                    return;
-                }
-
-                if (msg.type === 'unidad.updated') {
-                    const unidad = msg;
-                    if (unidad && unidad._id) {
-                        actualizarUnidadRealtime(unidad);
-                        updateUnidadInList(unidad);
-                    }
-                    return;
-                }
-
-                if (msg.type === 'unidad.sentido.changed') {
-                    const unidadId = msg.unidad_id || (msg.payload && msg.payload.unidad_id);
-                    const nuevoSentido = msg.nuevo_sentido || (msg.payload && msg.payload.nuevo_sentido);
-                    if (unidadId) {
-                        const li = document.getElementById(unidadId);
-                        if (li && li.currentU) { li.currentU.sentido = nuevoSentido; updateUnidadInList(li.currentU); }
-                    }
-                    return;
-                }
-
-                if (msg.type === 'unidad.alerta.puerta') {
-                    const unidadId = msg.unidad_id || (msg.payload && msg.payload.unidad_id);
-                    if (!unidadId) return;
-                    const li = document.getElementById(unidadId);
-                    if (li && li.currentU) {
-                        if (msg.puerta === 'DELANTERA') {
-                            li.currentU.puerta = msg.estado;
-                            li.currentU.alerta_puerta_message = msg.estado;
-                            li.currentU.alerta_puerta_fecha = msg.fecha;
-                        }
-                        if (msg.puerta === 'TRASERA') {
-                            li.currentU.puerta_trasera = msg.estado;
-                            li.currentU.alerta_puerta_message_trasera = msg.estado;
-                            li.currentU.alerta_puerta_fecha_trasera = msg.fecha;
-                        }
-                        updateUnidadInList(li.currentU);
-                    }
-                    return;
-                }
-
-            } catch (e) {
-                console.error('❌ SSE handler error', e);
+    sse.addEventListener('unidad.updated', (evt) => {
+        try {
+            const data = JSON.parse(evt.data);
+            if (data && data._id) {
+                actualizarUnidadRealtime(data);
+                updateUnidadInList(data);
             }
+        } catch (e) {
+            console.error('❌ parse unidad.updated', e);
         }
+    });
 
-        // Primary: listen to named events
-        es.addEventListener('unidad.updated', (evt) => {
-            try { handleMessageData(JSON.parse(evt.data)); } catch (e) { console.error('❌ parse unidad.updated', e); }
-        });
-        es.addEventListener('unidad.sentido.changed', (evt) => {
-            try { handleMessageData(JSON.parse(evt.data)); } catch (e) { console.error('❌ parse sentido', e); }
-        });
+    sse.addEventListener('unidad.sentido.changed', (evt) => {
+        try {
+            const data = JSON.parse(evt.data);
+            const li = document.getElementById(data.unidad_id);
+            if (li && li.currentU) {
+                li.currentU.sentido = data.nuevo_sentido;
+                updateUnidadInList(li.currentU);
+            }
+        } catch (e) {}
+    });
 
-        // Fallback: generic message
-        es.onmessage = (evt) => {
-            try { handleMessageData(JSON.parse(evt.data)); } catch (e) { console.error('❌ parse message', e); }
-        };
+    sse.addEventListener('unidad.alerta.puerta', (evt) => {
+        try {
+            const msg = JSON.parse(evt.data);
+            const li = document.getElementById(msg.unidad_id);
+            if (!li || !li.currentU) return;
 
-        es.onerror = (e) => {
-            console.error('❌ SSE ERROR', e);
-            // EventSource auto-reconnects; if closed, try manual reconnect later
-            try {
-                if (es.readyState === 2) {
-                    ws = null;
-                    setTimeout(() => conectarWebSocket(coopId), 3000);
-                }
-            } catch (err) {}
-        };
+            if (msg.puerta === 'DELANTERA') {
+                li.currentU.puerta = msg.estado;
+            }
+            if (msg.puerta === 'TRASERA') {
+                li.currentU.puerta_trasera = msg.estado;
+            }
+            updateUnidadInList(li.currentU);
+        } catch (e) {}
+    });
 
-    } catch (e) {
-        console.error('❌ Error creando EventSource:', e);
-        setTimeout(() => conectarWebSocket(coopId), 3000);
-    }
+    // fallback
+    sse.onmessage = (evt) => {
+        try {
+            const data = JSON.parse(evt.data);
+            if (data && data._id) {
+                actualizarUnidadRealtime(data);
+                updateUnidadInList(data);
+            }
+        } catch (e) {}
+    };
+
+    sse.onerror = (e) => {
+        // ⚠️ ESTO ES NORMAL EN SSE
+        if (sse.readyState === EventSource.CONNECTING) {
+            console.warn('🟡 SSE reconectando...');
+        } else if (sse.readyState === EventSource.CLOSED) {
+            console.error('🔴 SSE cerrado');
+        }
+    };
 }
 
 
@@ -1776,7 +1746,7 @@ $("#velocimetro").myfunc({divFact:10});
         @if(isset($id_coop))
             document.getElementById('cooperativa').value = '{{$id_coop}}';
             setUnidadesOnMap('{{$id_coop}}', true);
-            conectarWebSocket('{{$id_coop}}');
+            conectarSSE('{{$id_coop}}');
             //setInterval(setUnidadesOnMap, 30000, '{{$id_coop}}');
         @endif
 
