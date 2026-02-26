@@ -571,6 +571,7 @@ function conectarWebSocket(coopId) {
     socket.onmessage = (event) => {
         try {
             const msg = JSON.parse(event.data);
+            console.log(msg)
             if (!msg || !msg.type) return;
 
             /* =========================
