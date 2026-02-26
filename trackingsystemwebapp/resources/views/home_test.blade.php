@@ -535,7 +535,28 @@ Dashboard
 @endsection
 @section('scripts')
 <script src="js/speedometer.js"></script>
+<script>
+let SSE_CONNECTED = false;
 
+function iniciarSSEGlobal() {
+    if (SSE_CONNECTED) return;
+    SSE_CONNECTED = true;
+
+    @if(isset($id_coop))
+        conectarSSE('{{ $id_coop }}');
+    @elseif(Auth::user()->tipo_usuario->valor==2 
+        || Auth::user()->tipo_usuario->valor==3 
+        || Auth::user()->tipo_usuario->valor==4 
+        || Auth::user()->tipo_usuario->valor==5)
+        conectarSSE('*');
+    @endif
+}
+
+// ⚡ Conectar SSE apenas el DOM esté listo
+document.addEventListener('DOMContentLoaded', () => {
+    iniciarSSEGlobal();
+});
+</script>
 <script>
 let ws = null;
 // Ajustes horarios para fechas que vienen del servidor:
@@ -1747,7 +1768,7 @@ $("#velocimetro").myfunc({divFact:10});
         // === Configuración según tipo de usuario ===
         @if(isset($id_coop))
             document.getElementById('cooperativa').value = '{{$id_coop}}';
-            conectarSSE('{{$id_coop}}');
+            //conectarSSE('{{$id_coop}}');
             setUnidadesOnMap('{{$id_coop}}', true);
 
             //setInterval(setUnidadesOnMap, 30000, '{{$id_coop}}');
@@ -1755,7 +1776,7 @@ $("#velocimetro").myfunc({divFact:10});
 
         @if(Auth::user()->tipo_usuario->valor==2 || Auth::user()->tipo_usuario->valor==3 || Auth::user()->tipo_usuario->valor==4
             || Auth::user()->tipo_usuario->valor==5)
-            conectarSSE('*');
+            //conectarSSE('*');
             setUnidadesOnMap('', true);
 
             //setInterval(setUnidadesOnMap, 30000, null);
