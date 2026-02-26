@@ -26,37 +26,44 @@ const server = http.createServer((req, res) => {
     try {
         const parsed = url.parse(req.url, true);
         if (parsed.pathname === '/sse' || parsed.pathname === '/sse/') {
-            const coop = String(parsed.query.coop || parsed.query.cooperativa_id || parsed.query.coopId || '').trim();
-            // Basic validation
-            if (!coop) {
-                res.writeHead(400, { 'Content-Type': 'text/plain' });
-                res.end('Missing cooperativa id');
-                return;
-            }
 
-            // Setup SSE headers
-            res.writeHead(200, {
-                'Content-Type': 'text/event-stream',
-                'Cache-Control': 'no-cache',
-                'Connection': 'keep-alive',
-                'Access-Control-Allow-Origin': '*'
-            });
-            res.write(': connected\n\n');
+    const coopRaw = parsed.query.coop || parsed.query.cooperativa_id || '*';
+    const coop = String(coopRaw).trim() || '*';
 
-            // Register client
-            let set = sseClients.get(coop);
-            if (!set) {
-                set = new Set();
-                sseClients.set(coop, set);
-            }
-            set.add(res);
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*',
+        'X-Accel-Buffering': 'no'
+    });
 
-            // Remove on close
-            req.on('close', () => {
-                try { set.delete(res); } catch (e) {}
-            });
-            return;
-        }
+    // 🔥 SSE INIT
+    res.write('retry: 3000\n');
+    res.write(': connected\n\n');
+
+    let set = sseClients.get(coop);
+    if (!set) {
+        set = new Set();
+        sseClients.set(coop, set);
+    }
+    set.add(res);
+
+    console.log(`🔌 SSE CONNECT coop=${coop} total=${set.size}`);
+
+    // 🔥 HEARTBEAT
+    const ping = setInterval(() => {
+        try { res.write(': ping\n\n'); } catch (e) {}
+    }, 25000);
+
+    req.on('close', () => {
+        clearInterval(ping);
+        set.delete(res);
+        console.log(`🔌 SSE CLOSE coop=${coop} total=${set.size}`);
+    });
+
+    return;
+}
 
         // For other paths, simple healthcheck
         if (req.method === 'GET' && req.url === '/_health') {
@@ -130,7 +137,11 @@ redisSub.on('message', (channel, message) => {
         // Also send to SSE clients subscribed to this cooperativa
         const sset = sseClients.get(coopMsg);
         if (sset && sset.size > 0) {
-            const payload = `event: unidad.updated\ndata: ${JSON.stringify(data)}\n\n`;
+           const eventName = data.type || 'message';
+
+const payload =
+    `event: ${eventName}\n` +
+    `data: ${JSON.stringify(data)}\n\n`;
             sset.forEach((res) => {
                 try { res.write(payload); } catch (e) { /* ignore closed sockets */ }
             });
@@ -243,7 +254,11 @@ function readLoop() {
                             // Send to SSE clients
                             const sset = sseClients.get(coopMsg);
                             if (sset && sset.size > 0) {
-                                const payload = `event: unidad.updated\ndata: ${JSON.stringify(data)}\n\n`;
+                                const eventName = data.type || 'message';
+
+const payload =
+    `event: ${eventName}\n` +
+    `data: ${JSON.stringify(data)}\n\n`;
                                 sset.forEach((res) => {
                                     try { res.write(payload); } catch (e) {}
                                 });
