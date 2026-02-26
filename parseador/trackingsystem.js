@@ -1408,6 +1408,20 @@ function onClientConnected(socket) {
                                 if (err)
                                     console.log(err);
                             });
+
+
+                            enviarALaravelPorWS({
+                                type: 'unidad.alerta.puerta',
+                                unidad_id: document._id,
+                                imei: document.imei,
+                                puerta: 'DELANTERA',
+                                estado: puerta,
+                                fecha: fecha_gps,
+                                cooperativa_id: document.cooperativa_id
+                                    ? String(document.cooperativa_id).trim()
+                                    : null
+                            });
+                            
                         } else {
                             dbTrackingSystem.collection('unidads').updateOne({
                                 _id: document._id
