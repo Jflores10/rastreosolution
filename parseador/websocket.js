@@ -112,45 +112,42 @@ setInterval(() => {
 /* =========================
  * Redis realtime
  * ========================= */
-redisSub.subscribe('gps-channel');
+(async () => {
+    await redisSub.connect();
+    await redisSub.subscribe('gps-channel', (message) => {
+        try {
+            const data = JSON.parse(message);
 
-redisSub.on('message', (channel, message) => {
-    try {
-        const data = JSON.parse(message);
-console.log('📥 REDIS RAW:', message);
-        const coopMsg = String(data.cooperativa_id || '').trim();
-        console.log('📡 SSE coopMsg=', coopMsg, ' subs=', [...sseClients.keys()]);
+            console.log('📥 REDIS DATA:', data);
 
-        if (DEBUG_WS) {
-            console.log(`📡 Redis → WS | type=${data.type} coop=${coopMsg}`);
-        }
+            const coopMsg = normalizeCoopId(data.cooperativa_id);
+            console.log('📥 coopMsg=', coopMsg, ' sseKeys=', [...sseClients.keys()]);
 
-        // Add receive timestamp for diagnostics
-        try { data._ts_recv = Date.now(); } catch (e) {}
+            const eventName = data.type || 'message';
+            const payload =
+                `event: ${eventName}\n` +
+                `data: ${JSON.stringify(data)}\n\n`;
 
-        frontendClients.forEach((coopFront, ws) => {
-            if (ws.readyState !== WebSocket.OPEN) return;
-            if (coopFront !== coopMsg) return;
-            ws.send(JSON.stringify(data));
-        });
+            const targets = new Set();
 
-        // Also send to SSE clients subscribed to this cooperativa
-        const sset = sseClients.get(coopMsg);
-        if (sset && sset.size > 0) {
-           const eventName = data.type || 'message';
+            if (coopMsg && sseClients.has(coopMsg)) {
+                sseClients.get(coopMsg).forEach(r => targets.add(r));
+            }
+            if (sseClients.has('*')) {
+                sseClients.get('*').forEach(r => targets.add(r));
+            }
 
-const payload =
-    `event: ${eventName}\n` +
-    `data: ${JSON.stringify(data)}\n\n`;
-            sset.forEach((res) => {
-                try { res.write(payload); } catch (e) { /* ignore closed sockets */ }
+            targets.forEach(res => {
+                try { res.write(payload); } catch (e) {}
             });
-        }
 
-    } catch (err) {
-        console.error('❌ Error procesando mensaje Redis:', err);
-    }
-});
+        } catch (err) {
+            console.error('❌ Error procesando mensaje Redis:', err);
+        }
+    });
+
+    console.log('✅ Redis SUB conectado y escuchando gps-channel');
+})();
 
 /* =========================
  * Conexiones WebSocket
