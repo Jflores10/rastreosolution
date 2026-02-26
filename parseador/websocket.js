@@ -117,8 +117,9 @@ redisSub.subscribe('gps-channel');
 redisSub.on('message', (channel, message) => {
     try {
         const data = JSON.parse(message);
-
+console.log('📥 REDIS RAW:', message);
         const coopMsg = String(data.cooperativa_id || '').trim();
+        console.log('📡 SSE coopMsg=', coopMsg, ' subs=', [...sseClients.keys()]);
         if (!coopMsg) return; // 🔥 evita broadcast accidental
 
         if (DEBUG_WS) {
