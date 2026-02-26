@@ -563,7 +563,9 @@ function conectarSSE(coopId) {
 
     sse.addEventListener('unidad.updated', (evt) => {
         try {
+
             const data = JSON.parse(evt.data);
+            console.log(data)
             if (data && data._id) {
                 actualizarUnidadRealtime(data);
                 updateUnidadInList(data);
