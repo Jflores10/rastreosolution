@@ -1747,15 +1747,16 @@ $("#velocimetro").myfunc({divFact:10});
         // === Configuración según tipo de usuario ===
         @if(isset($id_coop))
             document.getElementById('cooperativa').value = '{{$id_coop}}';
-            //setUnidadesOnMap('{{$id_coop}}', true);
             conectarSSE('{{$id_coop}}');
+            setUnidadesOnMap('{{$id_coop}}', true);
+
             //setInterval(setUnidadesOnMap, 30000, '{{$id_coop}}');
         @endif
 
         @if(Auth::user()->tipo_usuario->valor==2 || Auth::user()->tipo_usuario->valor==3 || Auth::user()->tipo_usuario->valor==4
             || Auth::user()->tipo_usuario->valor==5)
-            //setUnidadesOnMap('', true);
             conectarSSE('{{$id_coop}}');
+            setUnidadesOnMap('', true);
 
             //setInterval(setUnidadesOnMap, 30000, null);
         @endif
