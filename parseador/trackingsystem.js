@@ -124,6 +124,12 @@ function enviarALaravelPorWS(data, opts = {}) {
                 JSON.stringify(eventPayload),
                 err => { if (err) console.error('❌ Redis event publish error:', err); }
             );
+            // also append to stream for durable processing
+            try {
+                redisPub.send_command('XADD', ['gps-stream', '*', 'data', JSON.stringify(eventPayload)], (sxErr) => {
+                    if (sxErr) console.error('❌ Error XADD gps-stream (event):', sxErr);
+                });
+            } catch (e) { console.error('❌ Excepción XADD event:', e); }
             return;
         }
 
@@ -153,6 +159,12 @@ function enviarALaravelPorWS(data, opts = {}) {
                 JSON.stringify(trackingPayload),
                 err => { if (err) console.error('❌ Redis tracking publish error:', err); }
             );
+            // also append to stream for durable processing
+            try {
+                redisPub.send_command('XADD', ['gps-stream', '*', 'data', JSON.stringify(trackingPayload)], (sxErr) => {
+                    if (sxErr) console.error('❌ Error XADD gps-stream (tracking):', sxErr);
+                });
+            } catch (e) { console.error('❌ Excepción XADD tracking:', e); }
         }
 
     } catch (err) {

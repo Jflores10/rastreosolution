@@ -1,6 +1,8 @@
 // websocket.js (OPTIMIZADO Y LIMPIO)
 const WebSocket = require('ws');
 const redis = require('redis');
+const http = require('http');
+const url = require('url');
 
 /* =========================
  * Redis
@@ -15,8 +17,67 @@ redisSub.on('error', err => {
  * WebSocket Server
  * ========================= */
 const PORT = 6001;
-const wss = new WebSocket.Server({ port: PORT }, () => {
-    console.log(`✅ WebSocket escuchando en ws://127.0.0.1:${PORT}`);
+
+// SSE clients: Map<coopId, Set<res>>
+const sseClients = new Map();
+
+// Create HTTP server and attach WebSocket.Server to it so both WS and SSE share the same port
+const server = http.createServer((req, res) => {
+    try {
+        const parsed = url.parse(req.url, true);
+        if (parsed.pathname === '/sse' || parsed.pathname === '/sse/') {
+            const coop = String(parsed.query.coop || parsed.query.cooperativa_id || parsed.query.coopId || '').trim();
+            // Basic validation
+            if (!coop) {
+                res.writeHead(400, { 'Content-Type': 'text/plain' });
+                res.end('Missing cooperativa id');
+                return;
+            }
+
+            // Setup SSE headers
+            res.writeHead(200, {
+                'Content-Type': 'text/event-stream',
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
+                'Access-Control-Allow-Origin': '*'
+            });
+            res.write(': connected\n\n');
+
+            // Register client
+            let set = sseClients.get(coop);
+            if (!set) {
+                set = new Set();
+                sseClients.set(coop, set);
+            }
+            set.add(res);
+
+            // Remove on close
+            req.on('close', () => {
+                try { set.delete(res); } catch (e) {}
+            });
+            return;
+        }
+
+        // For other paths, simple healthcheck
+        if (req.method === 'GET' && req.url === '/_health') {
+            res.writeHead(200, { 'Content-Type': 'text/plain' });
+            res.end('ok');
+            return;
+        }
+
+        res.writeHead(404, { 'Content-Type': 'text/plain' });
+        res.end('Not found');
+    } catch (e) {
+        console.error('HTTP handling error:', e);
+        res.writeHead(500);
+        res.end('server error');
+    }
+});
+
+const wss = new WebSocket.Server({ server });
+
+server.listen(PORT, () => {
+    console.log(`✅ WebSocket + SSE escuchando en http://127.0.0.1:${PORT}`);
 });
 
 const DEBUG_WS = process.env.DEBUG_WS === '1';
@@ -57,13 +118,23 @@ redisSub.on('message', (channel, message) => {
             console.log(`📡 Redis → WS | type=${data.type} coop=${coopMsg}`);
         }
 
+        // Add receive timestamp for diagnostics
+        try { data._ts_recv = Date.now(); } catch (e) {}
+
         frontendClients.forEach((coopFront, ws) => {
             if (ws.readyState !== WebSocket.OPEN) return;
             if (coopFront !== coopMsg) return;
-
-            // 🔥 REENVIAR TAL CUAL, SIN ENVOLVER, SIN MODIFICAR
             ws.send(JSON.stringify(data));
         });
+
+        // Also send to SSE clients subscribed to this cooperativa
+        const sset = sseClients.get(coopMsg);
+        if (sset && sset.size > 0) {
+            const payload = `event: unidad.updated\ndata: ${JSON.stringify(data)}\n\n`;
+            sset.forEach((res) => {
+                try { res.write(payload); } catch (e) { /* ignore closed sockets */ }
+            });
+        }
 
     } catch (err) {
         console.error('❌ Error procesando mensaje Redis:', err);
@@ -107,3 +178,94 @@ wss.on('connection', (ws) => {
         frontendClients.delete(ws);
     });
 });
+
+// === Redis Stream consumer (durable pipeline) ===
+const redisStream = redis.createClient();
+redisStream.on('error', err => { console.error('❌ Redis STREAM Error:', err); });
+
+const STREAM_KEY = 'gps-stream';
+const GROUP = 'ws-group';
+const CONSUMER = `ws-${process.pid}`;
+
+function ensureGroup(cb) {
+    redisStream.send_command('XGROUP', ['CREATE', STREAM_KEY, GROUP, '$', 'MKSTREAM'], (err) => {
+        // ignore BUSYGROUP error if group already exists
+        if (err && String(err).includes('BUSYGROUP')) {
+            if (DEBUG_WS) console.log('🔁 Redis group already exists');
+            return cb && cb();
+        }
+        if (err) console.error('❌ Error creando consumer group:', err);
+        return cb && cb();
+    });
+}
+
+function readLoop() {
+    // XREADGROUP GROUP <group> <consumer> BLOCK 5000 COUNT 100 STREAMS gps-stream >
+    redisStream.send_command('XREADGROUP', ['GROUP', GROUP, CONSUMER, 'BLOCK', '5000', 'COUNT', '100', 'STREAMS', STREAM_KEY, '>'], (err, resp) => {
+        if (err) {
+            console.error('❌ Error XREADGROUP:', err);
+            return setTimeout(readLoop, 1000);
+        }
+
+        if (!resp) {
+            // timeout, no messages
+            return setImmediate(readLoop);
+        }
+
+        // resp is [[streamKey, [[id, [field, value, ...]], ...]]]
+        try {
+            for (const streamResp of resp) {
+                const entries = streamResp[1] || [];
+                for (const entry of entries) {
+                    const id = entry[0];
+                    const fields = entry[1] || [];
+                    // fields is an array [field, value, field, value...]
+                    const obj = {};
+                    for (let i = 0; i < fields.length; i += 2) {
+                        obj[fields[i]] = fields[i+1];
+                    }
+
+                    // Expect obj.data to be JSON payload
+                    let data = null;
+                    try { data = JSON.parse(obj.data); } catch (e) { data = obj.data; }
+                    try { if (data && typeof data === 'object') data._ts_recv = Date.now(); } catch (e) {}
+
+                    // Forward to WS clients
+                    try {
+                        const coopMsg = String(data.cooperativa_id || '').trim();
+                        if (coopMsg) {
+                            frontendClients.forEach((coopFront, ws) => {
+                                if (ws.readyState !== WebSocket.OPEN) return;
+                                if (coopFront !== coopMsg) return;
+                                ws.send(JSON.stringify(data));
+                            });
+
+                            // Send to SSE clients
+                            const sset = sseClients.get(coopMsg);
+                            if (sset && sset.size > 0) {
+                                const payload = `event: unidad.updated\ndata: ${JSON.stringify(data)}\n\n`;
+                                sset.forEach((res) => {
+                                    try { res.write(payload); } catch (e) {}
+                                });
+                            }
+                        }
+                    } catch (e) { console.error('❌ Error forwarding stream message:', e); }
+
+                    // ACK the entry
+                    try {
+                        redisStream.send_command('XACK', [STREAM_KEY, GROUP, id], (ackErr) => {
+                            if (ackErr) console.error('❌ Error XACK:', ackErr);
+                        });
+                    } catch (e) { console.error('❌ Error XACK send_command:', e); }
+                }
+            }
+        } catch (e) {
+            console.error('❌ Error procesando entries de stream:', e);
+        }
+
+        // Continue loop
+        setImmediate(readLoop);
+    });
+}
+
+ensureGroup(() => { readLoop(); });

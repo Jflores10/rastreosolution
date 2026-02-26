@@ -545,109 +545,110 @@ const SERVER_HOUR_OFFSET = -5; // restar 5 horas a fecha (servidor)
 
 function conectarWebSocket(coopId) {
 
-    // ✅ Si ya está conectando u abierto, NO cerrar
-    if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) {
-        console.log('ℹ️ WS ya activo, no se recrea');
+    // ✅ Si ya está conectando u abierto, NO recrear
+    if (ws && (ws.readyState === 0 || ws.readyState === 1)) {
+        console.log('ℹ️ SSE ya activo, no se recrea');
         return;
     }
 
-    const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
-    const wsUrl = `${protocol}://${location.host}/ws/`;
+    const protocol = location.protocol === 'https:' ? 'https' : 'http';
+    const sseUrl = `${protocol}://${location.host}/sse?coop=${encodeURIComponent(String(coopId).trim())}`;
 
-    console.log('🔌 Conectando WS a:', wsUrl);
+    console.log('🔌 Conectando SSE a:', sseUrl);
 
-    const socket = new WebSocket(wsUrl);
+    try {
+        const es = new EventSource(sseUrl);
+        ws = es; // reuse global variable name
 
-    socket.onopen = () => {
-        console.log('%c🟢 WS CONECTADO', 'color:green;font-weight:bold');
-        ws = socket;
+        function handleMessageData(data) {
+            try {
+                if (!data) return;
 
-        socket.send(JSON.stringify({
-            type: 'frontend',
-            cooperativa_id: String(coopId).trim()
-        }));
-    };
-
-    socket.onmessage = (event) => {
-        try {
-            const msg = JSON.parse(event.data);
-            console.log(msg)
-            if (!msg || !msg.type) return;
-
-            /* =========================
-             * TRACKING
-             * ========================= */
-            if (msg.type === 'unidad.updated') {
-
-                const unidad = msg;
-                if (!unidad || !unidad._id) return;
-
-                // 👉 MAPA (una sola vez)
-                actualizarUnidadRealtime(unidad);
-
-                // 👉 LISTADO
-                updateUnidadInList(unidad);
-                return;
-            }
-
-            /* =========================
-             * SENTIDO
-             * ========================= */
-            if (msg.type === 'unidad.sentido.changed') {
-
-                const unidadId = msg.unidad_id;
-                if (!unidadId) return;
-
-                const li = document.getElementById(unidadId);
-                if (li && li.currentU) {
-                    li.currentU.sentido = msg.nuevo_sentido;
-                    updateUnidadInList(li.currentU);
-                }
-                return;
-            }
-
-            /* =========================
-             * PUERTAS
-             * ========================= */
-            if (msg.type === 'unidad.alerta.puerta') {
-
-                const unidadId = msg.unidad_id;
-                if (!unidadId) return;
-
-                const li = document.getElementById(unidadId);
-                if (li && li.currentU) {
-
-                    if (msg.puerta === 'DELANTERA') {
-                        li.currentU.puerta = msg.estado;
-                        li.currentU.alerta_puerta_message = msg.estado;
-                        li.currentU.alerta_puerta_fecha = msg.fecha;
+                // data may already be the unidad payload or wrapper
+                const msg = data;
+                if (!msg.type) {
+                    // if wrapped under payload
+                    const payload = msg.payload || msg;
+                    const unidad = payload.unidad || payload;
+                    if (unidad && unidad._id) {
+                        actualizarUnidadRealtime(unidad);
+                        updateUnidadInList(unidad);
                     }
-
-                    if (msg.puerta === 'TRASERA') {
-                        li.currentU.puerta_trasera = msg.estado;
-                        li.currentU.alerta_puerta_message_trasera = msg.estado;
-                        li.currentU.alerta_puerta_fecha_trasera = msg.fecha;
-                    }
-
-                    updateUnidadInList(li.currentU);
+                    return;
                 }
-                return;
-            }
 
-        } catch (e) {
-            console.error('❌ WS mensaje inválido', event.data, e);
+                if (msg.type === 'unidad.updated') {
+                    const unidad = msg;
+                    if (unidad && unidad._id) {
+                        actualizarUnidadRealtime(unidad);
+                        updateUnidadInList(unidad);
+                    }
+                    return;
+                }
+
+                if (msg.type === 'unidad.sentido.changed') {
+                    const unidadId = msg.unidad_id || (msg.payload && msg.payload.unidad_id);
+                    const nuevoSentido = msg.nuevo_sentido || (msg.payload && msg.payload.nuevo_sentido);
+                    if (unidadId) {
+                        const li = document.getElementById(unidadId);
+                        if (li && li.currentU) { li.currentU.sentido = nuevoSentido; updateUnidadInList(li.currentU); }
+                    }
+                    return;
+                }
+
+                if (msg.type === 'unidad.alerta.puerta') {
+                    const unidadId = msg.unidad_id || (msg.payload && msg.payload.unidad_id);
+                    if (!unidadId) return;
+                    const li = document.getElementById(unidadId);
+                    if (li && li.currentU) {
+                        if (msg.puerta === 'DELANTERA') {
+                            li.currentU.puerta = msg.estado;
+                            li.currentU.alerta_puerta_message = msg.estado;
+                            li.currentU.alerta_puerta_fecha = msg.fecha;
+                        }
+                        if (msg.puerta === 'TRASERA') {
+                            li.currentU.puerta_trasera = msg.estado;
+                            li.currentU.alerta_puerta_message_trasera = msg.estado;
+                            li.currentU.alerta_puerta_fecha_trasera = msg.fecha;
+                        }
+                        updateUnidadInList(li.currentU);
+                    }
+                    return;
+                }
+
+            } catch (e) {
+                console.error('❌ SSE handler error', e);
+            }
         }
-    };
 
-    socket.onclose = () => {
-        console.warn('🔴 WS DESCONECTADO, reintentando...');
-        ws = null;
+        // Primary: listen to named events
+        es.addEventListener('unidad.updated', (evt) => {
+            try { handleMessageData(JSON.parse(evt.data)); } catch (e) { console.error('❌ parse unidad.updated', e); }
+        });
+        es.addEventListener('unidad.sentido.changed', (evt) => {
+            try { handleMessageData(JSON.parse(evt.data)); } catch (e) { console.error('❌ parse sentido', e); }
+        });
+
+        // Fallback: generic message
+        es.onmessage = (evt) => {
+            try { handleMessageData(JSON.parse(evt.data)); } catch (e) { console.error('❌ parse message', e); }
+        };
+
+        es.onerror = (e) => {
+            console.error('❌ SSE ERROR', e);
+            // EventSource auto-reconnects; if closed, try manual reconnect later
+            try {
+                if (es.readyState === 2) {
+                    ws = null;
+                    setTimeout(() => conectarWebSocket(coopId), 3000);
+                }
+            } catch (err) {}
+        };
+
+    } catch (e) {
+        console.error('❌ Error creando EventSource:', e);
         setTimeout(() => conectarWebSocket(coopId), 3000);
-    };
-
-    socket.onerror = (e) => {
-        console.error('❌ WS ERROR', e);
-    };
+    }
 }
 
 
