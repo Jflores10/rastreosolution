@@ -120,7 +120,7 @@ redisSub.on('message', (channel, message) => {
 
         const coopMsg = String(data.cooperativa_id || '').trim();
         console.log('📥 REDIS DATA:', data);
-console.log('📥 coopMsg=', coopMsg, ' sseKeys=', [...sseClients.keys()]);
+        console.log('📥 coopMsg=', coopMsg, ' sseKeys=', [...sseClients.keys()]);
         if (!coopMsg) return; // 🔥 evita broadcast accidental
 
         if (DEBUG_WS) {
