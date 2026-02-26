@@ -742,7 +742,7 @@ function onClientConnected(socket) {
                                     }
 
                                     // ===== ENVÍO OPTIMIZADO GTFRI (MAPA) =====
-                                     let unidadPayload = {
+                                     const unidadPayload = {
                                         _id: document.value._id,
                                         imei: document.value.imei || data[imei],
                                         descripcion: document.value.descripcion || '',
