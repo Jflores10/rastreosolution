@@ -112,42 +112,47 @@ setInterval(() => {
 /* =========================
  * Redis realtime
  * ========================= */
-(async () => {
-    await redisSub.connect();
-    await redisSub.subscribe('gps-channel', (message) => {
-        try {
-            const data = JSON.parse(message);
+redisSub.subscribe('gps-channel');
 
-            console.log('📥 REDIS DATA:', data);
+redisSub.on('message', (channel, message) => {
+    try {
+        const data = JSON.parse(message);
 
-            const coopMsg = normalizeCoopId(data.cooperativa_id);
-            console.log('📥 coopMsg=', coopMsg, ' sseKeys=', [...sseClients.keys()]);
+        const coopMsg = String(data.cooperativa_id || '').trim();
+        console.log('📥 REDIS DATA:', data);
+console.log('📥 coopMsg=', coopMsg, ' sseKeys=', [...sseClients.keys()]);
+        if (!coopMsg) return; // 🔥 evita broadcast accidental
 
-            const eventName = data.type || 'message';
-            const payload =
-                `event: ${eventName}\n` +
-                `data: ${JSON.stringify(data)}\n\n`;
-
-            const targets = new Set();
-
-            if (coopMsg && sseClients.has(coopMsg)) {
-                sseClients.get(coopMsg).forEach(r => targets.add(r));
-            }
-            if (sseClients.has('*')) {
-                sseClients.get('*').forEach(r => targets.add(r));
-            }
-
-            targets.forEach(res => {
-                try { res.write(payload); } catch (e) {}
-            });
-
-        } catch (err) {
-            console.error('❌ Error procesando mensaje Redis:', err);
+        if (DEBUG_WS) {
+            console.log(`📡 Redis → WS | type=${data.type} coop=${coopMsg}`);
         }
-    });
 
-    console.log('✅ Redis SUB conectado y escuchando gps-channel');
-})();
+        // Add receive timestamp for diagnostics
+        try { data._ts_recv = Date.now(); } catch (e) {}
+
+        frontendClients.forEach((coopFront, ws) => {
+            if (ws.readyState !== WebSocket.OPEN) return;
+            if (coopFront !== coopMsg) return;
+            ws.send(JSON.stringify(data));
+        });
+
+        // Also send to SSE clients subscribed to this cooperativa
+        const sset = sseClients.get(coopMsg);
+        if (sset && sset.size > 0) {
+           const eventName = data.type || 'message';
+
+const payload =
+    `event: ${eventName}\n` +
+    `data: ${JSON.stringify(data)}\n\n`;
+            sset.forEach((res) => {
+                try { res.write(payload); } catch (e) { /* ignore closed sockets */ }
+            });
+        }
+
+    } catch (err) {
+        console.error('❌ Error procesando mensaje Redis:', err);
+    }
+});
 
 /* =========================
  * Conexiones WebSocket
