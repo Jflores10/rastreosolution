@@ -59,7 +59,7 @@ let wsReconnectTimeout = 3000;
 
 // Throttle control: evita enviar demasiados mensajes por unidad en ráfaga
 const lastSentByUnit = new Map(); // key = imei or _id -> timestamp ms
-const MIN_SEND_MS = 5000; // tiempo mínimo entre envíos por unidad (ajustable)
+const MIN_SEND_MS = 100; // tiempo mínimo entre envíos por unidad (ajustable)
 
 function connectWebSocketClient() {
     try {
@@ -99,67 +99,66 @@ const redisPub = new Redis();  // Para publicar / set / get
   This event is used to get a socket from the current array
 */
 
-function enviarALaravelPorWS(data, opts = {}) {
+function enviarALaravelPorWS(data, opts = false) {
     try {
         if (!data) return;
 
-        const now = Date.now();
+        // Si nos pasan un evento (p.ej. unidad.sentido.changed), publicar tal cual
+        // Si nos pasan wrappers con `unidad` o `recorrido.unidad`, extraer la unidad
+        let unit = null;
+        if (data.unidad && typeof data.unidad === 'object') unit = data.unidad;
+        else if (data.recorrido && data.recorrido.unidad && typeof data.recorrido.unidad === 'object') unit = data.recorrido.unidad;
+        else if (data._id || data.imei) unit = data; // ya es unidad-like
 
-        // ===============================
-        // 1️⃣ EVENTOS (NO TRACKING)
-        // ===============================
-        if (data.type && data.type !== 'unidad.updated') {
+        // Enviar el objeto completo de la unidad (unidadPayload) cuando esté presente
+        let payloadToPublish = data;
+        if (unit) {
+            // Hacemos una copia superficial para evitar mutar el objeto original
+            payloadToPublish = Object.assign({}, unit);
+            try { payloadToPublish._ts_sent = Date.now(); } catch (e) {}
 
-            // Evitar broadcast accidental
-            const coopEvt = String(data.cooperativa_id || '').trim();
-            if (!coopEvt) return;
-
-            const eventPayload = {
-                ...data,
-                _ts_sent: now
-            };
-
-            redisPub.publish(
-                'gps-channel',
-                JSON.stringify(eventPayload),
-                err => { if (err) console.error('❌ Redis event publish error:', err); }
-            );
-            return;
+            // Throttle por unidad (evita ráfagas que puedan sobrecargar el front)
+            const key = payloadToPublish.imei || payloadToPublish._id || JSON.stringify(payloadToPublish);
+            const now = Date.now();
+            const last = (typeof lastSentByUnit !== 'undefined' && lastSentByUnit.get) ? lastSentByUnit.get(key) || 0 : 0;
+            const force = opts && opts.force;
+            if (!force && (now - last) < (typeof MIN_SEND_MS !== 'undefined' ? MIN_SEND_MS : 0)) {
+                return; // demasiado pronto desde el último envío para esta unidad
+            }
+            if (typeof lastSentByUnit !== 'undefined' && lastSentByUnit.set) lastSentByUnit.set(key, now);
+        } else {
+            // para eventos no-unit, añadimos timestamp diagnóstico
+            try { payloadToPublish._ts_sent = Date.now(); } catch (e) {}
         }
 
-        // ===============================
-        // 2️⃣ TRACKING (unidad.updated)
-        // ===============================
-        if (data.type === 'unidad.updated') {
+        // Publicar en Redis (gps-channel) para que websocket.js lo reemita a los frontends
+        if (redisPub && typeof redisPub.publish === 'function') {
+            try {
+                redisPub.publish('gps-channel', JSON.stringify(payloadToPublish), (err) => {
+                    if (err) console.error('❌ Error publicando en Redis (gps-channel):', err);
+                });
+                return; // publicado por Redis con éxito (o en cola)
+            } catch (e) {
+                console.error('❌ Excepción publicando en Redis:', e);
+                // seguir al fallback wsClient
+            }
+        }
 
-            const coop = String(data.cooperativa_id || '').trim();
-            if (!coop) return;
-
-            const key = String(data.imei || data._id || '').trim();
-            if (!key) return;
-
-            const last = lastSentByUnit.get(key) || 0;
-            if (!opts.force && (now - last) < MIN_SEND_MS) return;
-            lastSentByUnit.set(key, now);
-
-            const trackingPayload = {
-                ...data,
-                cooperativa_id: coop,
-                _ts_sent: now
-            };
-
-            redisPub.publish(
-                'gps-channel',
-                JSON.stringify(trackingPayload),
-                err => { if (err) console.error('❌ Redis tracking publish error:', err); }
-            );
+        // Fallback: enviar directamente al WS local si Redis no está disponible
+        if (wsClient && wsClient.readyState === WebSocket.OPEN) {
+            try {
+                wsClient.send(JSON.stringify(payloadToPublish));
+            } catch (e) {
+                console.error('Error enviando por WS local (fallback):', e);
+            }
+        } else {
+            try { console.log('WS no disponible y Redis no funcional, payload skip:', payloadToPublish.imei || payloadToPublish._id); } catch (e) {}
         }
 
     } catch (err) {
-        console.error('❌ Error en enviarALaravelPorWS:', err);
+        console.error('Error en enviarALaravelPorWS:', err);
     }
 }
-
 function getSocket(imei) {
     for (var i = 0; i < socketArray.length; i++) {
         if (socketArray[i].imei === imei)
@@ -741,24 +740,48 @@ function onClientConnected(socket) {
                                         }
                                     }
 
-                                    // ===== ENVÍO OPTIMIZADO GTFRI (MAPA) =====
-                                    const unidadPayload = {
-                                        type: 'unidad.updated',
+                                    let unidadPayload = {
                                         _id: document.value._id,
                                         imei: document.value.imei || data[imei],
+                                        descripcion: document.value.descripcion || '',
+                                        placa: document.value.placa || '',
                                         latitud: document.value.latitud,
                                         longitud: document.value.longitud,
-                                        velocidad_actual: document.value.velocidad_actual || 0,
-                                        angulo: document.value.angulo,
+                                        velocidad_actual: document.value.velocidad_actual || document.value.velocidad || 0,
+                                        voltaje: document.value.voltaje,
+                                        mileage: document.value.mileage,
+                                        bateria: document.value.bateria,
+                                        contador_total: document.value.contador_total,
+                                        contador_diario: document.value.contador_diario,
+                                        contador_total_sensor_2: document.value.contador_total_sensor_2,
+                                        contador_diario_sensor_2: document.value.contador_diario_sensor_2,
+                                        contador_total_sensor_3: document.value.contador_total_sensor_3,
+                                        contador_diario_sensor_3: document.value.contador_diario_sensor_3,
                                         estado_movil: document.value.estado_movil,
-                                        sentido: document.value.sentido ?? null,
+                                        angulo: document.value.angulo,
                                         fecha_gps: document.value.fecha_gps,
-                                        cooperativa_id: document.value.cooperativa_id
-                                            ? String(document.value.cooperativa_id).trim()
-                                            : null
+                                        fecha: document.value.fecha,
+                                        evento: document.value.evento,
+                                        sentido: (document.value.sentido !== undefined) ? document.value.sentido : null,
+                                        puerta: (document.value.puerta !== undefined) ? document.value.puerta : null,
+                                        puerta_trasera: (document.value.puerta_trasera !== undefined) ? document.value.puerta_trasera : null,
+                                        alerta_puerta_message: (document.value.alerta_puerta_message !== undefined) ? document.value.alerta_puerta_message : null,
+                                        alerta_puerta_fecha: (document.value.alerta_puerta_fecha !== undefined) ? document.value.alerta_puerta_fecha : null,
+                                        alerta_puerta_message_trasera: (document.value.alerta_puerta_message_trasera !== undefined) ? document.value.alerta_puerta_message_trasera : null,
+                                        alerta_puerta_fecha_trasera: (document.value.alerta_puerta_fecha_trasera !== undefined) ? document.value.alerta_puerta_fecha_trasera : null,
+                                        fecha_puerta_abierta: (document.value.fecha_puerta_abierta !== undefined) ? document.value.fecha_puerta_abierta : null,
+                                        fecha_puerta_abierta_trasera: (document.value.fecha_puerta_abierta_trasera !== undefined) ? document.value.fecha_puerta_abierta_trasera : null,
+                                        fecha_puerta_cerrada: (document.value.fecha_puerta_cerrada !== undefined) ? document.value.fecha_puerta_cerrada : null,
+                                        fecha_puerta_cerrada_trasera: (document.value.fecha_puerta_cerrada_trasera !== undefined) ? document.value.fecha_puerta_cerrada_trasera : null,
+                                        cooperativa_id: (document.value.cooperativa_id ? String(document.value.cooperativa_id) : null)
                                     };
 
+                                        // Enviar versión preliminar inmediatamente (fast-path) para reducir latencia
+                                    try { enviarALaravelPorWS(unidadPayload, { force: true }); } catch (e) { console.error('Error fast-path WS send:', e); }
                                     enviarALaravelPorWS(unidadPayload);
+
+                                    
+                                  
 
                                     dbTrackingSystem.collection('recorridos').insertOne({
                                         imei: data[imei],
@@ -1385,18 +1408,6 @@ function onClientConnected(socket) {
                                 if (err)
                                     console.log(err);
                             });
-                            enviarALaravelPorWS({
-                                type: 'unidad.alerta.puerta',
-                                unidad_id: document._id,
-                                imei: document.imei,
-                                puerta: 'DELANTERA',
-                                estado: puerta,
-                                fecha: fecha_gps,
-                                cooperativa_id: document.cooperativa_id
-                                    ? String(document.cooperativa_id).trim()
-                                    : null
-                            });
-
                         } else {
                             dbTrackingSystem.collection('unidads').updateOne({
                                 _id: document._id
@@ -1412,18 +1423,6 @@ function onClientConnected(socket) {
                             }, function (err, result) {
                                 if (err)
                                     console.log(err);
-                            });
-
-                            enviarALaravelPorWS({
-                                    type: 'unidad.alerta.puerta',
-                                    unidad_id: document._id,
-                                    imei: document.imei,
-                                    puerta: 'TRASERA',
-                                    estado: puerta,
-                                    fecha: fecha_gps,
-                                    cooperativa_id: document.cooperativa_id
-                                        ? String(document.cooperativa_id).trim()
-                                        : null
                             });
                         }
                     }
