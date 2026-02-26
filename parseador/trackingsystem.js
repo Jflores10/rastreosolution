@@ -99,64 +99,64 @@ const redisPub = new Redis();  // Para publicar / set / get
   This event is used to get a socket from the current array
 */
 
-function enviarALaravelPorWS(data, opts = false) {
+function enviarALaravelPorWS(data, opts = {}) {
     try {
         if (!data) return;
 
-        // Si nos pasan un evento (p.ej. unidad.sentido.changed), publicar tal cual
-        // Si nos pasan wrappers con `unidad` o `recorrido.unidad`, extraer la unidad
-        let unit = null;
-        if (data.unidad && typeof data.unidad === 'object') unit = data.unidad;
-        else if (data.recorrido && data.recorrido.unidad && typeof data.recorrido.unidad === 'object') unit = data.recorrido.unidad;
-        else if (data._id || data.imei) unit = data; // ya es unidad-like
+        const now = Date.now();
 
-        // Enviar el objeto completo de la unidad (unidadPayload) cuando esté presente
-        let payloadToPublish = data;
-        if (unit) {
-            // Hacemos una copia superficial para evitar mutar el objeto original
-            payloadToPublish = Object.assign({}, unit);
-            try { payloadToPublish._ts_sent = Date.now(); } catch (e) {}
+        // ===============================
+        // 1️⃣ EVENTOS (NO TRACKING)
+        // ===============================
+        if (data.type && data.type !== 'unidad.updated') {
 
-            // Throttle por unidad (evita ráfagas que puedan sobrecargar el front)
-            const key = payloadToPublish.imei || payloadToPublish._id || JSON.stringify(payloadToPublish);
-            const now = Date.now();
-            const last = (typeof lastSentByUnit !== 'undefined' && lastSentByUnit.get) ? lastSentByUnit.get(key) || 0 : 0;
-            const force = opts && opts.force;
-            if (!force && (now - last) < (typeof MIN_SEND_MS !== 'undefined' ? MIN_SEND_MS : 0)) {
-                return; // demasiado pronto desde el último envío para esta unidad
-            }
-            if (typeof lastSentByUnit !== 'undefined' && lastSentByUnit.set) lastSentByUnit.set(key, now);
-        } else {
-            // para eventos no-unit, añadimos timestamp diagnóstico
-            try { payloadToPublish._ts_sent = Date.now(); } catch (e) {}
+            // Evitar broadcast accidental
+            const coopEvt = String(data.cooperativa_id || '').trim();
+            if (!coopEvt) return;
+
+            const eventPayload = {
+                ...data,
+                _ts_sent: now
+            };
+
+            redisPub.publish(
+                'gps-channel',
+                JSON.stringify(eventPayload),
+                err => { if (err) console.error('❌ Redis event publish error:', err); }
+            );
+            return;
         }
 
-        // Publicar en Redis (gps-channel) para que websocket.js lo reemita a los frontends
-        if (redisPub && typeof redisPub.publish === 'function') {
-            try {
-                redisPub.publish('gps-channel', JSON.stringify(payloadToPublish), (err) => {
-                    if (err) console.error('❌ Error publicando en Redis (gps-channel):', err);
-                });
-                return; // publicado por Redis con éxito (o en cola)
-            } catch (e) {
-                console.error('❌ Excepción publicando en Redis:', e);
-                // seguir al fallback wsClient
-            }
-        }
+        // ===============================
+        // 2️⃣ TRACKING (unidad.updated)
+        // ===============================
+        if (data.type === 'unidad.updated') {
 
-        // Fallback: enviar directamente al WS local si Redis no está disponible
-        if (wsClient && wsClient.readyState === WebSocket.OPEN) {
-            try {
-                wsClient.send(JSON.stringify(payloadToPublish));
-            } catch (e) {
-                console.error('Error enviando por WS local (fallback):', e);
-            }
-        } else {
-            try { console.log('WS no disponible y Redis no funcional, payload skip:', payloadToPublish.imei || payloadToPublish._id); } catch (e) {}
+            const coop = String(data.cooperativa_id || '').trim();
+            if (!coop) return;
+
+            const key = String(data.imei || data._id || '').trim();
+            if (!key) return;
+
+            const last = lastSentByUnit.get(key) || 0;
+            if (!opts.force && (now - last) < MIN_SEND_MS) return;
+            lastSentByUnit.set(key, now);
+
+            const trackingPayload = {
+                ...data,
+                cooperativa_id: coop,
+                _ts_sent: now
+            };
+
+            redisPub.publish(
+                'gps-channel',
+                JSON.stringify(trackingPayload),
+                err => { if (err) console.error('❌ Redis tracking publish error:', err); }
+            );
         }
 
     } catch (err) {
-        console.error('Error en enviarALaravelPorWS:', err);
+        console.error('❌ Error en enviarALaravelPorWS:', err);
     }
 }
 function getSocket(imei) {
