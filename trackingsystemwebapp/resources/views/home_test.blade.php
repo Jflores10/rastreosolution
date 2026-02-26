@@ -545,130 +545,108 @@ const SERVER_HOUR_OFFSET = -5; // restar 5 horas a fecha (servidor)
 
 function conectarWebSocket(coopId) {
 
-    // 🔴 Si ya hay conexión abierta o en proceso, cerrarla para evitar sockets huérfanos
-    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
-        console.warn('🔄 Cerrando WS anterior (open/connecting)');
-        try { ws.close(); } catch(e) { /* ignore */ }
+    // ✅ Si ya está conectando u abierto, NO cerrar
+    if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) {
+        console.log('ℹ️ WS ya activo, no se recrea');
+        return;
     }
 
     const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
-    // Conectar vía path /ws/ del host (permite que nginx termine TLS y haga proxy a 127.0.0.1:6001)
     const wsUrl = `${protocol}://${location.host}/ws/`;
 
     console.log('🔌 Conectando WS a:', wsUrl);
 
-    // Usar variable local para evitar condición de carrera en los handlers
     const socket = new WebSocket(wsUrl);
 
-    socket.onopen = (event) => {
+    socket.onopen = () => {
         console.log('%c🟢 WS CONECTADO', 'color:green;font-weight:bold');
-        console.log('Cooperativa:' + coopId);
-
-        // Asignar socket abierto a la variable global
         ws = socket;
 
-        // 🔥 Registrar cooperativa usando el socket abierto
-        try {
-            socket.send(JSON.stringify({
-                type: 'frontend',
-                cooperativa_id: String(coopId).trim()
-            }));
-        } catch (e) {
-            console.error('Error enviando registro de cooperativa:', e);
-        }
+        socket.send(JSON.stringify({
+            type: 'frontend',
+            cooperativa_id: String(coopId).trim()
+        }));
     };
 
     socket.onmessage = (event) => {
         try {
-            const data = JSON.parse(event.data);
-            // Actualización inmediata y sincronizada de todas las unidades
-            if (data.type === 'unidad.updated') {
-                const payload = data.payload || {};
-                const unidad = payload.unidad || payload;
-                if (unidad) {
-                    let gpsDateRaw = unidad.fecha_gps  || null;
-                    let srvDateRaw = unidad.fecha || null;
-                    let gpsIso = null;
-                    let srvIso = null;
-                    try {
-                        if (gpsDateRaw) {
-                            let d = new Date(gpsDateRaw);
-                            if (!isNaN(d.getTime())) {
-                                d.setHours(d.getHours() + GPS_HOUR_OFFSET);
-                                gpsIso = d.toISOString();
-                            } else {
-                                gpsIso = gpsDateRaw;
-                            }
-                        }
-                    } catch(e) { gpsIso = gpsDateRaw; }
-                    try {
-                        if (srvDateRaw) {
-                            let d2 = new Date(srvDateRaw);
-                            if (!isNaN(d2.getTime())) {
-                                d2.setHours(d2.getHours() + SERVER_HOUR_OFFSET);
-                                srvIso = d2.toISOString();
-                            } else {
-                                srvIso = srvDateRaw;
-                            }
-                        }
-                    } catch(e) { srvIso = srvDateRaw; }
+            const msg = JSON.parse(event.data);
+            if (!msg || !msg.type) return;
 
-                    const fakeFechaGps = { fecha_gps: { date: gpsIso } };
-                    const fakeFechaServidor = { fecha_servidor: { date: srvIso } };
-                    setMarcadorUnidad(unidad, fakeFechaGps, fakeFechaServidor, 0);
-                    updateUnidadInList(unidad);
-                }
-            } else if (data.type === 'unidad.sentido.changed') {
-                try {
-                    const unidadId = data.unidad_id || data.unidadId || (data.payload && data.payload.unidad_id);
-                    const nuevoSentido = data.nuevo_sentido || (data.payload && data.payload.nuevo_sentido);
-                    if (unidadId) {
-                        const li = document.getElementById(unidadId);
-                        if (li && li.currentU) {
-                            li.currentU.sentido = nuevoSentido;
-                            updateUnidadInList(li.currentU);
-                        }
-                    }
-                } catch (e) {
-                    console.error('Error procesando unidad.sentido.changed', e);
-                }
+            /* =========================
+             * TRACKING
+             * ========================= */
+            if (msg.type === 'unidad.updated') {
+
+                const unidad = msg;
+                if (!unidad || !unidad._id) return;
+
+                // 👉 MAPA (una sola vez)
+                actualizarUnidadRealtime(unidad);
+
+                // 👉 LISTADO
+                updateUnidadInList(unidad);
+                return;
             }
-        } catch (err) {
-            console.error('❌ WS mensaje inválido', event.data);
+
+            /* =========================
+             * SENTIDO
+             * ========================= */
+            if (msg.type === 'unidad.sentido.changed') {
+
+                const unidadId = msg.unidad_id;
+                if (!unidadId) return;
+
+                const li = document.getElementById(unidadId);
+                if (li && li.currentU) {
+                    li.currentU.sentido = msg.nuevo_sentido;
+                    updateUnidadInList(li.currentU);
+                }
+                return;
+            }
+
+            /* =========================
+             * PUERTAS
+             * ========================= */
+            if (msg.type === 'unidad.alerta.puerta') {
+
+                const unidadId = msg.unidad_id;
+                if (!unidadId) return;
+
+                const li = document.getElementById(unidadId);
+                if (li && li.currentU) {
+
+                    if (msg.puerta === 'DELANTERA') {
+                        li.currentU.puerta = msg.estado;
+                        li.currentU.alerta_puerta_message = msg.estado;
+                        li.currentU.alerta_puerta_fecha = msg.fecha;
+                    }
+
+                    if (msg.puerta === 'TRASERA') {
+                        li.currentU.puerta_trasera = msg.estado;
+                        li.currentU.alerta_puerta_message_trasera = msg.estado;
+                        li.currentU.alerta_puerta_fecha_trasera = msg.fecha;
+                    }
+
+                    updateUnidadInList(li.currentU);
+                }
+                return;
+            }
+
+        } catch (e) {
+            console.error('❌ WS mensaje inválido', event.data, e);
         }
+    };
+
+    socket.onclose = () => {
+        console.warn('🔴 WS DESCONECTADO, reintentando...');
+        ws = null;
+        setTimeout(() => conectarWebSocket(coopId), 3000);
     };
 
     socket.onerror = (e) => {
         console.error('❌ WS ERROR', e);
     };
-
-    // Nota: esta función puede ser llamada tanto para el socket local como para la variable global
-    const handleClose = (s) => {
-        console.warn('🔴 WS DESCONECTADO');
-        if (ws === s) ws = null; // limpiar referencia global si coincide
-        // Reintentar conexión con backoff
-        setTimeout(function(){
-            try {
-                conectarWebSocket(coopId);
-            } catch(e){
-                console.error('Error reconectando WS', e);
-            }
-        }, 3000);
-    };
-
-    // Si se creó socket local lo gestionamos, si no, dejamos el handler en la variable global
-    // (cuando usamos socket local, el onclose ya fue asignado en esa variable)
-    if (typeof socket !== 'undefined') {
-        socket.onclose = () => handleClose(socket);
-        socket.onerror = (e) => {
-            console.error('❌ WS ERROR', e);
-        };
-    } else {
-        ws.onclose = () => handleClose(ws);
-        ws.onerror = (e) => {
-            console.error('❌ WS ERROR', e);
-        };
-    }
 }
 
 
@@ -676,337 +654,170 @@ function conectarWebSocket(coopId) {
 
 function actualizarUnidadRealtime(unidad) {
 
-    if (!unidad || !unidad.latitud || !unidad.longitud) {
+    if (
+        !unidad ||
+        unidad.latitud === undefined ||
+        unidad.longitud === undefined ||
+        isNaN(parseFloat(unidad.latitud)) ||
+        isNaN(parseFloat(unidad.longitud))
+    ) {
         return;
     }
 
-    let fakeFecha = {
+    const fakeFecha = {
         fecha_gps: unidad.fecha_gps ?? null,
         fecha_servidor: unidad.fecha ?? null,
-        diferencia: null,
+        diferencia: unidad.diferencia ?? null,
         fecha_puerta_abierta: null,
         fecha_puerta_cerrada: null
     };
+
     setMarcadorUnidad(unidad, fakeFecha, fakeFecha, 0);
 }
-
 // Buscar el <li> de la unidad en la lista lateral y actualizar sus campos.
 function updateUnidadInList(unidad) {
     if (!unidad || !unidad._id) return;
 
-    // Preserve previously-fetched meta (from unidades-meta) so WS updates that lack
-    // ruta_* or bitacora do not wipe the values. If there is an existing LI with
-    // saved meta, copy those values into the incoming unidad when missing.
-    try {
-        var existingLiForMerge = document.getElementById(unidad._id);
-        if (existingLiForMerge && existingLiForMerge.currentU) {
-            var prev = existingLiForMerge.currentU;
-            if ((!unidad.ruta_actual || unidad.ruta_actual === '') && prev.ruta_actual) unidad.ruta_actual = prev.ruta_actual;
-            if ((!unidad.ruta_fecha || unidad.ruta_fecha === '') && prev.ruta_fecha) unidad.ruta_fecha = prev.ruta_fecha;
-            if ((!unidad.ruta_conductor || unidad.ruta_conductor === '') && prev.ruta_conductor) unidad.ruta_conductor = prev.ruta_conductor;
-            if ((!unidad.ruta_hora_fin || unidad.ruta_hora_fin === '') && (prev.ruta_hora_fin || prev.ruta_hora_fin === '')) unidad.ruta_hora_fin = prev.ruta_hora_fin;
-            if ((!unidad.bitacora || unidad.bitacora === '') && prev.bitacora) unidad.bitacora = prev.bitacora;
-        }
-    } catch (e) {
-        console.warn('Merge existing meta failed', e);
-    }
+    let li = document.getElementById(unidad._id);
+    let isNew = false;
 
-    // Construir campos paralelos a los usados en appendUnidades
-    var fecha_gps = unidad.fecha_gps || null;
-    var fecha_gps_marker = '-';
-    try {
-        if (fecha_gps) {
-            let d = new Date(fecha_gps);
-            if (!isNaN(d.getTime())) {
-                d.setHours(d.getHours() + GPS_HOUR_OFFSET);
-                fecha_gps_marker = d.format('H:i:s');
-            } else {
-                fecha_gps_marker = fecha_gps;
-            }
-        }
-    } catch(e) { fecha_gps_marker = fecha_gps || '-'; }
-    var fecha_servidor = '-';
-    try {
-        if (unidad.fecha) {
-            let d2 = new Date(unidad.fecha);
-            if (!isNaN(d2.getTime())) {
-                d2.setHours(d2.getHours() + SERVER_HOUR_OFFSET);
-                fecha_servidor = d2.format('d-m-Y H:i:s');
-            } else {
-                fecha_servidor = unidad.fecha;
-            }
-        }
-    } catch(e) { fecha_servidor = unidad.fecha || '-'; }
-
-    var voltaje = (unidad.voltaje != null) ? String(unidad.voltaje).substring(0,2) : '--';
-    var velocidad_num = Number(unidad.velocidad_actual) || 0;
-
-    var estado = unidad.estado_movil || ((velocidad_num==0)?'D':'M');
-    if (unidad.diferencia != null && unidad.diferencia > 30) estado = 'no_envia_trama';
-    if (!fecha_gps) estado = 'no_envia_trama';
-
-    var iId = 'i' + unidad._id;
-    var gId = 'i' + unidad._id;
-    var bId = 'i' + unidad._id;
-
-    var sentido = '';
-    if (unidad.sentido){
-        if (unidad.sentido == 'i') sentido = '<i class="fa fa-arrow-circle-right" title="IDA" style="color:green"></i>&nbsp&nbsp';
-        else if (unidad.sentido == 'r') sentido = '<i class="fa fa-arrow-circle-left" title="RETORNO" style="color:#001672"></i>&nbsp&nbsp';
-    }
-
-    // Campos auxiliares que pueden venir en el payload
-    var ruta_actual = unidad.ruta_actual || '';
-    var ruta_fecha = unidad.ruta_fecha || '';
-    var ruta_conductor = unidad.ruta_conductor || '';
-    var ruta_hora_fin = unidad.ruta_hora_fin || '';
-
-    var fecha_puerta_abierta = '--';
-    var fecha_puerta_cerrada = '--';
-    var fecha_puerta_abierta_trasera =  '--';
-    var fecha_puerta_cerrada_trasera = '--';
-    /*
-    var fecha_puerta_abierta = unidad.fecha_puerta_abierta || '';
-    var fecha_puerta_cerrada = unidad.fecha_puerta_cerrada || '';
-    var fecha_puerta_abierta_trasera = unidad.fecha_puerta_abierta_trasera || '';
-    var fecha_puerta_cerrada_trasera = unidad.fecha_puerta_cerrada_trasera || '';
-
-    // Normalizar/formatear fechas de puertas según HistoricoController: restar 10 horas y mostrar 'd-m-Y H:i:s'
-    function formatDoorDate(raw) {
-        if (!raw) return '';
-        try {
-            let d = new Date(raw);
-            if (!isNaN(d.getTime())) {
-                // aplicar offset igual que en servidor (restar 10 horas)
-                d.setHours(d.getHours() + GPS_HOUR_OFFSET);
-                if (typeof d.format === 'function') return d.format('d-m-Y H:i:s');
-                // fallback legible
-                return d.toISOString().replace('T', ' ').split('.')[0];
-            }
-            return raw;
-        } catch (e) {
-            return raw;
-        }
-    }
-
-    fecha_puerta_abierta = formatDoorDate(fecha_puerta_abierta);
-    fecha_puerta_cerrada = formatDoorDate(fecha_puerta_cerrada);
-    fecha_puerta_abierta_trasera = formatDoorDate(fecha_puerta_abierta_trasera);
-    fecha_puerta_cerrada_trasera = formatDoorDate(fecha_puerta_cerrada_trasera);
-    */
-    var html = '';
-
-    // Generar exactamente el HTML con el mismo look según estado
-    switch (estado) {
-        case 'D':
-            html += '' +
-                ((unidad.climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
-                ((unidad.rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
-                sentido + '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#F44336"></i>&nbsp' +
-                (unidad.descripcion || '') + '&nbsp&nbsp <i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ (unidad.latitud||'') +'\',\''+ (unidad.longitud||'') +'\');" class="fa fa-map-marker" style="color:#F44336"></i>&nbsp' + (fecha_gps_marker || '-') + '  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(velocidad_num) + '' +
-                '&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#F44336"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#F44336"></i>&nbsp' + (unidad.contador_total||'') + " | " + (unidad.contador_diario||'') +
-                '&nbsp&nbsp&nbsp' + ((unidad.is_atm !== undefined && unidad.is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'') +
-                '&nbsp&nbsp&nbsp|&nbsp&nbsp';
-
-            html += (unidad.puerta ? ((unidad.puerta==='PUERTA ABIERTA (DELANTERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta:
-                ((unidad.puerta==='PUERTA CERRADA (DELANTERA)')?'<img src="../images/closedoor.png" height="20" width="20">'+ fecha_puerta_cerrada :'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>');
-
-            html += (unidad.puerta_trasera ? ((unidad.puerta_trasera==='PUERTA ABIERTA (TRASERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta_trasera:
-                ((unidad.puerta_trasera==='PUERTA CERRADA (TRASERA)')?'<img src="../images/closedoor.png" height="20" width="20">'+ fecha_puerta_cerrada_trasera :'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>');
-
-            html += '&nbsp&nbsp&nbsp|&nbsp&nbsp&nbsp<font color="black">' + ruta_actual + '</font>' + '&nbsp&nbsp<font color="black">(' + ruta_fecha + ')</font>-<font color="red">(' + ruta_hora_fin + ')</font>&nbsp&nbsp<font color="black">' + ruta_conductor + '</font>';
-
-            if (unidad.bitacora && unidad.bitacora != "") {
-                var img = (unidad.bitacora=="R")?'/images/police.png':((unidad.bitacora=="M")?'/images/mantenimiento.png':'/images/other.png');
-                html += '&nbsp&nbsp&nbsp|&nbsp&nbsp <img id="' + bId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_Bitacora(\''+ unidad._id + '\');" width="20" height="20" src="'+ img + '"/>';
-            }
-            break;
-
-        case 'E':
-            html += '' +
-                ((unidad.climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
-                ((unidad.rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
-                '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#f49a16"></i>&nbsp' + (unidad.descripcion||'') +
-                '&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ (unidad.latitud||'') +'\',\''+ (unidad.longitud||'') +'\');" class="fa fa-map-marker" style="color:#f49a16"></i>&nbsp' + (fecha_gps_marker || '-') + '  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(velocidad_num) + '' +
-                '&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#f49a16"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#f49a16"></i>&nbsp' + (unidad.contador_total||'') + " | " + (unidad.contador_diario||'') +
-                '&nbsp&nbsp&nbsp|&nbsp&nbsp';
-
-            html += (unidad.puerta ? ((unidad.puerta==='PUERTA ABIERTA (DELANTERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta:
-                ((unidad.puerta==='PUERTA CERRADA (DELANTERA)')?'<img src="../images/closedoor.png" height="20" width="20">'+ fecha_puerta_cerrada :'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>');
-
-            html += (unidad.puerta_trasera ? ((unidad.puerta_trasera==='PUERTA ABIERTA (TRASERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta_trasera:
-                ((unidad.puerta_trasera==='PUERTA CERRADA (TRASERA)')?'<img src="../images/closedoor.png" height="20" width="20">'+ fecha_puerta_cerrada_trasera :'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>');
-
-            html += '&nbsp&nbsp&nbsp|&nbsp&nbsp&nbsp<font color="black">' + ruta_actual + '</font>' + '&nbsp&nbsp<font color="black">(' + ruta_fecha + ')</font>-<font color="red">(' + ruta_hora_fin + ')</font>&nbsp&nbsp<font color="black">' + ruta_conductor + '</font>';
-
-            if (unidad.bitacora && unidad.bitacora != "") {
-                var img2 = (unidad.bitacora=="R")?'/images/police.png':((unidad.bitacora=="M")?'/images/mantenimiento.png':'/images/other.png');
-                html += '&nbsp&nbsp&nbsp|&nbsp&nbsp <img id="' + bId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_Bitacora(\''+ unidad._id + '\');" width="20" height="20" src="'+ img2 + '"/>';
-            }
-            break;
-
-        case 'M':
-            html += '' +
-                ((unidad.climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
-                ((unidad.rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
-                sentido + '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#00AA88"></i>&nbsp' + (unidad.descripcion||'') +
-                '&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ (unidad.latitud||'') +'\',\''+ (unidad.longitud||'') +'\');" class="fa fa-map-marker" style="color:#00AA88"></i>&nbsp' + (fecha_gps_marker || '-') + '  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(velocidad_num) + '' +
-                '&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#00AA88"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#00AA88"></i>&nbsp' + (unidad.contador_total||'') + " | " + (unidad.contador_diario||'') +
-                '&nbsp&nbsp&nbsp|&nbsp&nbsp';
-
-            html += (unidad.puerta ? ((unidad.puerta==='PUERTA ABIERTA (DELANTERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta:
-                ((unidad.puerta==='PUERTA CERRADA (DELANTERA)')?'<img src="../images/closedoor.png" height="20" width="20">'+ fecha_puerta_cerrada :'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>');
-
-            html += (unidad.puerta_trasera ? ((unidad.puerta_trasera==='PUERTA ABIERTA (TRASERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta_trasera:
-                ((unidad.puerta_trasera==='PUERTA CERRADA (TRASERA)')?'<img src="../images/closedoor.png" height="20" width="20">'+ fecha_puerta_cerrada_trasera :'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>');
-
-            html += '&nbsp&nbsp&nbsp|&nbsp&nbsp&nbsp<font color="black">' + ruta_actual + '</font>' + '&nbsp&nbsp<font color="black">(' + ruta_fecha + ')</font>-<font color="red">(' + ruta_hora_fin + ')</font>&nbsp&nbsp<font color="black">' + ruta_conductor + '</font>';
-
-            if (unidad.bitacora && unidad.bitacora != "") {
-                var img3 = (unidad.bitacora=="R")?'/images/police.png':((unidad.bitacora=="M")?'/images/mantenimiento.png':'/images/other.png');
-                html += '&nbsp&nbsp&nbsp|&nbsp&nbsp <img id="' + bId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_Bitacora(\''+ unidad._id + '\');" width="20" height="20" src="'+ img3 + '"/>';
-            }
-            break;
-
-        default:
-            html += '' +
-                ((unidad.climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
-                ((unidad.rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
-                '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#990073"></i>&nbsp' + (unidad.descripcion||'') +
-                '&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ (unidad.latitud||'') +'\',\''+ (unidad.longitud||'') +'\');" class="fa fa-map-marker" style="color:#990073"></i>&nbsp' + (fecha_gps_marker || '-') + '  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(velocidad_num) + '' +
-                '&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#990073"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#990073"></i>&nbsp' + (unidad.contador_total||'') + " | " + (unidad.contador_diario||'') +
-                '&nbsp&nbsp&nbsp|&nbsp&nbsp';
-
-            html += (unidad.puerta ? ((unidad.puerta==='PUERTA ABIERTA (DELANTERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta:
-                ((unidad.puerta==='PUERTA CERRADA (DELANTERA)')?'<img src="../images/closedoor.png" height="20" width="20">'+ fecha_puerta_cerrada :'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>');
-
-            html += (unidad.puerta_trasera ? ((unidad.puerta_trasera==='PUERTA ABIERTA (TRASERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta_trasera:
-                ((unidad.puerta_trasera==='PUERTA CERRADA (TRASERA)')?'<img src="../images/closedoor.png" height="20" width="20">'+ fecha_puerta_cerrada_trasera :'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>');
-
-            html += '&nbsp&nbsp&nbsp|&nbsp&nbsp&nbsp<font color="black">' + ruta_actual + '</font>' + '&nbsp&nbsp<font color="black">(' + ruta_fecha + ')</font>-<font color="red">(' + ruta_hora_fin + ')</font>&nbsp&nbsp<font color="black">' + ruta_conductor + '</font>';
-
-            if (unidad.bitacora && unidad.bitacora != "") {
-                var img4 = (unidad.bitacora=="R")?'/images/police.png':((unidad.bitacora=="M")?'/images/mantenimiento.png':'/images/other.png');
-                html += '&nbsp&nbsp&nbsp|&nbsp&nbsp <img id="' + bId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_Bitacora(\''+ unidad._id + '\');" width="20" height="20" src="'+ img4 + '"/>';
-            }
-            break;
-    }
-
-    // Insertar o actualizar el LI sin alterar la interfaz externa
-    var li = document.getElementById(unidad._id);
     if (!li) {
-        var ul = document.getElementById('ul_unidades');
+        const ul = document.getElementById('ul_unidades');
         if (!ul) return;
         li = document.createElement('li');
         li.className = 'list-group-item';
         li.id = unidad._id;
         ul.prepend(li);
+        isNew = true;
+        li.currentU = {};
     }
 
+    // 🔥 Merge inteligente: no perder meta previa
+    const prev = li.currentU || {};
+    const u = Object.assign({}, prev, unidad);
+    li.currentU = u;
+
+    /* =========================
+     * FECHAS
+     * ========================= */
+    let fecha_gps_marker = '-';
+    try {
+        if (u.fecha_gps) {
+            let d = new Date(u.fecha_gps);
+            if (!isNaN(d.getTime())) {
+                d.setHours(d.getHours() + GPS_HOUR_OFFSET);
+                fecha_gps_marker = d.format('H:i:s');
+            }
+        }
+    } catch (e) {}
+
+    let fecha_servidor = '-';
+    try {
+        if (u.fecha) {
+            let d2 = new Date(u.fecha);
+            if (!isNaN(d2.getTime())) {
+                d2.setHours(d2.getHours() + SERVER_HOUR_OFFSET);
+                fecha_servidor = d2.format('d-m-Y H:i:s');
+            }
+        }
+    } catch (e) {}
+
+    /* =========================
+     * ESTADO
+     * ========================= */
+    const velocidad = Number(u.velocidad_actual) || 0;
+    let estado = u.estado_movil || (velocidad === 0 ? 'D' : 'M');
+    if (!u.fecha_gps || (u.diferencia != null && u.diferencia > 30)) {
+        estado = 'no_envia_trama';
+    }
+
+    /* =========================
+     * DETECTAR CAMBIOS VISUALES
+     * ========================= */
+    const visualKey = [
+        estado,
+        u.sentido,
+        u.puerta,
+        u.puerta_trasera,
+        u.ruta_actual,
+        u.ruta_fecha,
+        u.ruta_conductor,
+        u.ruta_hora_fin,
+        u.bitacora,
+        u.velocidad_actual,
+        u.voltaje,
+        u.contador_total,
+        u.contador_diario
+    ].join('|');
+
+    if (!isNew && li._visualKey === visualKey) {
+        // Nada visual cambió → no tocar DOM
+        return;
+    }
+    li._visualKey = visualKey;
+
+    /* =========================
+     * HTML
+     * ========================= */
+    const voltaje = (u.voltaje != null) ? String(u.voltaje).substring(0,2) : '--';
+    const sentidoIcon =
+        u.sentido === 'i'
+            ? '<i class="fa fa-arrow-circle-right" title="IDA" style="color:green"></i>&nbsp&nbsp'
+            : u.sentido === 'r'
+                ? '<i class="fa fa-arrow-circle-left" title="RETORNO" style="color:#001672"></i>&nbsp&nbsp'
+                : '';
+
+    const puertaDel = u.puerta
+        ? (u.puerta === 'PUERTA ABIERTA (DELANTERA)'
+            ? '<img src="../images/opendoor.png" height="20" width="20">'
+            : u.puerta === 'PUERTA CERRADA (DELANTERA)'
+                ? '<img src="../images/closedoor.png" height="20" width="20">'
+                : '<strong>---</strong>')
+        : '<strong>---</strong>';
+
+    const puertaTras = u.puerta_trasera
+        ? (u.puerta_trasera === 'PUERTA ABIERTA (TRASERA)'
+            ? '<img src="../images/opendoor.png" height="20" width="20">'
+            : u.puerta_trasera === 'PUERTA CERRADA (TRASERA)'
+                ? '<img src="../images/closedoor.png" height="20" width="20">'
+                : '<strong>---</strong>')
+        : '<strong>---</strong>';
+
+    let html = '';
+
+    html +=
+        ((u.climatizada===true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'') +
+        ((u.rampa===true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'') +
+        sentidoIcon +
+        `<i class="fa fa-bus" style="color:#00AA88"></i>&nbsp${u.descripcion||''}&nbsp&nbsp` +
+        `<i class="fa fa-map-marker" style="color:#00AA88"></i>&nbsp${fecha_gps_marker}&nbsp` +
+        `<i class="fa fa-tachometer"></i>&nbsp${Math.round(velocidad)}&nbsp` +
+        `<i class="fa fa-bolt"></i>&nbsp${voltaje}&nbsp` +
+        `<i class="fa fa-users"></i>&nbsp${u.contador_total||0} | ${u.contador_diario||0}` +
+        '&nbsp&nbsp|&nbsp&nbsp' +
+        puertaDel + '&nbsp&nbsp' + puertaTras +
+        '&nbsp&nbsp|&nbsp&nbsp' +
+        `<strong>${u.ruta_actual||''}</strong> (${u.ruta_fecha||''}) - <span style="color:red">${u.ruta_hora_fin||''}</span> ${u.ruta_conductor||''}`;
+
+    if (u.bitacora) {
+        const img =
+            u.bitacora === 'R' ? '/images/police.png' :
+            u.bitacora === 'M' ? '/images/mantenimiento.png' :
+            '/images/other.png';
+        html += `&nbsp&nbsp|&nbsp&nbsp<img width="20" height="20" src="${img}">`;
+    }
+
+    /* =========================
+     * DOM UPDATE
+     * ========================= */
     li.innerHTML = html;
-    li.currentU = unidad;
     li.currentFechagps = fecha_gps_marker;
     li.currentFecha = fecha_servidor;
-  
+
     li.onclick = function () {
-        selectUnidad(this.currentU,this.currentFechagps,this.currentFecha,1); 
+        selectUnidad(this.currentU, this.currentFechagps, this.currentFecha, 1);
     };
-
-    // Actualizar marcador en mapa
-    // Solo actualizar marcador si lat/lon son válidos
-    var latValid = unidad.latitud != undefined && unidad.longitud != undefined && !isNaN(parseFloat(unidad.latitud)) && !isNaN(parseFloat(unidad.longitud));
-    if (latValid) {
-        try { setMarcadorUnidad(unidad, {fecha_gps: fecha_gps}, {fecha_servidor: unidad.fecha}, 0); } catch(e) { /* ignore */ }
-    } else {
-        // Si no hay coordenadas, no llamar al setMarcadorUnidad; el alert original se mostraba en esa función
-        console.warn('Unidad sin coordenadas: ' + unidad._id);
-    }
 }
-
-// Pequeña utilidad para devolver un icono por ángulo (puede ser simple por ahora)
-function getIconForAngle(angle) {
-    // Reusar icono genérico; si hay lógica para rotar icono, añadirla aquí
-    return null; // dejar que addMarker / setMarcadorUnidad manejen el ícono actual
-}
-
-// --- Meta fetching: batch unidad meta (ruta_actual + tipo_bitacora) ---
-const unidadesMetaCache = {}; // unidad_id -> {data, ts}
-const META_TTL_MS = 30 * 1000; // 30s cache
-const META_INTERVAL_MS = 15 * 1000; // 15s between batch requests
-
-function scheduleMetaRefresh() {
-    // Kick once and then interval
-    refreshVisibleUnidadesMeta();
-    setInterval(refreshVisibleUnidadesMeta, META_INTERVAL_MS);
-}
-
-function refreshVisibleUnidadesMeta() {
-    try {
-        // collect visible unidad IDs from the UL
-        const ul = document.getElementById('ul_unidades');
-        if (!ul) return;
-        const ids = [];
-        ul.querySelectorAll('li').forEach(li => {
-            if (li.id) ids.push(li.id);
-        });
-        if (ids.length === 0) return;
-
-        // Filter by cache
-        const toFetch = ids.filter(id => {
-            const cached = unidadesMetaCache[id];
-            return !(cached && (Date.now() - cached.ts) < META_TTL_MS);
-        });
-        if (toFetch.length === 0) return;
-
-        fetchUnidadesMeta(toFetch).then(map => {
-            Object.keys(map).forEach(uid => {
-                unidadesMetaCache[uid] = { data: map[uid], ts: Date.now() };
-                // update UI if li exists
-                const li = document.getElementById(uid);
-                if (li && li.currentU) {
-                    li.currentU.ruta_actual = map[uid].ruta_actual || '';
-                    li.currentU.ruta_fecha = map[uid].ruta_fecha || '';
-                    li.currentU.ruta_conductor = map[uid].ruta_conductor || '';
-                    // map server's ruta_hora_final into client's ruta_hora_fin
-                    li.currentU.ruta_hora_fin = map[uid].ruta_hora_final || '';
-                    // only set tipo_bitacora if present
-                    if (map[uid].tipo_bitacora) li.currentU.bitacora = map[uid].tipo_bitacora;
-                    try { updateUnidadInList(li.currentU); } catch (e) { console.warn('Error updating li after meta fetch', e); }
-                }
-            });
-        }).catch(err => console.warn('Error fetching unidades meta', err));
-    } catch (e) {
-        console.warn('refreshVisibleUnidadesMeta error', e);
-    }
-}
-
-function fetchUnidadesMeta(unidadIds) {
-    return new Promise((resolve, reject) => {
-        try {
-            fetch('/historico/unidades-meta', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]')||{content:''}).content
-                },
-                body: JSON.stringify({ unidad_ids: unidadIds })
-            }).then(r => r.json()).then(json => {
-                resolve(json || {});
-            }).catch(reject);
-        } catch (e) { reject(e); }
-    });
-}
-
-// Inicializar WS cuando carga la página con la cooperativa seleccionada
-document.addEventListener('DOMContentLoaded', function () {
-    var coopEl = document.getElementById('cooperativa');
-    var coopId = coopEl ? coopEl.value : '';
-    conectarWebSocket(coopId);
-    // start periodic metadata refresh for unidades (ruta + bitacora)
-    try { scheduleMetaRefresh(); } catch(e) { console.warn('No scheduleMetaRefresh', e); }
-});
-
 
 </script>
 
@@ -2061,81 +1872,94 @@ $("#velocimetro").myfunc({divFact:10});
 
     setInterval(verifyGoogleMSG,100,null);
 
-    function setMarcadorUnidad(unidad,fecha_gps_,fecha_servidor,_is)
-    {
-        var estado;
-        switch(unidad.estado_movil)
-        {
-            case "M":estado="En movimiento";break;
-            case "D":estado="Detenido";break;
-            case "E":estado="Perdida de GPS";break;
-            default:estado="-";break;
+    function setMarcadorUnidad(unidad, fecha_gps_, fecha_servidor_, _is) {
+
+        // =========================
+        // ESTADO
+        // =========================
+        let estado = '-';
+        switch (unidad.estado_movil) {
+            case 'M': estado = 'En movimiento'; break;
+            case 'D': estado = 'Detenido'; break;
+            case 'E': estado = 'Pérdida de GPS'; break;
         }
 
-        if( estado =="-")
-        {
-            if(parseFloat(unidad.velocidad_actual)==0)
-                estado="Detenido";
-            else
-                estado="En movimiento";
+        if (estado === '-') {
+            estado = (parseFloat(unidad.velocidad_actual) === 0)
+                ? 'Detenido'
+                : 'En movimiento';
         }
-        var fecha_gps;
-        var fecha;
-        if( fecha_gps_!=null && _is==0)
-          fecha_gps =new Date(fecha_gps_.fecha_gps.date).format('d-m-Y H:i:s');
-        
 
-        if( fecha_servidor!=null && _is==0)
-          fecha =new Date(fecha_servidor.fecha_servidor.date).format('d-m-Y H:i:s');
-        
-        if(_is==1){
-            fecha=fecha_servidor;
-            fecha_gps=fecha_gps_;
-        }
-        
+        // =========================
+        // FECHAS (SEGURAS)
+        // =========================
+        let fecha = '-';
+        let fecha_gps = '-';
 
-        var html =// '<div class="panel">'+
-               // '<div class="panel-heading"><h3>'+unidad.descripcion+'</h3></div>'+
-                '<div class="panel-body popup-content"  style="height:12em;overflow: auto;margin: 2px; padding: 2px; ">'+
-                '<ul  style="list-style-type: none; margin: 3px; padding: 3px;overflow: auto;width=100px;overflow-y: hidden;">'+
-                '<li><strong>Disco:</strong>&nbsp'+unidad.descripcion+'</li>' +
-                '<li><strong>Placa:</strong>&nbsp'+unidad.placa+'</li>' +
-                '<li><strong>Velocidad:</strong>&nbsp'+unidad.velocidad_actual+' km/h'+'</li>' +
-                '<li><strong>Voltaje:</strong>&nbsp'+unidad.voltaje+' v'+'</li>' +
-                '<li><strong>Mileage:</strong>&nbsp'+unidad.mileage+' km'+'</li>' +
-                '<li><strong>C. Total:</strong>&nbsp'+unidad.contador_total+'</li>' +
-                '<li><strong>C. Diario:</strong>&nbsp'+unidad.contador_diario+'</li>' +
-                '<li><strong>C. Total 2:</strong>&nbsp'+((unidad.contador_total_sensor_2 != undefined)?unidad.contador_total_sensor_2:'-')+'</li>' +
-                '<li><strong>C. Diario 2:</strong>&nbsp'+((unidad.contador_diario_sensor_2 != undefined )?unidad.contador_diario_sensor_2:'-')+'</li>' +
-                '<li><strong>C. Total 3:</strong>&nbsp'+((unidad.contador_total_sensor_3 != undefined)?unidad.contador_total_sensor_3:'-')+'</li>' +
-                '<li><strong>C. Diario 3:</strong>&nbsp'+((unidad.contador_diario_sensor_3 != undefined )?unidad.contador_diario_sensor_3:'-')+'</li>' +
-                '<li><strong>Estado:</strong>&nbsp'+estado+'</li>' +
-                '<li><strong>Fecha de servidor:</strong>&nbsp'+'<br/>'+fecha+'</li>' +
-                '<li><strong>Fecha de GPS:</strong>&nbsp'+'<br/>'+fecha_gps+'</li>' +
-                '<li id="li_dir_actual" style="display:none"><strong>Dirección Actual:</strong>&nbsp'+'<br/><span class="dir-wrap" id="dir_actual_marca"></span></li>' +
+        try {
+            if (_is === 0 && fecha_gps_?.fecha_gps) {
+                fecha_gps = new Date(fecha_gps_.fecha_gps).format('d-m-Y H:i:s');
+            }
+            if (_is === 0 && fecha_servidor_?.fecha_servidor) {
+                fecha = new Date(fecha_servidor_.fecha_servidor).format('d-m-Y H:i:s');
+            }
+            if (_is === 1) {
+                fecha = fecha_servidor_;
+                fecha_gps = fecha_gps_;
+            }
+        } catch (e) {}
 
-                '</ul>'+
-                '<div class="form-group">'+
-                '<button class="btn btn-info btn-block" onclick="ver_direccion(\'' 
-                    + unidad.latitud + '\', \'' 
-                    + unidad.longitud + '\', \'#dir_actual_marca\', \'#li_dir_actual\')">Ver Dirección</button>'+
+        // =========================
+        // SOLO CREAR POPUP SI ES UNIDAD ACTUAL
+        // =========================
+        let popupHtml = null;
 
-                '<button onclick="openCommandForm(\'' + unidad.imei + '\', \'' + unidad.latitud + '\', \'' + unidad.longitud + '\');velocimetro_change('+unidad.velocidad_actual+');" class="btn btn-primary btn-block">Consola de comando</button>'+
-                
-                '</div>'+
-               // '</div>'+
+        if (currentUnidad === null || currentUnidad === unidad._id) {
+            popupHtml =
+                '<div class="panel-body popup-content" style="height:12em;overflow:auto;margin:2px;padding:2px;">' +
+                '<ul style="list-style:none;margin:3px;padding:3px;">' +
+                `<li><strong>Disco:</strong> ${unidad.descripcion}</li>` +
+                `<li><strong>Placa:</strong> ${unidad.placa || '-'}</li>` +
+                `<li><strong>Velocidad:</strong> ${unidad.velocidad_actual || 0} km/h</li>` +
+                `<li><strong>Voltaje:</strong> ${unidad.voltaje || '-'} v</li>` +
+                `<li><strong>Mileage:</strong> ${unidad.mileage || '-'} km</li>` +
+                `<li><strong>C. Total:</strong> ${unidad.contador_total || 0}</li>` +
+                `<li><strong>C. Diario:</strong> ${unidad.contador_diario || 0}</li>` +
+                `<li><strong>Estado:</strong> ${estado}</li>` +
+                `<li><strong>Fecha servidor:</strong><br>${fecha}</li>` +
+                `<li><strong>Fecha GPS:</strong><br>${fecha_gps}</li>` +
+                '<li id="li_dir_actual" style="display:none"><strong>Dirección Actual:</strong><br>' +
+                '<span class="dir-wrap" id="dir_actual_marca"></span></li>' +
+                '</ul>' +
+                '<div class="form-group">' +
+                `<button class="btn btn-info btn-block" onclick="ver_direccion('${unidad.latitud}','${unidad.longitud}','#dir_actual_marca','#li_dir_actual')">Ver Dirección</button>` +
+                `<button class="btn btn-primary btn-block" onclick="openCommandForm('${unidad.imei}','${unidad.latitud}','${unidad.longitud}');velocimetro_change(${unidad.velocidad_actual || 0});">Consola de comando</button>` +
+                '</div>' +
                 '</div>';
-        if ((currentUnidad == null || currentUnidad == unidad._id) && unidad.latitud != undefined && unidad.longitud != undefined)
-	        addMarker(html, unidad.latitud,
-	                unidad.longitud,
-	                unidad._id,
-	                unidad.angulo,
-                    (unidad.orden != null)?unidad.descripcion + '(' + unidad.orden + ')':unidad.descripcion,
-                    unidad.velocidad_actual,
-                    unidad.sentido
+        }
+
+        // =========================
+        // MOVER / ACTUALIZAR MARKER
+        // =========================
+        if (
+            unidad.latitud !== undefined &&
+            unidad.longitud !== undefined &&
+            !isNaN(parseFloat(unidad.latitud)) &&
+            !isNaN(parseFloat(unidad.longitud))
+        ) {
+            addMarker(
+                popupHtml,
+                unidad.latitud,
+                unidad.longitud,
+                unidad._id,
+                unidad.angulo,
+                (unidad.orden != null)
+                    ? `${unidad.descripcion} (${unidad.orden})`
+                    : unidad.descripcion,
+                unidad.velocidad_actual,
+                unidad.sentido
             );
-        else if (unidad.latitud == undefined && unidad.longitud == undefined) 
-            alert('Esta unidad no tiene coordenadas registradas.');
+        }
     }
     function openCommandForm(imei, lat, long)
     {
