@@ -563,6 +563,47 @@ function onClientConnected(socket) {
                             console.log(err);
                         else //If there is no error
                         {
+
+                            // ===== ENVÍO OPTIMIZADO GTFRI (MAPA) =====
+                                const unidadPayload = {
+                                    type: 'unidad.updated',
+                                    _id: document.value._id,
+                                    imei: document.value.imei || data[imei],
+                                    descripcion: document.value.descripcion || '',
+                                    placa: document.value.placa || '',
+                                    latitud: document.value.latitud,
+                                    longitud: document.value.longitud,
+                                    velocidad_actual: document.value.velocidad_actual || document.value.velocidad || 0,
+                                    voltaje: document.value.voltaje,
+                                    mileage: document.value.mileage,
+                                    bateria: document.value.bateria,
+                                    contador_total: document.value.contador_total,
+                                    contador_diario: document.value.contador_diario,
+                                    contador_total_sensor_2: document.value.contador_total_sensor_2,
+                                    contador_diario_sensor_2: document.value.contador_diario_sensor_2,
+                                    contador_total_sensor_3: document.value.contador_total_sensor_3,
+                                    contador_diario_sensor_3: document.value.contador_diario_sensor_3,
+                                    estado_movil: document.value.estado_movil,
+                                    angulo: document.value.angulo,
+                                    fecha_gps: document.value.fecha_gps,
+                                    fecha: document.value.fecha,
+                                    evento: document.value.evento,
+                                    sentido: (document.value.sentido !== undefined) ? document.value.sentido : null,
+                                    puerta: (document.value.puerta !== undefined) ? document.value.puerta : null,
+                                    puerta_trasera: (document.value.puerta_trasera !== undefined) ? document.value.puerta_trasera : null,
+                                    alerta_puerta_message: (document.value.alerta_puerta_message !== undefined) ? document.value.alerta_puerta_message : null,
+                                    alerta_puerta_fecha: (document.value.alerta_puerta_fecha !== undefined) ? document.value.alerta_puerta_fecha : null,
+                                    alerta_puerta_message_trasera: (document.value.alerta_puerta_message_trasera !== undefined) ? document.value.alerta_puerta_message_trasera : null,
+                                    alerta_puerta_fecha_trasera: (document.value.alerta_puerta_fecha_trasera !== undefined) ? document.value.alerta_puerta_fecha_trasera : null,
+                                    fecha_puerta_abierta: (document.value.fecha_puerta_abierta !== undefined) ? document.value.fecha_puerta_abierta : null,
+                                    fecha_puerta_abierta_trasera: (document.value.fecha_puerta_abierta_trasera !== undefined) ? document.value.fecha_puerta_abierta_trasera : null,
+                                    fecha_puerta_cerrada: (document.value.fecha_puerta_cerrada !== undefined) ? document.value.fecha_puerta_cerrada : null,
+                                    fecha_puerta_cerrada_trasera: (document.value.fecha_puerta_cerrada_trasera !== undefined) ? document.value.fecha_puerta_cerrada_trasera : null,
+                                    cooperativa_id: (document.value.cooperativa_id ? String(document.value.cooperativa_id) : null)
+                                };
+
+                                enviarALaravelPorWS(unidadPayload);
+
                             if (document != undefined && document != null) //If unidad was updated and taken
                             {
                                 /*
@@ -756,45 +797,7 @@ function onClientConnected(socket) {
                                         }
                                     }
 
-                                    // ===== ENVÍO OPTIMIZADO GTFRI (MAPA) =====
-                                     const unidadPayload = {
-                                        type: 'unidad.updated',
-                                        _id: document.value._id,
-                                        imei: document.value.imei || data[imei],
-                                        descripcion: document.value.descripcion || '',
-                                        placa: document.value.placa || '',
-                                        latitud: document.value.latitud,
-                                        longitud: document.value.longitud,
-                                        velocidad_actual: document.value.velocidad_actual || document.value.velocidad || 0,
-                                        voltaje: document.value.voltaje,
-                                        mileage: document.value.mileage,
-                                        bateria: document.value.bateria,
-                                        contador_total: document.value.contador_total,
-                                        contador_diario: document.value.contador_diario,
-                                        contador_total_sensor_2: document.value.contador_total_sensor_2,
-                                        contador_diario_sensor_2: document.value.contador_diario_sensor_2,
-                                        contador_total_sensor_3: document.value.contador_total_sensor_3,
-                                        contador_diario_sensor_3: document.value.contador_diario_sensor_3,
-                                        estado_movil: document.value.estado_movil,
-                                        angulo: document.value.angulo,
-                                        fecha_gps: document.value.fecha_gps,
-                                        fecha: document.value.fecha,
-                                        evento: document.value.evento,
-                                        sentido: (document.value.sentido !== undefined) ? document.value.sentido : null,
-                                        puerta: (document.value.puerta !== undefined) ? document.value.puerta : null,
-                                        puerta_trasera: (document.value.puerta_trasera !== undefined) ? document.value.puerta_trasera : null,
-                                        alerta_puerta_message: (document.value.alerta_puerta_message !== undefined) ? document.value.alerta_puerta_message : null,
-                                        alerta_puerta_fecha: (document.value.alerta_puerta_fecha !== undefined) ? document.value.alerta_puerta_fecha : null,
-                                        alerta_puerta_message_trasera: (document.value.alerta_puerta_message_trasera !== undefined) ? document.value.alerta_puerta_message_trasera : null,
-                                        alerta_puerta_fecha_trasera: (document.value.alerta_puerta_fecha_trasera !== undefined) ? document.value.alerta_puerta_fecha_trasera : null,
-                                        fecha_puerta_abierta: (document.value.fecha_puerta_abierta !== undefined) ? document.value.fecha_puerta_abierta : null,
-                                        fecha_puerta_abierta_trasera: (document.value.fecha_puerta_abierta_trasera !== undefined) ? document.value.fecha_puerta_abierta_trasera : null,
-                                        fecha_puerta_cerrada: (document.value.fecha_puerta_cerrada !== undefined) ? document.value.fecha_puerta_cerrada : null,
-                                        fecha_puerta_cerrada_trasera: (document.value.fecha_puerta_cerrada_trasera !== undefined) ? document.value.fecha_puerta_cerrada_trasera : null,
-                                        cooperativa_id: (document.value.cooperativa_id ? String(document.value.cooperativa_id) : null)
-                                    };
-
-                                    enviarALaravelPorWS(unidadPayload);
+                                 
 
                                     dbTrackingSystem.collection('recorridos').insertOne({
                                         imei: data[imei],
@@ -820,9 +823,7 @@ function onClientConnected(socket) {
                                         if (err){
                                             console.log(err);
                                         }
-                                        else {
-                                           
-                                        }
+                                        
                                     });
                                 }
                             }

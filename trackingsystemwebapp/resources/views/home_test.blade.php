@@ -696,10 +696,10 @@ function updateUnidadInList(unidad) {
 
     // Preferir la marca de tiempo de recepción (_ts_sent) si está disponible
     try {
-        if (unidad._ts_sent) {
-            const recvDate = new Date(unidad._ts_sent);
-            if (!isNaN(recvDate.getTime())) {
-                fecha_gps_marker = recvDate.toLocaleTimeString('es-EC', {
+        if (fecha_gps) {
+            const fecha_gpsDate = new Date(fecha_gps);
+            if (!isNaN(fecha_gpsDate.getTime())) {
+                fecha_gps_marker = fecha_gpsDate.toLocaleTimeString('es-EC', {
                     hour: '2-digit',
                     minute: '2-digit',
                     second: '2-digit',
@@ -2289,7 +2289,6 @@ $("#velocimetro").myfunc({divFact:10});
 				{
 					if(data.unidades[j].latitud!=null && data.unidades[j].longitud!=null 
                         && data.unidades[j].latitud!=undefined && data.unidades[j].longitud!=undefined){
-                            
 						setMarcadorUnidad(data.unidades[j],data.array_fechas[j],data.array_fechas[j],0);
 
                         if (!mapaCentrado && load) {
