@@ -714,6 +714,29 @@ function updateUnidadInList(unidad) {
     } catch (e) {
         fecha_gps_marker = '-';
     }
+
+     try {
+        if (fecha_gps) {
+            const fecha_gpsDatec = new Date(fecha_gps);
+            if (!isNaN(fecha_gpsDatec.getTime())) {
+                fecha_gpsDatec.setHours(fecha_gpsDatec.getHours() + GPS_HOUR_OFFSET);
+                fecha_gps_marker_c = fecha_gpsDatec.toLocaleString('es-EC', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false
+                });
+
+                
+            }
+        }
+    } catch (e) {
+        fecha_gps_marker_c = '-';
+    }
+    
     var fecha_srv = unidad.fecha || null;
     var fecha_servidor = '-';
     try {
@@ -907,10 +930,12 @@ function updateUnidadInList(unidad) {
     li.innerHTML = html;
     li.currentU = unidad;
     li.currentFechagps = fecha_gps_marker;
+    li.currentFechagpsC = fecha_gps_marker_c;
+
     li.currentFecha = fecha_servidor;
   
     li.onclick = function () {
-        selectUnidad(this.currentU,this.currentFechagps,this.currentFecha,1); 
+        selectUnidad(this.currentU,this.currentFechagpsC,this.currentFecha,1); 
     };
 
   
@@ -2007,7 +2032,9 @@ $("#velocimetro").myfunc({divFact:10});
                     year: 'numeric',
                     hour: '2-digit',
                     minute: '2-digit',
-                    second: '2-digit'
+                    second: '2-digit',
+                    hour12: false
+
                 });
 
             }
@@ -2020,7 +2047,9 @@ $("#velocimetro").myfunc({divFact:10});
                     year: 'numeric',
                     hour: '2-digit',
                     minute: '2-digit',
-                    second: '2-digit'
+                    second: '2-digit',
+                    hour12: false
+
                 });
             }
             if (_is === 1) {
