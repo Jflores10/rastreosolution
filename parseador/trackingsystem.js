@@ -539,7 +539,7 @@ function onClientConnected(socket) {
                 /*
                     We get and update the unidad from unidads collection
                 */
-               console.log("FechaGPS:" +data[datetime])
+               console.log("FechaGPS:" +moment.utc(data[datetime], 'YYYYMMDDHHmmss').toDate())
                 dbTrackingSystem.collection('unidads').findOneAndUpdate({ imei: data[imei], estado: 'A' },
                     {
                         $set: {
