@@ -699,6 +699,7 @@ function updateUnidadInList(unidad) {
         if (fecha_gps) {
             const fecha_gpsDate = new Date(fecha_gps);
             if (!isNaN(fecha_gpsDate.getTime())) {
+                fecha_gpsDate.setHours(fecha_gpsDate.getHours() + GPS_HOUR_OFFSET);
                 fecha_gps_marker = fecha_gpsDate.toLocaleTimeString('es-EC', {
                     hour: '2-digit',
                     minute: '2-digit',
@@ -708,37 +709,32 @@ function updateUnidadInList(unidad) {
             }
         }
     } catch (e) {
-        // ignore and fall back
+        fecha_gps_marker = '-';
     }
-    /*
-    // Si no tuvimos _ts_recv, usar fecha_gps como antes
-    if (fecha_gps_marker === '-' ) {
-        try {
-            if (fecha_gps) {
-                let d = new Date(fecha_gps);
-                if (!isNaN(d.getTime())) {
-                    d.setHours(d.getHours() + GPS_HOUR_OFFSET);
-                    fecha_gps_marker = (typeof d.format === 'function') ? d.format('H:i:s') : (d.toLocaleTimeString('es-EC', { hour12: false }));
-                } else {
-                    fecha_gps_marker = fecha_gps;
-                }
-            }
-        } catch(e) { fecha_gps_marker = fecha_gps || '-'; }
-    }
-        */
-
+    var fecha_srv = unidad.fecha || null;
     var fecha_servidor = '-';
     try {
-        if (unidad.fecha) {
-            let d2 = new Date(unidad.fecha);
-            if (!isNaN(d2.getTime())) {
-                d2.setHours(d2.getHours() + SERVER_HOUR_OFFSET);
-                fecha_servidor = d2.format('d-m-Y H:i:s');
-            } else {
-                fecha_servidor = unidad.fecha;
-            }
-        }
-    } catch(e) { fecha_servidor = unidad.fecha || '-'; }
+    if (fecha_srv) {
+        const d2 = new Date(fecha_srv);
+        if (!isNaN(d2.getTime())) {
+
+            d2.setHours(d2.getHours() + SERVER_HOUR_OFFSET);
+
+            fecha_servidor = d2.toLocaleString('es-EC', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            });
+        } 
+    }
+    } catch (e) {
+        fecha_servidor =  '-';
+    }
+
 
     var voltaje = (unidad.voltaje != null) ? String(unidad.voltaje).substring(0,2) : '--';
     var velocidad_num = Number(unidad.velocidad_actual) || 0;
