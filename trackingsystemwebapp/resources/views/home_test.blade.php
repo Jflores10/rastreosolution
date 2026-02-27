@@ -1998,10 +1998,30 @@ $("#velocimetro").myfunc({divFact:10});
 
         try {
             if (_is === 0 && fecha_gps_?.fecha_gps) {
-                fecha_gps = new Date(fecha_gps_.fecha_gps).format('d-m-Y H:i:s');
+                const dGps = new Date(fecha_gps_.fecha_gps);
+                dGps.setHours(dGps.getHours() + GPS_HOUR_OFFSET);
+                fecha_gps = dGps.toLocaleString('es-EC', {
+                    timeZone: 'America/Guayaquil',
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+
             }
             if (_is === 0 && fecha_servidor_?.fecha_servidor) {
-                fecha = new Date(fecha_servidor_.fecha_servidor).format('d-m-Y H:i:s');
+                const dSrv = new Date(fecha_servidor_.fecha_servidor);
+                fecha = dSrv.toLocaleString('es-EC', {
+                    timeZone: 'America/Guayaquil',
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
             }
             if (_is === 1) {
                 fecha = fecha_servidor_;
