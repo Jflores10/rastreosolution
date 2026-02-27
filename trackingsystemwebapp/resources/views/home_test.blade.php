@@ -718,7 +718,7 @@ function updateUnidadInList(unidad) {
         const d2 = new Date(fecha_srv);
         if (!isNaN(d2.getTime())) {
 
-            d2.setHours(d2.getHours() + SERVER_HOUR_OFFSET);
+            d2.setHours(d2.getHours());
 
             fecha_servidor = d2.toLocaleString('es-EC', {
                 year: 'numeric',
