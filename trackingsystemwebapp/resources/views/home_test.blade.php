@@ -666,7 +666,6 @@ function actualizarUnidadRealtime(unidad) {
         fecha_puerta_abierta: null,
         fecha_puerta_cerrada: null
     };
-    console.log(fakeFecha)
     setMarcadorUnidad(unidad, fakeFecha, fakeFecha, 0);
 }
 // Buscar el <li> de la unidad en la lista lateral y actualizar sus campos.
