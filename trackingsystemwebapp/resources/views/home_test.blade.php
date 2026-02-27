@@ -693,26 +693,38 @@ function updateUnidadInList(unidad) {
     // Construir campos paralelos a los usados en appendUnidades
     var fecha_gps = unidad.fecha_gps || null;
     var fecha_gps_marker = '-';
-    /*
-    const recvDate = new Date(data._ts_recv);
-    const fecha_gps_marker=recvDate.toLocaleTimeString('es-EC', {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-    });
-    */
 
+    // Preferir la marca de tiempo de recepción (_ts_recv) si está disponible
     try {
-        if (fecha_gps) {
-            let d = new Date(fecha_gps);
-            if (!isNaN(d.getTime())) {
-                d.setHours(d.getHours() + GPS_HOUR_OFFSET);
-                fecha_gps_marker = d.format('H:i:s');
-            } else {
-                fecha_gps_marker = fecha_gps;
+        if (unidad._ts_recv) {
+            const recvDate = new Date(unidad._ts_recv);
+            if (!isNaN(recvDate.getTime())) {
+                fecha_gps_marker = recvDate.toLocaleTimeString('es-EC', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
             }
         }
-    } catch(e) { fecha_gps_marker = fecha_gps || '-'; }
+    } catch (e) {
+        // ignore and fall back
+    }
+    /*
+    // Si no tuvimos _ts_recv, usar fecha_gps como antes
+    if (fecha_gps_marker === '-' ) {
+        try {
+            if (fecha_gps) {
+                let d = new Date(fecha_gps);
+                if (!isNaN(d.getTime())) {
+                    d.setHours(d.getHours() + GPS_HOUR_OFFSET);
+                    fecha_gps_marker = (typeof d.format === 'function') ? d.format('H:i:s') : (d.toLocaleTimeString('es-EC'));
+                } else {
+                    fecha_gps_marker = fecha_gps;
+                }
+            }
+        } catch(e) { fecha_gps_marker = fecha_gps || '-'; }
+    }
+        */
 
     var fecha_servidor = '-';
     try {
