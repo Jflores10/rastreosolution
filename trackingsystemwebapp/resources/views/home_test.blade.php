@@ -2289,9 +2289,8 @@ $("#velocimetro").myfunc({divFact:10});
 				{
 					if(data.unidades[j].latitud!=null && data.unidades[j].longitud!=null 
                         && data.unidades[j].latitud!=undefined && data.unidades[j].longitud!=undefined){
-
-                        data.unidades[j].fecha_gps="--";
-						//setMarcadorUnidad(data.unidades[j],data.array_fechas[j],data.array_fechas[j],0);
+                            
+						setMarcadorUnidad(data.unidades[j],data.array_fechas[j],data.array_fechas[j],0);
 
                         if (!mapaCentrado && load) {
                             let lat = parseFloat( data.unidades[j].latitud);
