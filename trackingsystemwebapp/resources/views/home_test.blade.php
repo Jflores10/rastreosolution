@@ -694,15 +694,16 @@ function updateUnidadInList(unidad) {
     var fecha_gps = unidad.fecha_gps || null;
     var fecha_gps_marker = '-';
 
-    // Preferir la marca de tiempo de recepción (_ts_recv) si está disponible
+    // Preferir la marca de tiempo de recepción (_ts_sent) si está disponible
     try {
-        if (unidad._ts_recv) {
-            const recvDate = new Date(unidad._ts_recv);
+        if (unidad._ts_sent) {
+            const recvDate = new Date(unidad._ts_sent);
             if (!isNaN(recvDate.getTime())) {
                 fecha_gps_marker = recvDate.toLocaleTimeString('es-EC', {
                     hour: '2-digit',
                     minute: '2-digit',
-                    second: '2-digit'
+                    second: '2-digit',
+                    hour12: false
                 });
             }
         }
@@ -717,7 +718,7 @@ function updateUnidadInList(unidad) {
                 let d = new Date(fecha_gps);
                 if (!isNaN(d.getTime())) {
                     d.setHours(d.getHours() + GPS_HOUR_OFFSET);
-                    fecha_gps_marker = (typeof d.format === 'function') ? d.format('H:i:s') : (d.toLocaleTimeString('es-EC'));
+                    fecha_gps_marker = (typeof d.format === 'function') ? d.format('H:i:s') : (d.toLocaleTimeString('es-EC', { hour12: false }));
                 } else {
                     fecha_gps_marker = fecha_gps;
                 }
