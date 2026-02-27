@@ -208,7 +208,7 @@
                 @endif
               </ul>
               <div class="navbar-center" style="position: absolute; left: 50%; transform: translateX(-50%); margin-top: 5px;">
-                <div id="reloj" data-server-time="{{ \Carbon\Carbon::now()->toIso8601String() }}" style="
+                <div id="reloj" style="
                     font-weight: bold; 
                     font-size: 18px; 
                     color: #fff; 
@@ -325,24 +325,15 @@
     @yield('scripts')
   
     <script>
-      (function(){
-        var el = document.getElementById('reloj');
-        if(!el) return;
-        var serverIso = el.getAttribute('data-server-time');
-        var d = serverIso ? new Date(serverIso) : new Date();
-        function pad(n){ return String(n).padStart(2,'0'); }
-        function render(){
-          var hours = pad(d.getHours());
-          var minutes = pad(d.getMinutes());
-          var seconds = pad(d.getSeconds());
-          el.innerHTML = '<font color="white">'+ hours + ':' + minutes + ':' + seconds +'</font>';
-        }
-        render();
-        setInterval(function(){
-          d = new Date(d.getTime() + 1000);
-          render();
-        }, 1000);
-      })();
+      setInterval(function(){
+        var today = new Date();
+        var hours = String(today.getHours()).padStart(2, '0');
+        var minutes = String(today.getMinutes()).padStart(2, '0');
+        var seconds = String(today.getSeconds()).padStart(2, '0');
+        var time = hours + ":" + minutes + ":" + seconds;
+        document.getElementById('reloj').innerHTML='<font color="white">'+time+'</font>';
+      }, 1000);
+      
     </script>
   
   </body>
