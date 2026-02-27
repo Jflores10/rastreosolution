@@ -59,7 +59,7 @@ let wsReconnectTimeout = 3000;
 
 // Throttle control: evita enviar demasiados mensajes por unidad en ráfaga
 const lastSentByUnit = new Map(); // key = imei or _id -> timestamp ms
-const MIN_SEND_MS = 5000; // tiempo mínimo entre envíos por unidad (ajustable)
+const MIN_SEND_MS = 2000; // tiempo mínimo entre envíos por unidad (ajustable)
 
 function connectWebSocketClient() {
     try {
