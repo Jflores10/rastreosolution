@@ -692,17 +692,16 @@ function updateUnidadInList(unidad) {
 
     // Construir campos paralelos a los usados en appendUnidades
     var fecha_gps = unidad.fecha_gps || null;
-    //var fecha_gps_marker = '-';
+    var fecha_gps_marker = '-';
+    /*
     const recvDate = new Date(data._ts_recv);
     const fecha_gps_marker=recvDate.toLocaleTimeString('es-EC', {
         hour: '2-digit',
         minute: '2-digit',
         second: '2-digit'
     });
+    */
 
-    console.log(fecha_gps_marker)
-
-    /*
     try {
         if (fecha_gps) {
             let d = new Date(fecha_gps);
@@ -715,7 +714,6 @@ function updateUnidadInList(unidad) {
         }
     } catch(e) { fecha_gps_marker = fecha_gps || '-'; }
 
-    */
     var fecha_servidor = '-';
     try {
         if (unidad.fecha) {
