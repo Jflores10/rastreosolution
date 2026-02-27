@@ -708,23 +708,11 @@ function updateUnidadInList(unidad) {
                     second: '2-digit',
                     hour12: false
                 });
-
-                fecha_gps_marker_c = d2.toLocaleString('es-EC', {
-                    year: 'numeric',
-                    month: '2-digit',
-                    day: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                    hour12: false
-                });
-
+                
             }
         }
     } catch (e) {
         fecha_gps_marker = '-';
-        fecha_gps_marker_c = '-';
-
     }
     var fecha_srv = unidad.fecha || null;
     var fecha_servidor = '-';
@@ -918,7 +906,7 @@ function updateUnidadInList(unidad) {
 
     li.innerHTML = html;
     li.currentU = unidad;
-    li.currentFechagps = fecha_gps_marker_c;
+    li.currentFechagps = fecha_gps_marker;
     li.currentFecha = fecha_servidor;
   
     li.onclick = function () {
@@ -2010,31 +1998,10 @@ $("#velocimetro").myfunc({divFact:10});
 
         try {
             if (_is === 0 && fecha_gps_?.fecha_gps) {
-                const dGps = new Date(fecha_gps_.fecha_gps);
-                dGps.setHours(dGps.getHours() + GPS_HOUR_OFFSET);
-                fecha_gps = dGps.toLocaleString('es-EC', {
-                    timeZone: 'America/Guayaquil',
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit'
-                });
                 fecha_gps = new Date(fecha_gps_.fecha_gps).format('d-m-Y H:i:s');
             }
             if (_is === 0 && fecha_servidor_?.fecha_servidor) {
-                const dSrv = new Date(fecha_servidor_.fecha_servidor);
-                fecha = dSrv.toLocaleString('es-EC', {
-                    timeZone: 'America/Guayaquil',
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit'
-                });
-
+                fecha = new Date(fecha_servidor_.fecha_servidor).format('d-m-Y H:i:s');
             }
             if (_is === 1) {
                 fecha = fecha_servidor_;
