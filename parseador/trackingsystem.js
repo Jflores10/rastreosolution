@@ -59,7 +59,7 @@ let wsReconnectTimeout = 3000;
 
 // Throttle control: evita enviar demasiados mensajes por unidad en ráfaga
 const lastSentByUnit = new Map(); // key = imei or _id -> timestamp ms
-const MIN_SEND_MS = 5000; // tiempo mínimo entre envíos por unidad (ajustable)
+const MIN_SEND_MS = 2000; // tiempo mínimo entre envíos por unidad (ajustable)
 
 function connectWebSocketClient() {
     try {
@@ -567,26 +567,26 @@ function onClientConnected(socket) {
                             // ===== ENVÍO OPTIMIZADO GTFRI (MAPA) =====
                                 const unidadPayload = {
                                     type: 'unidad.updated',
-                                     _id: document.value._id,
-                                     imei: document.value.imei || data[imei],
-                                     estado_movil: (toInteger(data[status]) >= 420000) ? 'M' : 'D',
-                                    latitud: toFloat(data[latitude]),
-                                    longitud: toFloat(data[longitude]),
-                                    voltaje: toFloat(data[voltage]),
-                                    velocidad_actual: toFloat(data[speed]),
-                                    mileage: toDecimalHex(data[mileage]),
-                                    bateria: toFloat(data[battery]),
-                                    is_atm: (message.includes(ATM) ? 1 : 0),
-                                    angulo: toInteger(data[angle]),
-                                    fecha_gps: (fechaGPS != 0) ? (moment(data[datetime], DEVICE_DATE_FORMAT).toDate()) : new Date(),
-                                    fecha: new Date(),
+                                    _id: document.value._id,
+                                    imei: document.value.imei || data[imei],
+                                    descripcion: document.value.descripcion || '',
+                                    placa: document.value.placa || '',
+                                    latitud: document.value.latitud,
+                                    longitud: document.value.longitud,
+                                    velocidad_actual: document.value.velocidad_actual || document.value.velocidad || 0,
+                                    voltaje: document.value.voltaje,
+                                    mileage: document.value.mileage,
+                                    bateria: document.value.bateria,
                                     contador_total: document.value.contador_total,
                                     contador_diario: document.value.contador_diario,
                                     contador_total_sensor_2: document.value.contador_total_sensor_2,
                                     contador_diario_sensor_2: document.value.contador_diario_sensor_2,
                                     contador_total_sensor_3: document.value.contador_total_sensor_3,
                                     contador_diario_sensor_3: document.value.contador_diario_sensor_3,
-                                    
+                                    estado_movil: document.value.estado_movil,
+                                    angulo: document.value.angulo,
+                                    fecha_gps: document.value.fecha_gps,
+                                    fecha: document.value.fecha,
                                     evento: document.value.evento,
                                     sentido: (document.value.sentido !== undefined) ? document.value.sentido : null,
                                     puerta: (document.value.puerta !== undefined) ? document.value.puerta : null,
