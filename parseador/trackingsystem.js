@@ -547,6 +547,9 @@ function onClientConnected(socket) {
                     try {
                         const setPayload = {
                             type: 'unidad.updated',
+                            _id: existingUnidad._id,
+                            descripcion: existingUnidad.descripcion || '',
+                            placa: document.value.placa || '',
                             imei: data[imei],
                             latitud: toFloat(data[latitude]),
                             longitud: toFloat(data[longitude]),
