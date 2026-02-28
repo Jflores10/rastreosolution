@@ -59,7 +59,7 @@ let wsReconnectTimeout = 3000;
 
 // Throttle control: evita enviar demasiados mensajes por unidad en ráfaga
 const lastSentByUnit = new Map(); // key = imei or _id -> timestamp ms
-const MIN_SEND_MS = 2000; // tiempo mínimo entre envíos por unidad (ajustable)
+const MIN_SEND_MS = 5000; // tiempo mínimo entre envíos por unidad (ajustable)
 
 function connectWebSocketClient() {
     try {
@@ -542,89 +542,70 @@ function onClientConnected(socket) {
                console.log("FechaGPS:" +moment(data[datetime], DEVICE_DATE_FORMAT).toDate())
                console.log("FechaGPSsend:" +moment(data[sentTime], DEVICE_DATE_FORMAT).toDate())
 
-                // First, try to read existing unidad so we can send a lightweight set-payload
-                dbTrackingSystem.collection('unidads').findOne({ imei: data[imei], estado: 'A' }, function(findErr, existingUnidad) {
-                    try {
-                        const setPayload = {
-                            type: 'unidad.updated',
-                            _id: existingUnidad._id,
-                            descripcion: existingUnidad.descripcion || '',
-                            placa: document.value.placa || '',
-                            imei: data[imei],
+                dbTrackingSystem.collection('unidads').findOneAndUpdate({ imei: data[imei], estado: 'A' },
+                    {
+                        $set: {
+                            estado_movil: (toInteger(data[status]) >= 420000) ? 'M' : 'D',
                             latitud: toFloat(data[latitude]),
                             longitud: toFloat(data[longitude]),
-                            velocidad_actual: toFloat(data[speed]),
                             voltaje: toFloat(data[voltage]),
+                            velocidad_actual: toFloat(data[speed]),
+                            mileage: toDecimalHex(data[mileage]),
+                            bateria: toFloat(data[battery]),
+                            is_atm: (message.includes(ATM) ? 1 : 0),
+                            angulo: toInteger(data[angle]),
                             fecha_gps: (fechaGPS != 0) ? (moment(data[datetime], DEVICE_DATE_FORMAT).toDate()) : new Date(),
-                            fecha: new Date(),
-                            cooperativa_id: existingUnidad && existingUnidad.cooperativa_id ? String(existingUnidad.cooperativa_id) : null
-                        };
-
-                        // Send fast-path before DB update if we have a cooperativa_id (force bypass throttle)
-                        if (setPayload.cooperativa_id) {
-                            try { enviarALaravelPorWS(setPayload, { force: true }); } catch (e) { console.error('❌ Fast-path send failed:', e); }
+                            fecha: new Date()
                         }
-                    } catch (e) {
-                        // ignore fast-path errors
-                        console.error('❌ Error building setPayload fast-path:', e);
-                    }
-
-                    // Now perform the actual findOneAndUpdate as before
-                    dbTrackingSystem.collection('unidads').findOneAndUpdate({ imei: data[imei], estado: 'A' },
+                    }, { returnNewDocument: true },
+                    function (err, document) {
+                        if (err)//If there is a database error, show the message
+                            console.log(err);
+                        else //If there is no error
                         {
-                            $set: {
-                                estado_movil: (toInteger(data[status]) >= 420000) ? 'M' : 'D',
-                                latitud: toFloat(data[latitude]),
-                                longitud: toFloat(data[longitude]),
-                                voltaje: toFloat(data[voltage]),
-                                velocidad_actual: toFloat(data[speed]),
-                                mileage: toDecimalHex(data[mileage]),
-                                bateria: toFloat(data[battery]),
-                                is_atm: (message.includes(ATM) ? 1 : 0),
-                                angulo: toInteger(data[angle]),
-                                fecha_gps: (fechaGPS != 0) ? (moment(data[datetime], DEVICE_DATE_FORMAT).toDate()) : new Date(),
-                                fecha: new Date()
-                            }
-                        }, { returnNewDocument: true },
-                        function (err, document) {
-                            if (err)//If there is a database error, show the message
-                                console.log(err);
-                            else //If there is no error
+
+                            // ===== ENVÍO OPTIMIZADO GTFRI (MAPA) =====
+                                const unidadPayload = {
+                                    type: 'unidad.updated',
+                                     _id: document.value._id,
+                                     imei: document.value.imei || data[imei],
+                                     estado_movil: (toInteger(data[status]) >= 420000) ? 'M' : 'D',
+                                    latitud: toFloat(data[latitude]),
+                                    longitud: toFloat(data[longitude]),
+                                    voltaje: toFloat(data[voltage]),
+                                    velocidad_actual: toFloat(data[speed]),
+                                    mileage: toDecimalHex(data[mileage]),
+                                    bateria: toFloat(data[battery]),
+                                    is_atm: (message.includes(ATM) ? 1 : 0),
+                                    angulo: toInteger(data[angle]),
+                                    fecha_gps: (fechaGPS != 0) ? (moment(data[datetime], DEVICE_DATE_FORMAT).toDate()) : new Date(),
+                                    fecha: new Date(),
+                                    contador_total: document.value.contador_total,
+                                    contador_diario: document.value.contador_diario,
+                                    contador_total_sensor_2: document.value.contador_total_sensor_2,
+                                    contador_diario_sensor_2: document.value.contador_diario_sensor_2,
+                                    contador_total_sensor_3: document.value.contador_total_sensor_3,
+                                    contador_diario_sensor_3: document.value.contador_diario_sensor_3,
+                                    
+                                    evento: document.value.evento,
+                                    sentido: (document.value.sentido !== undefined) ? document.value.sentido : null,
+                                    puerta: (document.value.puerta !== undefined) ? document.value.puerta : null,
+                                    puerta_trasera: (document.value.puerta_trasera !== undefined) ? document.value.puerta_trasera : null,
+                                    alerta_puerta_message: (document.value.alerta_puerta_message !== undefined) ? document.value.alerta_puerta_message : null,
+                                    alerta_puerta_fecha: (document.value.alerta_puerta_fecha !== undefined) ? document.value.alerta_puerta_fecha : null,
+                                    alerta_puerta_message_trasera: (document.value.alerta_puerta_message_trasera !== undefined) ? document.value.alerta_puerta_message_trasera : null,
+                                    alerta_puerta_fecha_trasera: (document.value.alerta_puerta_fecha_trasera !== undefined) ? document.value.alerta_puerta_fecha_trasera : null,
+                                    fecha_puerta_abierta: (document.value.fecha_puerta_abierta !== undefined) ? document.value.fecha_puerta_abierta : null,
+                                    fecha_puerta_abierta_trasera: (document.value.fecha_puerta_abierta_trasera !== undefined) ? document.value.fecha_puerta_abierta_trasera : null,
+                                    fecha_puerta_cerrada: (document.value.fecha_puerta_cerrada !== undefined) ? document.value.fecha_puerta_cerrada : null,
+                                    fecha_puerta_cerrada_trasera: (document.value.fecha_puerta_cerrada_trasera !== undefined) ? document.value.fecha_puerta_cerrada_trasera : null,
+                                    cooperativa_id: (document.value.cooperativa_id ? String(document.value.cooperativa_id) : null)
+                                };
+
+                                enviarALaravelPorWS(unidadPayload);
+
+                            if (document != undefined && document != null) //If unidad was updated and taken
                             {
-
-                                // ===== ENVÍO OPTIMIZADO GTFRI (MAPA) =====
-                                    const unidadPayload = {
-                                        type: 'unidad.updated',
-                                        _id: document.value._id,
-                                        imei: document.value.imei || data[imei],
-                                        descripcion: document.value.descripcion || '',
-                                        placa: document.value.placa || '',
-                                        contador_total: document.value.contador_total,
-                                        contador_diario: document.value.contador_diario,
-                                        contador_total_sensor_2: document.value.contador_total_sensor_2,
-                                        contador_diario_sensor_2: document.value.contador_diario_sensor_2,
-                                        contador_total_sensor_3: document.value.contador_total_sensor_3,
-                                        contador_diario_sensor_3: document.value.contador_diario_sensor_3,
-                                        estado_movil: document.value.estado_movil,
-                                        evento: document.value.evento,
-                                        sentido: (document.value.sentido !== undefined) ? document.value.sentido : null,
-                                        puerta: (document.value.puerta !== undefined) ? document.value.puerta : null,
-                                        puerta_trasera: (document.value.puerta_trasera !== undefined) ? document.value.puerta_trasera : null,
-                                        alerta_puerta_message: (document.value.alerta_puerta_message !== undefined) ? document.value.alerta_puerta_message : null,
-                                        alerta_puerta_fecha: (document.value.alerta_puerta_fecha !== undefined) ? document.value.alerta_puerta_fecha : null,
-                                        alerta_puerta_message_trasera: (document.value.alerta_puerta_message_trasera !== undefined) ? document.value.alerta_puerta_message_trasera : null,
-                                        alerta_puerta_fecha_trasera: (document.value.alerta_puerta_fecha_trasera !== undefined) ? document.value.alerta_puerta_fecha_trasera : null,
-                                        fecha_puerta_abierta: (document.value.fecha_puerta_abierta !== undefined) ? document.value.fecha_puerta_abierta : null,
-                                        fecha_puerta_abierta_trasera: (document.value.fecha_puerta_abierta_trasera !== undefined) ? document.value.fecha_puerta_abierta_trasera : null,
-                                        fecha_puerta_cerrada: (document.value.fecha_puerta_cerrada !== undefined) ? document.value.fecha_puerta_cerrada : null,
-                                        fecha_puerta_cerrada_trasera: (document.value.fecha_puerta_cerrada_trasera !== undefined) ? document.value.fecha_puerta_cerrada_trasera : null,
-                                        cooperativa_id: (document.value.cooperativa_id ? String(document.value.cooperativa_id) : null)
-                                    };
-
-                                    enviarALaravelPorWS(unidadPayload);
-
-                                if (document != undefined && document != null) //If unidad was updated and taken
-                                {
                                 /*
                                     We create a new record for recorridos collection
                                 */
@@ -849,7 +830,6 @@ function onClientConnected(socket) {
                         }
                     }
                 );
-                    });
             }
             else if (message.includes(GTDAT) && !message.includes(ACK))//If the message contains counter data
             {
