@@ -846,6 +846,7 @@ function onClientConnected(socket) {
                         }
                     }
                 );
+                    });
             }
             else if (message.includes(GTDAT) && !message.includes(ACK))//If the message contains counter data
             {
