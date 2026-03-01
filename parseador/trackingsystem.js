@@ -169,7 +169,7 @@ function enviarALaravelPorWS(data, opts = {}) {
                 coop = cached.cooperativa_id;
             }
         }
-
+        console.log(coop)
         coop = String(coop || '').trim();
         if (!coop) return; // aquí sí, no hay forma
 
