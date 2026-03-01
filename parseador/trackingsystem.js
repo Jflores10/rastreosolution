@@ -462,20 +462,15 @@ function procesarRecorridosYAlertas_GTFRI(documentValue, data, message, indexes)
               }
               email_send = email_send ? (email_send + "," + correoinfinty) : correoinfinty;
 
-              // Normalizar fecha GPS y formatear para notificación
-              const fechaGps = documentValue.fecha_gps;
-              let fechaGpsStr = '';
-              if (fechaGps != null) {
-                const time = moment.duration('05:00:00');
-                try {
-                  fechaGpsStr = moment(fechaGps).subtract(time).format(DATE_FORMAT);
-                } catch (e) {
-                  fechaGpsStr = String(fechaGps);
-                }
+              let dategps = documentValue.fecha_gps;
+              if (dategps != null) {
+                let datetimeM = moment(dategps, DEVICE_DATE_FORMAT);
+                let time = moment.duration("05:00:00");
+                dategps = datetimeM.subtract(time).format(DATE_FORMAT);
               }
 
               let message_notification = "  Notificación Infinity Solutions\n";
-              message_notification += "Fecha GPS: " + fechaGpsStr;
+              message_notification += "Fecha GPS: " + dategps;
               message_notification += "\nhttps://www.google.com.ec/maps/dir/" + documentValue.latitud + "," + documentValue.longitud + "//@" + documentValue.latitud + "," + documentValue.longitud + ",16z?hl=en";
               message_notification += " \nExceso de velocidad de: " + documentValue.velocidad_actual + " km/h \n\n\nInfinity Solutions";
 
@@ -527,20 +522,15 @@ function procesarRecorridosYAlertas_GTFRI(documentValue, data, message, indexes)
               // en tu código ponías solo management.infinity...:
               email_send = correoinfinty;
 
-              // Normalizar fecha GPS y formatear para notificación
-              const fechaGps = documentValue.fecha_gps;
-              let fechaGpsStr = '';
-              if (fechaGps != null) {
-                const time = moment.duration('05:00:00');
-                try {
-                  fechaGpsStr = moment(fechaGps).subtract(time).format(DATE_FORMAT);
-                } catch (e) {
-                  fechaGpsStr = String(fechaGps);
-                }
+              let dategps = documentValue.fecha_gps;
+              if (dategps != null) {
+                let datetimeM = moment(dategps, DEVICE_DATE_FORMAT);
+                let time = moment.duration("05:00:00");
+                dategps = datetimeM.subtract(time).format(DATE_FORMAT);
               }
 
               let message_notification = "  Notificación Infinity Solutions\n";
-              message_notification += "Fecha GPS: " + fechaGpsStr;
+              message_notification += "Fecha GPS: " + dategps;
               message_notification += "\nhttps://www.google.com.ec/maps/dir/" + documentValue.latitud + "," + documentValue.longitud + "//@" + documentValue.latitud + "," + documentValue.longitud + ",16z?hl=en";
               message_notification += " \nUnidad con voltaje de dispositivo de:" + documentValue.voltaje + " \n\n\nInfinity Solutions";
 
@@ -1021,97 +1011,154 @@ function onClientConnected(socket) {
       }
 
       // ================== GTDIS (PUERTAS) ==================
-      else if (message.includes(GTDIS) && !message.includes(ACK)) {
-        let imei = 2;
-        let speed = 8;
-        let angle = 9;
-        let longitude = 11;
-        let latitude = 12;
-        let datetime = 13;
-        let sentTime = 20;
-        let indexdoor = 5;
-        let data = message.split(',');
+        else if (message.includes(GTDIS) && !message.includes(ACK)) {
 
-        let puerta = '';
-        if (toInteger(data[indexdoor]) == 20) puerta = 'PUERTA ABIERTA (DELANTERA)';
-        if (toInteger(data[indexdoor]) == 21) puerta = 'PUERTA CERRADA (DELANTERA)';
-        if (toInteger(data[indexdoor]) == 30) puerta = 'PUERTA ABIERTA (TRASERA)';
-        if (toInteger(data[indexdoor]) == 31) puerta = 'PUERTA CERRADA (TRASERA)';
+            let imei = 2;
+            let speed = 8;
+            let angle = 9;
+            let longitude = 11;
+            let latitude = 12;
+            let datetime = 13;
+            let sentTime = 20;
+            let indexdoor = 5;
 
-        dbTrackingSystem.collection('unidads').findOne({ imei: data[imei], estado: 'A' }, function (err, document) {
-          if (err) console.log(err);
-          else if (document) {
-            let latitud = toFloat(data[latitude]);
-            let longitudV = toFloat(data[longitude]);
-            let fecha_servidor = new Date();
-            let fecha_gps = (toInteger(data[datetime]) != 0) ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate() : new Date();
+            let data = message.split(',');
 
-            if (latitud === 0 || longitudV === 0) {
-              latitud = document.latitud;
-              longitudV = document.longitud;
-            }
+            let puerta = '';
+            if (toInteger(data[indexdoor]) === 20) puerta = 'PUERTA ABIERTA (DELANTERA)';
+            if (toInteger(data[indexdoor]) === 21) puerta = 'PUERTA CERRADA (DELANTERA)';
+            if (toInteger(data[indexdoor]) === 30) puerta = 'PUERTA ABIERTA (TRASERA)';
+            if (toInteger(data[indexdoor]) === 31) puerta = 'PUERTA CERRADA (TRASERA)';
 
-            dbTrackingSystem.collection('recorridos').insertOne({
-              imei: data[imei],
-              tipo: GTDIS,
-              unidad_id: document._id,
-              velocidad: toFloat(data[speed]),
-              angulo: toInteger(data[angle]),
-              longitud: longitudV,
-              latitud: latitud,
-              fecha_gps: fecha_gps,
-              fecha: fecha_servidor,
-              evento: puerta,
-              fecha_envio: (toInteger(data[sentTime]) != 0) ? moment(data[sentTime], DEVICE_DATE_FORMAT).toDate() : new Date(),
-              js: true
-            }, { writeConcern: { w: 0 } });
+            dbTrackingSystem.collection('unidads').findOne(
+                { imei: data[imei], estado: 'A' },
+                function (err, document) {
+                    if (err || !document) return;
 
-            if (toInteger(data[indexdoor]) == 20 || toInteger(data[indexdoor]) == 21) {
-              dbTrackingSystem.collection('unidads').updateOne({ _id: document._id }, {
-                $set: {
-                  puerta: puerta,
-                  alerta_puerta_message: puerta,
-                  alerta_puerta_fecha: fecha_gps,
-                  fecha_puerta_abierta: ((puerta == 'PUERTA ABIERTA (DELANTERA)') ? fecha_gps : (document.fecha_puerta_abierta ?? null)),
-                  fecha_puerta_cerrada: ((puerta == 'PUERTA CERRADA (DELANTERA)') ? fecha_gps : (document.fecha_puerta_cerrada ?? null)),
-                  is_atm: 0
+                    let latitud = toFloat(data[latitude]);
+                    let longitudV = toFloat(data[longitude]);
+                    let fecha_servidor = new Date();
+                    let fecha_gps = (toInteger(data[datetime]) !== 0)
+                        ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate()
+                        : new Date();
+
+                    if (latitud === 0 || longitudV === 0) {
+                        latitud = document.latitud;
+                        longitudV = document.longitud;
+                    }
+
+                    // Registrar recorrido
+                    dbTrackingSystem.collection('recorridos').insertOne({
+                        imei: data[imei],
+                        tipo: GTDIS,
+                        unidad_id: document._id,
+                        velocidad: toFloat(data[speed]),
+                        angulo: toInteger(data[angle]),
+                        longitud: longitudV,
+                        latitud: latitud,
+                        fecha_gps: fecha_gps,
+                        fecha: fecha_servidor,
+                        evento: puerta,
+                        fecha_envio: (toInteger(data[sentTime]) !== 0)
+                            ? moment(data[sentTime], DEVICE_DATE_FORMAT).toDate()
+                            : new Date(),
+                        js: true
+                    }, { writeConcern: { w: 0 } });
+
+                    // ================= PUERTA DELANTERA =================
+                    if (toInteger(data[indexdoor]) === 20 || toInteger(data[indexdoor]) === 21) {
+
+                        let fechaPuertaAbierta = null;
+                        let fechaPuertaCerrada = null;
+
+                        if (puerta === 'PUERTA ABIERTA (DELANTERA)') {
+                            fechaPuertaAbierta = fecha_gps;
+                        } else if (document.fecha_puerta_abierta !== undefined && document.fecha_puerta_abierta !== null) {
+                            fechaPuertaAbierta = document.fecha_puerta_abierta;
+                        }
+
+                        if (puerta === 'PUERTA CERRADA (DELANTERA)') {
+                            fechaPuertaCerrada = fecha_gps;
+                        } else if (document.fecha_puerta_cerrada !== undefined && document.fecha_puerta_cerrada !== null) {
+                            fechaPuertaCerrada = document.fecha_puerta_cerrada;
+                        }
+
+                        dbTrackingSystem.collection('unidads').updateOne(
+                            { _id: document._id },
+                            {
+                                $set: {
+                                    puerta: puerta,
+                                    alerta_puerta_message: puerta,
+                                    alerta_puerta_fecha: fecha_gps,
+                                    fecha_puerta_abierta: fechaPuertaAbierta,
+                                    fecha_puerta_cerrada: fechaPuertaCerrada,
+                                    is_atm: 0
+                                }
+                            },
+                            { writeConcern: { w: 0 } }
+                        );
+
+                        enviarALaravelPorWS({
+                            type: 'unidad.alerta.puerta',
+                            unidad_id: document._id,
+                            imei: document.imei,
+                            puerta: 'DELANTERA',
+                            estado: puerta,
+                            fecha: fecha_gps,
+                            cooperativa_id: document.cooperativa_id
+                                ? String(document.cooperativa_id).trim()
+                                : null
+                        });
+
+                    }
+                    // ================= PUERTA TRASERA =================
+                    else {
+
+                        let fechaPuertaAbiertaT = null;
+                        let fechaPuertaCerradaT = null;
+
+                        if (puerta === 'PUERTA ABIERTA (TRASERA)') {
+                            fechaPuertaAbiertaT = fecha_gps;
+                        } else if (document.fecha_puerta_abierta_trasera !== undefined && document.fecha_puerta_abierta_trasera !== null) {
+                            fechaPuertaAbiertaT = document.fecha_puerta_abierta_trasera;
+                        }
+
+                        if (puerta === 'PUERTA CERRADA (TRASERA)') {
+                            fechaPuertaCerradaT = fecha_gps;
+                        } else if (document.fecha_puerta_cerrada_trasera !== undefined && document.fecha_puerta_cerrada_trasera !== null) {
+                            fechaPuertaCerradaT = document.fecha_puerta_cerrada_trasera;
+                        }
+
+                        dbTrackingSystem.collection('unidads').updateOne(
+                            { _id: document._id },
+                            {
+                                $set: {
+                                    puerta_trasera: puerta,
+                                    alerta_puerta_message_trasera: puerta,
+                                    alerta_puerta_fecha_trasera: fecha_gps,
+                                    fecha_puerta_abierta_trasera: fechaPuertaAbiertaT,
+                                    fecha_puerta_cerrada_trasera: fechaPuertaCerradaT,
+                                    is_atm: 0
+                                }
+                            },
+                            { writeConcern: { w: 0 } }
+                        );
+
+                        enviarALaravelPorWS({
+                            type: 'unidad.alerta.puerta',
+                            unidad_id: document._id,
+                            imei: document.imei,
+                            puerta: 'TRASERA',
+                            estado: puerta,
+                            fecha: fecha_gps,
+                            cooperativa_id: document.cooperativa_id
+                                ? String(document.cooperativa_id).trim()
+                                : null
+                        });
+                    }
                 }
-              }, { writeConcern: { w: 0 } });
-
-              enviarALaravelPorWS({
-                type: 'unidad.alerta.puerta',
-                unidad_id: document._id,
-                imei: document.imei,
-                puerta: 'DELANTERA',
-                estado: puerta,
-                fecha: fecha_gps,
-                cooperativa_id: document.cooperativa_id ? String(document.cooperativa_id).trim() : null
-              });
-            } else {
-              dbTrackingSystem.collection('unidads').updateOne({ _id: document._id }, {
-                $set: {
-                  puerta_trasera: puerta,
-                  alerta_puerta_message_trasera: puerta,
-                  alerta_puerta_fecha_trasera: fecha_gps,
-                  fecha_puerta_abierta_trasera: ((puerta == 'PUERTA ABIERTA (TRASERA)') ? fecha_gps : (document.fecha_puerta_abierta_trasera ?? null)),
-                  fecha_puerta_cerrada_trasera: ((puerta == 'PUERTA CERRADA (TRASERA)') ? fecha_gps : (document.fecha_puerta_cerrada_trasera ?? null)),
-                  is_atm: 0
-                }
-              }, { writeConcern: { w: 0 } });
-
-              enviarALaravelPorWS({
-                type: 'unidad.alerta.puerta',
-                unidad_id: document._id,
-                imei: document.imei,
-                puerta: 'TRASERA',
-                estado: puerta,
-                fecha: fecha_gps,
-                cooperativa_id: document.cooperativa_id ? String(document.cooperativa_id).trim() : null
-              });
-            }
-          }
-        });
-      }
+            );
+        }
 
       // ================== GTMPF / GTMPN ==================
       else if (message.includes(GTMPF) && !message.includes(ACK)) {
