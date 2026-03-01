@@ -158,14 +158,20 @@ function enviarALaravelPorWS(data, opts = {}) {
 
     // 2) TRACKING (unidad.updated)
     if (data.type === 'unidad.updated') {
-        console.log("entro"+data.cooperativa_id)
-      const coop = String(data.cooperativa_id || '').trim();
-      if (!coop) return;
-        console.log("entro1")
+        const key = String(data.imei || data._id || '').trim();
+        if (!key) return;
 
-      const key = String(data.imei || data._id || '').trim();
-      if (!key) return;
-        console.log("entro2")
+        // 🔑 recuperar desde cache si no viene en el payload
+        let coop = data.cooperativa_id;
+        if (!coop) {
+            const cached = unidadStateCache.get(key);
+            if (cached && cached.cooperativa_id) {
+                coop = cached.cooperativa_id;
+            }
+        }
+
+        coop = String(coop || '').trim();
+        if (!coop) return; // aquí sí, no hay forma
 
       // Throttle inteligente: solo limita si NO hay movimiento
       const prev = lastSentByUnit.get(key);
