@@ -158,11 +158,14 @@ function enviarALaravelPorWS(data, opts = {}) {
 
     // 2) TRACKING (unidad.updated)
     if (data.type === 'unidad.updated') {
+        console.log("entro")
       const coop = String(data.cooperativa_id || '').trim();
       if (!coop) return;
+        console.log("entro1")
 
       const key = String(data.imei || data._id || '').trim();
       if (!key) return;
+        console.log("entro2")
 
       // Throttle inteligente: solo limita si NO hay movimiento
       const prev = lastSentByUnit.get(key);
@@ -643,7 +646,6 @@ function onClientConnected(socket) {
 
             // ===================== PAYLOAD COMPLETO (CACHE + GPS) =====================
             const unidadPayload = buildUnidadPayloadRealtime(gpsData);
-            console.log(unidadPayload)
 
             // 🔥🔥🔥 ENVIAR AL FRONT INMEDIATO
             enviarALaravelPorWS(unidadPayload);
