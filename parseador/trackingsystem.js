@@ -158,7 +158,7 @@ function enviarALaravelPorWS(data, opts = {}) {
 
     // 2) TRACKING (unidad.updated)
     if (data.type === 'unidad.updated') {
-        console.log("entro")
+        console.log("entro"+coop)
       const coop = String(data.cooperativa_id || '').trim();
       if (!coop) return;
         console.log("entro1")
