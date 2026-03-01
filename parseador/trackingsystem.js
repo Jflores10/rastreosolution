@@ -644,6 +644,7 @@ function onClientConnected(socket) {
               bateria: toFloat(data[idx.battery]),
               is_atm: (message.includes(ATM) ? 1 : 0),
               angulo: toInteger(data[idx.angle]),
+              descripcion:document.value.descripcion,
               fecha_gps: (fechaGPS !== 0) ? moment(data[idx.datetime], DEVICE_DATE_FORMAT).toDate() : new Date(),
               fecha: new Date(),
               contador_total: document.value.contador_total,
