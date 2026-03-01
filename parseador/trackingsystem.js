@@ -71,7 +71,20 @@ let logsAdmin = [];
 // WS client (si lo quieres usar como fallback; en tu flujo actual publicas Redis)
 let wsClient = null;
 let wsReconnectTimeout = 3000;
+const unidadStateCache = new Map();
 
+function buildUnidadPayloadRealtime(base, extra = {}) {
+    const key = String(base.imei || base._id || '').trim();
+    const prev = unidadStateCache.get(key) || {};
+
+    // Merge: lo nuevo pisa lo viejo, pero NO borra campos
+    const payload = Object.assign({}, prev, base, extra);
+
+    // Guardar cache
+    unidadStateCache.set(key, payload);
+
+    return payload;
+}
 function connectWebSocketClient() {
   try {
     wsClient = new WebSocket("ws://127.0.0.1:6001");
@@ -587,96 +600,86 @@ function onClientConnected(socket) {
       }
 
       // ================== GTFRI (TRACKING) ==================
-      else if (message.includes(GTFRI) && !message.includes(ACK)) {
-        // indexes
-        const idx = {
-          imei: 2,
-          voltage: 4,
-          speed: 8,
-          angle: 9,
-          height: 10,
-          longitude: 11,
-          latitude: 12,
-          datetime: 13,
-          mileage: 17,
-          battery: 23,
-          status: 24,
-          sentTime: 28
-        };
+     // ================== GTFRI (REALTIME + ESTADO COMPLETO) ==================
+        else if (message.includes(GTFRI) && !message.includes(ACK)) {
 
-        const data = message.split(',');
-        const fechaGPS = toInteger(data[idx.datetime]);
-
-        // UPDATE unidad primero (BD)
-        dbTrackingSystem.collection('unidads').findOneAndUpdate(
-          { imei: data[idx.imei], estado: 'A' },
-          {
-            $set: {
-              estado_movil: (toInteger(data[idx.status]) >= 420000) ? 'M' : 'D',
-              latitud: toFloat(data[idx.latitude]),
-              longitud: toFloat(data[idx.longitude]),
-              voltaje: toFloat(data[idx.voltage]),
-              velocidad_actual: toFloat(data[idx.speed]),
-              mileage: toDecimalHex(data[idx.mileage]),
-              bateria: toFloat(data[idx.battery]),
-              is_atm: (message.includes(ATM) ? 1 : 0),
-              angulo: toInteger(data[idx.angle]),
-              fecha_gps: (fechaGPS !== 0) ? moment(data[idx.datetime], DEVICE_DATE_FORMAT).toDate() : new Date(),
-              fecha: new Date()
-            }
-          },
-          { returnNewDocument: true },
-          function (err, document) {
-            if (err) { console.log(err); return; }
-            if (!document || !document.value) return;
-
-            // ✅ 1) SSE/Redis publish INMEDIATO (no bloquear)
-            const unidadPayload = {
-              type: 'unidad.updated',
-              _id: document.value._id,
-              imei: document.value.imei || data[idx.imei],
-              estado_movil: (toInteger(data[idx.status]) >= 420000) ? 'M' : 'D',
-              latitud: toFloat(data[idx.latitude]),
-              longitud: toFloat(data[idx.longitude]),
-              voltaje: toFloat(data[idx.voltage]),
-              velocidad_actual: toFloat(data[idx.speed]),
-              mileage: toDecimalHex(data[idx.mileage]),
-              bateria: toFloat(data[idx.battery]),
-              is_atm: (message.includes(ATM) ? 1 : 0),
-              angulo: toInteger(data[idx.angle]),
-              descripcion:document.value.descripcion,
-              fecha_gps: (fechaGPS !== 0) ? moment(data[idx.datetime], DEVICE_DATE_FORMAT).toDate() : new Date(),
-              fecha: new Date(),
-              contador_total: document.value.contador_total,
-              contador_diario: document.value.contador_diario,
-              contador_total_sensor_2: document.value.contador_total_sensor_2,
-              contador_diario_sensor_2: document.value.contador_diario_sensor_2,
-              contador_total_sensor_3: document.value.contador_total_sensor_3,
-              contador_diario_sensor_3: document.value.contador_diario_sensor_3,
-              evento: document.value.evento,
-              sentido: (document.value.sentido !== undefined) ? document.value.sentido : null,
-              puerta: (document.value.puerta !== undefined) ? document.value.puerta : null,
-              puerta_trasera: (document.value.puerta_trasera !== undefined) ? document.value.puerta_trasera : null,
-              alerta_puerta_message: (document.value.alerta_puerta_message !== undefined) ? document.value.alerta_puerta_message : null,
-              alerta_puerta_fecha: (document.value.alerta_puerta_fecha !== undefined) ? document.value.alerta_puerta_fecha : null,
-              alerta_puerta_message_trasera: (document.value.alerta_puerta_message_trasera !== undefined) ? document.value.alerta_puerta_message_trasera : null,
-              alerta_puerta_fecha_trasera: (document.value.alerta_puerta_fecha_trasera !== undefined) ? document.value.alerta_puerta_fecha_trasera : null,
-              fecha_puerta_abierta: (document.value.fecha_puerta_abierta !== undefined) ? document.value.fecha_puerta_abierta : null,
-              fecha_puerta_abierta_trasera: (document.value.fecha_puerta_abierta_trasera !== undefined) ? document.value.fecha_puerta_abierta_trasera : null,
-              fecha_puerta_cerrada: (document.value.fecha_puerta_cerrada !== undefined) ? document.value.fecha_puerta_cerrada : null,
-              fecha_puerta_cerrada_trasera: (document.value.fecha_puerta_cerrada_trasera !== undefined) ? document.value.fecha_puerta_cerrada_trasera : null,
-              cooperativa_id: (document.value.cooperativa_id ? String(document.value.cooperativa_id) : null)
+            const idx = {
+                imei: 2,
+                voltage: 4,
+                speed: 8,
+                angle: 9,
+                height: 10,
+                longitude: 11,
+                latitude: 12,
+                datetime: 13,
+                mileage: 17,
+                battery: 23,
+                status: 24,
+                sentTime: 28
             };
 
+            const data = message.split(',');
+            const now = new Date();
+            const fechaGPS = toInteger(data[idx.datetime]);
+
+            // ===================== DATOS NUEVOS (GPS) =====================
+            const gpsData = {
+                type: 'unidad.updated',
+                imei: data[idx.imei],
+                latitud: toFloat(data[idx.latitude]),
+                longitud: toFloat(data[idx.longitude]),
+                voltaje: toFloat(data[idx.voltage]),
+                velocidad_actual: toFloat(data[idx.speed]),
+                bateria: toFloat(data[idx.battery]),
+                mileage: toDecimalHex(data[idx.mileage]),
+                angulo: toInteger(data[idx.angle]),
+                estado_movil: (toInteger(data[idx.status]) >= 420000) ? 'M' : 'D',
+                fecha_gps: (fechaGPS !== 0)
+                    ? moment(data[idx.datetime], DEVICE_DATE_FORMAT).toDate()
+                    : now,
+                fecha: now,
+                is_atm: (message.includes(ATM) ? 1 : 0)
+            };
+
+            // ===================== PAYLOAD COMPLETO (CACHE + GPS) =====================
+            const unidadPayload = buildUnidadPayloadRealtime(gpsData);
+
+            // 🔥🔥🔥 ENVIAR AL FRONT INMEDIATO
             enviarALaravelPorWS(unidadPayload);
 
-            // ✅ 2) Trabajo pesado (NO bloquea SSE)
+            // ===================== ACTUALIZAR BD (NO BLOQUEA) =====================
+            dbTrackingSystem.collection('unidads').updateOne(
+                { imei: data[idx.imei], estado: 'A' },
+                {
+                    $set: {
+                        estado_movil: unidadPayload.estado_movil,
+                        latitud: unidadPayload.latitud,
+                        longitud: unidadPayload.longitud,
+                        voltaje: unidadPayload.voltaje,
+                        velocidad_actual: unidadPayload.velocidad_actual,
+                        mileage: unidadPayload.mileage,
+                        bateria: unidadPayload.bateria,
+                        is_atm: unidadPayload.is_atm,
+                        angulo: unidadPayload.angulo,
+                        fecha_gps: unidadPayload.fecha_gps,
+                        fecha: now
+                    }
+                },
+                { writeConcern: { w: 0 } }
+            );
+
+            // ===================== TRABAJO PESADO ASYNC =====================
             setImmediate(() => {
-              procesarRecorridosYAlertas_GTFRI(document.value, data, message, idx);
+                try {
+                    procesarRecorridosYAlertas_GTFRI(
+                        { _id: unidadPayload._id || null, ...unidadPayload },
+                        data,
+                        message,
+                        idx
+                    );
+                } catch (e) {}
             });
-          }
-        );
-      }
+        }
 
       // ================== GTDAT ==================
       else if (message.includes(GTDAT) && !message.includes(ACK)) {
