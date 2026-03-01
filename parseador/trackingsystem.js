@@ -164,15 +164,12 @@ function enviarALaravelPorWS(data, opts = {}) {
         // 🔑 recuperar desde cache si no viene en el payload
         let coop = data.cooperativa_id;
         if (!coop) {
-            console.log("emtrp")
             const cached = unidadStateCache.get(key);
             if (cached && cached.cooperativa_id) {
                 coop = cached.cooperativa_id;
             }
-            console.log("111"+cached)
 
         }
-        console.log(coop)
         coop = String(coop || '').trim();
         if (!coop) return; // aquí sí, no hay forma
 
