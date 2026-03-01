@@ -643,6 +643,7 @@ function onClientConnected(socket) {
 
             // ===================== PAYLOAD COMPLETO (CACHE + GPS) =====================
             const unidadPayload = buildUnidadPayloadRealtime(gpsData);
+            console.log(unidadPayload)
 
             // 🔥🔥🔥 ENVIAR AL FRONT INMEDIATO
             enviarALaravelPorWS(unidadPayload);
