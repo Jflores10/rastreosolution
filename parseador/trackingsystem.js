@@ -462,15 +462,20 @@ function procesarRecorridosYAlertas_GTFRI(documentValue, data, message, indexes)
               }
               email_send = email_send ? (email_send + "," + correoinfinty) : correoinfinty;
 
-              let dategps = documentValue.fecha_gps;
-              if (dategps != null) {
-                let datetimeM = moment(dategps, DEVICE_DATE_FORMAT);
-                let time = moment.duration("05:00:00");
-                dategps = datetimeM.subtract(time).format(DATE_FORMAT);
+              // Normalizar fecha GPS y formatear para notificación
+              const fechaGps = documentValue.fecha_gps;
+              let fechaGpsStr = '';
+              if (fechaGps != null) {
+                const time = moment.duration('05:00:00');
+                try {
+                  fechaGpsStr = moment(fechaGps).subtract(time).format(DATE_FORMAT);
+                } catch (e) {
+                  fechaGpsStr = String(fechaGps);
+                }
               }
 
               let message_notification = "  Notificación Infinity Solutions\n";
-              message_notification += "Fecha GPS: " + dategps;
+              message_notification += "Fecha GPS: " + fechaGpsStr;
               message_notification += "\nhttps://www.google.com.ec/maps/dir/" + documentValue.latitud + "," + documentValue.longitud + "//@" + documentValue.latitud + "," + documentValue.longitud + ",16z?hl=en";
               message_notification += " \nExceso de velocidad de: " + documentValue.velocidad_actual + " km/h \n\n\nInfinity Solutions";
 
@@ -522,15 +527,20 @@ function procesarRecorridosYAlertas_GTFRI(documentValue, data, message, indexes)
               // en tu código ponías solo management.infinity...:
               email_send = correoinfinty;
 
-              let dategps = documentValue.fecha_gps;
-              if (dategps != null) {
-                let datetimeM = moment(dategps, DEVICE_DATE_FORMAT);
-                let time = moment.duration("05:00:00");
-                dategps = datetimeM.subtract(time).format(DATE_FORMAT);
+              // Normalizar fecha GPS y formatear para notificación
+              const fechaGps = documentValue.fecha_gps;
+              let fechaGpsStr = '';
+              if (fechaGps != null) {
+                const time = moment.duration('05:00:00');
+                try {
+                  fechaGpsStr = moment(fechaGps).subtract(time).format(DATE_FORMAT);
+                } catch (e) {
+                  fechaGpsStr = String(fechaGps);
+                }
               }
 
               let message_notification = "  Notificación Infinity Solutions\n";
-              message_notification += "Fecha GPS: " + dategps;
+              message_notification += "Fecha GPS: " + fechaGpsStr;
               message_notification += "\nhttps://www.google.com.ec/maps/dir/" + documentValue.latitud + "," + documentValue.longitud + "//@" + documentValue.latitud + "," + documentValue.longitud + ",16z?hl=en";
               message_notification += " \nUnidad con voltaje de dispositivo de:" + documentValue.voltaje + " \n\n\nInfinity Solutions";
 
