@@ -655,7 +655,10 @@ function onClientConnected(socket) {
             const data = message.split(',');
             const now = new Date();
             const fechaGPS = toInteger(data[idx.datetime]);
+            if(data[idx.imei]=='868789024290420'){
+            console.log(fechaGPS+" -- "+data[idx.imei])
 
+            }
             // ===================== DATOS NUEVOS (GPS) =====================
             const gpsData = {
                 type: 'unidad.updated',
