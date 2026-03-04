@@ -1199,10 +1199,27 @@ function onClientConnected(socket) {
         else if (message.includes(GTIGN) && !message.includes(ACK)) {
             let imei = 2;
             let data = message.split(',');
+            let speed = 6;
+            let angle = 7;
+            let height = 8;
+            let longitude = 9;
+            let latitude = 10;
+            let datetime = 11;
+            let fechaGPS = toInteger(data[datetime]);
+
 
             dbTrackingSystem.collection('unidads').updateOne(
                 { imei: data[imei], estado: 'A' },
-                { $set: { ignicionf: 'on' } },
+                { $set: { 
+                    ignicionf: 'on',
+                    fecha_gps: (fechaGPS != 0) ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate() : new Date(),
+                    latitud: toFloat(data[latitude]),
+                    longitud: toFloat(data[longitude]),
+                    velocidad: toFloat(data[speed]),
+                    altura: toFloat(data[height]),
+                    angulo: toInteger(data[angle]),
+                    fecha: new Date(),
+                } },
                 { writeConcern: { w: 0 } },
                 function(err, result) {
                     if (err) console.log(err);
@@ -1213,10 +1230,27 @@ function onClientConnected(socket) {
         else if (message.includes(GTIGF) && !message.includes(ACK)) {
             let imei = 2;
             let data = message.split(',');
+            let speed = 6;
+            let angle = 7;
+            let height = 8;
+            let longitude = 9;
+            let latitude = 10;
+            let datetime = 11;
+            let fechaGPS = toInteger(data[datetime]);
+           
 
             dbTrackingSystem.collection('unidads').updateOne(
                 { imei: data[imei], estado: 'A' },
-                { $set: { ignicionf: 'off' } },
+                { $set: { 
+                    ignicionf: 'off',
+                    fecha_gps: (fechaGPS != 0) ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate() : new Date(),
+                    latitud: toFloat(data[latitude]),
+                    longitud: toFloat(data[longitude]),
+                    velocidad: toFloat(data[speed]),
+                    altura: toFloat(data[height]),
+                    angulo: toInteger(data[angle]),
+                    fecha: new Date(),
+                } },
                 { writeConcern: { w: 0 } },
                 function(err, result) {
                     if (err) console.log(err);
