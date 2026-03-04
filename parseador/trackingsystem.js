@@ -614,10 +614,9 @@ function onClientConnected(socket) {
     sendLogsToAdminSockets(message);
     const datatest = message.split(',');
 
-    if(datatest[2]=='867162025631219'){
+    if(datatest.includes('867162025631219')){
         console.log("Ime"  +datatest)
     }
-    console.log(datatest)
 
     const imeiIndex = 2;
 
