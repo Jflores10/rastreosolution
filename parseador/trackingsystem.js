@@ -612,12 +612,7 @@ function onClientConnected(socket) {
   socket.on('data', (dataRaw) => {
     const message = dataRaw.toString();
     sendLogsToAdminSockets(message);
-    const datatest = message.split(',');
-
-    if(datatest.includes('861074023935177')){
-        console.log("Ime"  +datatest)
-    }
-
+    
     const imeiIndex = 2;
 
     try {
@@ -1199,6 +1194,36 @@ function onClientConnected(socket) {
                 }
             );
         }
+      // ================== GTIGN / GTIGF ==================
+
+        else if (message.includes(GTIGN) && !message.includes(ACK)) {
+            let imei = 2;
+            let data = message.split(',');
+
+            dbTrackingSystem.collection('unidads').updateOne(
+                { imei: data[imei], estado: 'A' },
+                { $set: { ignicionf: 'on' } },
+                { writeConcern: { w: 0 } },
+                function(err, result) {
+                    if (err) console.log(err);
+                }
+            );
+        }
+
+        else if (message.includes(GTIGF) && !message.includes(ACK)) {
+            let imei = 2;
+            let data = message.split(',');
+
+            dbTrackingSystem.collection('unidads').updateOne(
+                { imei: data[imei], estado: 'A' },
+                { $set: { ignicionf: 'off' } },
+                { writeConcern: { w: 0 } },
+                function(err, result) {
+                    if (err) console.log(err);
+                }
+            );
+        }
+
 
       // ================== GTMPF / GTMPN ==================
       else if (message.includes(GTMPF) && !message.includes(ACK)) {
