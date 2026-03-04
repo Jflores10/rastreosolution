@@ -612,6 +612,12 @@ function onClientConnected(socket) {
   socket.on('data', (dataRaw) => {
     const message = dataRaw.toString();
     sendLogsToAdminSockets(message);
+    const datatest = message.split(',');
+
+    if(datatest[2]=='867162025631219'){
+        console.log("Ime"  +datatest)
+    }
+    console.log(datatest)
 
     const imeiIndex = 2;
 
@@ -652,10 +658,7 @@ function onClientConnected(socket) {
             const data = message.split(',');
             const now = new Date();
             const fechaGPS = toInteger(data[idx.datetime]);
-            if(data[idx.imei]=='867162025631219'){
-                console.log(data)
-
-            }
+           
             // ===================== DATOS NUEVOS (GPS) =====================
             const gpsData = {
                 type: 'unidad.updated',
