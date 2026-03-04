@@ -614,7 +614,7 @@ function onClientConnected(socket) {
     sendLogsToAdminSockets(message);
     const datatest = message.split(',');
 
-    if(datatest.includes('867162025631219')){
+    if(datatest.includes('861074023935177')){
         console.log("Ime"  +datatest)
     }
 
