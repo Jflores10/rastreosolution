@@ -679,37 +679,46 @@ function onClientConnected(socket) {
             enviarALaravelPorWS(unidadPayload);
 
             // ===================== ACTUALIZAR BD (NO BLOQUEA) =====================
-            dbTrackingSystem.collection('unidads').updateOne(
+            dbTrackingSystem.collection('unidads').findOneAndUpdate(
                 { imei: data[idx.imei], estado: 'A' },
                 {
                     $set: {
-                        estado_movil: unidadPayload.estado_movil,
-                        latitud: unidadPayload.latitud,
-                        longitud: unidadPayload.longitud,
-                        voltaje: unidadPayload.voltaje,
-                        velocidad_actual: unidadPayload.velocidad_actual,
-                        mileage: unidadPayload.mileage,
-                        bateria: unidadPayload.bateria,
-                        is_atm: unidadPayload.is_atm,
-                        angulo: unidadPayload.angulo,
-                        fecha_gps: unidadPayload.fecha_gps,
+                        estado_movil: gpsData.estado_movil,
+                        latitud: gpsData.latitud,
+                        longitud: gpsData.longitud,
+                        voltaje: gpsData.voltaje,
+                        velocidad_actual: gpsData.velocidad_actual,
+                        mileage: gpsData.mileage,
+                        bateria: gpsData.bateria,
+                        is_atm: gpsData.is_atm,
+                        angulo: gpsData.angulo,
+                        fecha_gps: gpsData.fecha_gps,
                         fecha: now
                     }
                 },
-                { writeConcern: { w: 0 } }
-            );
+                { returnDocument: 'after', writeConcern: { w: 0 } },
+                function (err, result) {
 
-            // ===================== TRABAJO PESADO ASYNC =====================
-            setImmediate(() => {
-                try {
-                    procesarRecorridosYAlertas_GTFRI(
-                        { _id: unidadPayload._id || null, ...unidadPayload },
-                        data,
-                        message,
-                        idx
-                    );
-                } catch (e) {}
-            });
+                    if (err || !result || !result.value) return;
+
+                    const unidad = result.value; // 🔥 unidad ya actualizada
+
+                    // ===================== TRABAJO PESADO =====================
+                    setImmediate(() => {
+                        try {
+
+                            procesarRecorridosYAlertas_GTFRI(
+                                unidad,   
+                                data,
+                                message,
+                                idx
+                            );
+
+                        } catch (e) {}
+                    });
+
+                }
+            );
         }
 
       // ================== GTDAT ==================
