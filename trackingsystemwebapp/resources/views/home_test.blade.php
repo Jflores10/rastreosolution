@@ -670,7 +670,6 @@ function conectarSSE(coopId) {
         try {
 
             const data = JSON.parse(evt.data);
-            console.log(data)
             if (data && data._id) {
                 // First, apply realtime position/marker
                 actualizarUnidadRealtime(data);
@@ -719,6 +718,8 @@ function conectarSSE(coopId) {
     sse.addEventListener('unidad.sentido.changed', (evt) => {
         try {
             const data = JSON.parse(evt.data);
+            console.log(data)
+
             const li = document.getElementById(data.unidad_id);
             if (li && li.currentU) {
                 li.currentU.sentido = data.nuevo_sentido;
@@ -730,6 +731,8 @@ function conectarSSE(coopId) {
     sse.addEventListener('unidad.alerta.puerta', (evt) => {
         try {
             const msg = JSON.parse(evt.data);
+            console.log(msg)
+
             const li = document.getElementById(msg.unidad_id);
             if (!li || !li.currentU) return;
 
