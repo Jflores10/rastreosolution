@@ -639,7 +639,7 @@ function refreshVisibleUnidadesMeta() {
                 // cache it
                 unidadesMetaCache[uid] = { data: m, ts: Date.now() };
                 // apply: DO NOT overwrite existing ruta on the LI (unless empty) — only apply route if LI has none
-                applyMetaToLi(uid, m, 'batch');
+                //applyMetaToLi(uid, m, 'batch');
             });
         });
     } catch (e) {
@@ -689,7 +689,7 @@ function conectarSSE(coopId) {
                 const anyMeta = Object.keys(meta).some(k => meta[k] && meta[k] !== '');
                 if (anyMeta) {
                     unidadesMetaCache[data._id] = { data: meta, ts: Date.now() };
-                    applyMetaToLi(data._id, meta, 'sse');
+                    //applyMetaToLi(data._id, meta, 'sse');
                 }
 
                 // Now update the rest of the unidad fields in the list
@@ -704,7 +704,7 @@ function conectarSSE(coopId) {
                             var serverMeta = resp && resp[data._id] ? resp[data._id] : null;
                             if (serverMeta) {
                                 unidadesMetaCache[data._id] = { data: serverMeta, ts: Date.now() };
-                                applyMetaToLi(data._id, serverMeta, 'sse');
+                                //applyMetaToLi(data._id, serverMeta, 'sse');
                             }
                         } catch (e) { console.warn('apply server meta after sse failed', e); }
                     }).catch(function(e){ /* ignore */ });
