@@ -550,9 +550,6 @@ function iniciarSSEGlobal() {
         || Auth::user()->tipo_usuario->valor==5)
         conectarSSE('*');
     @endif
-
-    // Start periodic meta refresh (safe to call multiple times)
-    try { scheduleMetaRefresh(); } catch (e) { console.warn('scheduleMetaRefresh failed', e); }
 }
 
 // ⚡ Conectar SSE apenas el DOM esté listo
@@ -568,17 +565,6 @@ const GPS_HOUR_OFFSET = -5; // restar 10 horas a fecha_gps
 const SERVER_HOUR_OFFSET = -5; // restar 5 horas a fecha (servidor)
 
 let sse = null;
-const unidadesMetaCache = {}; // unidad_id -> {data, ts}
-const META_TTL_MS = 30 * 1000; // 30s cache
-const META_INTERVAL_MS = 15 * 1000; // 15s between batch requests
-const META_MAX_BATCH = 200; // máximo ids por request
-const META_FETCH_TIMEOUT_MS = 5000; // timeout por fetch
-
-// internal state for refresh scheduling and concurrency
-let metaRefreshScheduled = false;
-let metaRefreshRunning = false;
-let metaConsecutiveFailures = 0;
-const metaInFlight = {}; // uid -> true when there's an active immediate fetch
 
 function conectarSSE(coopId) {
 
@@ -604,36 +590,6 @@ function conectarSSE(coopId) {
             if (data && data._id) {
                 actualizarUnidadRealtime(data);
                 updateUnidadInList(data);
-                // Si no tenemos meta para esta unidad (o expiró), solicitarla inmediatamente
-                try {
-                    const uid = String(data._id);
-                    const cached = unidadesMetaCache[uid];
-                    const needsMeta = !(cached && (Date.now() - cached.ts) < META_TTL_MS);
-                    const lacksRuta = !(data.ruta_actual || data.ruta_fecha || data.ruta_conductor || data.ruta_hora_fin);
-                    if (needsMeta && lacksRuta && !metaInFlight[uid]) {
-                        metaInFlight[uid] = true;
-                        fetchUnidadesMeta([uid]).then(map => {
-                            try {
-                                if (map && map[uid] && Object.keys(map[uid]).length > 0) {
-                                    unidadesMetaCache[uid] = { data: map[uid], ts: Date.now() };
-                                    const li = document.getElementById(uid);
-                                    if (li && li.currentU) {
-                                        const m = map[uid] || {};
-                                        if (m.ruta_actual !== undefined && m.ruta_actual !== null) li.currentU.ruta_actual = m.ruta_actual;
-                                        if (m.ruta_fecha !== undefined && m.ruta_fecha !== null) li.currentU.ruta_fecha = m.ruta_fecha;
-                                        if (m.ruta_conductor !== undefined && m.ruta_conductor !== null) li.currentU.ruta_conductor = m.ruta_conductor;
-                                        if (m.ruta_hora_final !== undefined && m.ruta_hora_final !== null) li.currentU.ruta_hora_fin = m.ruta_hora_final;
-                                        if (m.tipo_bitacora !== undefined && m.tipo_bitacora !== null) li.currentU.bitacora = m.tipo_bitacora;
-                                        try { updateUnidadInList(li.currentU); } catch (e) { console.warn('Error updating li after immediate meta fetch', e); }
-                                    }
-                                } else {
-                                    // if server returned empty meta, don't overwrite existing cache or UI
-                                    // but we could schedule a retry later (skip for now)
-                                }
-                            } finally { metaInFlight[uid] = false; }
-                        }).catch(() => { metaInFlight[uid] = false; });
-                    }
-                } catch (e) {}
             }
         } catch (e) {
             console.error('❌ parse unidad.updated', e);
@@ -687,114 +643,6 @@ function conectarSSE(coopId) {
         }
     };
 }
-
-function scheduleMetaRefresh() {
-    // Kick once and then interval
-    if (metaRefreshScheduled) return;
-    metaRefreshScheduled = true;
-
-    // Kick once
-    refreshVisibleUnidadesMeta();
-
-    // Schedule regular refresh but avoid overlapping runs
-    setInterval(() => {
-        if (!metaRefreshRunning) refreshVisibleUnidadesMeta();
-    }, META_INTERVAL_MS);
-}
-
-
-function refreshVisibleUnidadesMeta() {
-    try {
-        // collect visible unidad IDs from the UL
-        const ul = document.getElementById('ul_unidades');
-        if (!ul) return;
-        const ids = [];
-        ul.querySelectorAll('li').forEach(li => {
-            if (li.id) ids.push(li.id);
-        });
-        if (ids.length === 0) return;
-
-        // Filter by cache
-        const toFetchAll = ids.filter(id => {
-            const cached = unidadesMetaCache[id];
-            return !(cached && (Date.now() - cached.ts) < META_TTL_MS);
-        });
-        if (toFetchAll.length === 0) return;
-
-        // mark running to avoid overlap
-        if (metaRefreshRunning) return;
-        metaRefreshRunning = true;
-
-        // Batch requests to avoid huge payloads
-        const batches = [];
-        for (let i = 0; i < toFetchAll.length; i += META_MAX_BATCH) batches.push(toFetchAll.slice(i, i + META_MAX_BATCH));
-
-        (async () => {
-            try {
-                for (const batch of batches) {
-                    try {
-                        const map = await fetchUnidadesMeta(batch);
-                        metaConsecutiveFailures = 0;
-                        Object.keys(map).forEach(uid => {
-                            unidadesMetaCache[uid] = { data: map[uid], ts: Date.now() };
-                            const li = document.getElementById(uid);
-                            if (li && li.currentU) {
-                                const m = map[uid] || {};
-                                if (m.ruta_actual !== undefined && m.ruta_actual !== null) li.currentU.ruta_actual = m.ruta_actual;
-                                if (m.ruta_fecha !== undefined && m.ruta_fecha !== null) li.currentU.ruta_fecha = m.ruta_fecha;
-                                if (m.ruta_conductor !== undefined && m.ruta_conductor !== null) li.currentU.ruta_conductor = m.ruta_conductor;
-                                if (m.ruta_hora_final !== undefined && m.ruta_hora_final !== null) li.currentU.ruta_hora_fin = m.ruta_hora_final;
-                                if (m.tipo_bitacora !== undefined && m.tipo_bitacora !== null) li.currentU.bitacora = m.tipo_bitacora;
-                                try { updateUnidadInList(li.currentU); } catch (e) { console.warn('Error updating li after meta fetch', e); }
-                            }
-                        });
-                    } catch (e) {
-                        metaConsecutiveFailures++;
-                        console.warn('Error fetching unidades meta batch', e);
-                        // small backoff if repeated failures
-                        if (metaConsecutiveFailures > 3) await new Promise(r => setTimeout(r, 2000));
-                    }
-                }
-            } finally {
-                metaRefreshRunning = false;
-            }
-        })();
-    } catch (e) {
-        console.warn('refreshVisibleUnidadesMeta error', e);
-    }
-}
-
-function fetchUnidadesMeta(unidadIds) {
-    // Normalize and dedupe
-    if (!Array.isArray(unidadIds) || unidadIds.length === 0) return Promise.resolve({});
-    const ids = Array.from(new Set(unidadIds.map(String)));
-    return new Promise(async (resolve) => {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), META_FETCH_TIMEOUT_MS);
-        try {
-            const resp = await fetch('/historico/unidades-meta', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]')||{content:''}).content
-                },
-                body: JSON.stringify({ unidad_ids: ids }),
-                signal: controller.signal
-            });
-            clearTimeout(timeout);
-            if (!resp || !resp.ok) { console.warn('fetchUnidadesMeta HTTP', resp && resp.status); resolve({}); return; }
-            const json = await resp.json();
-            resolve(json || {});
-        } catch (e) {
-            clearTimeout(timeout);
-            console.warn('fetchUnidadesMeta error', e);
-            resolve({});
-        }
-    });
-}
-
-
 
 
 
