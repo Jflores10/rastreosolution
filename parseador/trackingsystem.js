@@ -412,25 +412,7 @@ MongoClient.connect(connection, { useUnifiedTopology: true }, function (error, c
     dbTrackingSystem = client.db('dbtrackingsystem');
 
   // ===================== CARGA INICIAL CACHE UNIDADES =====================
-  dbTrackingSystem.collection('unidads').find({ estado: 'A' }).forEach(function (u) {
-    buildUnidadPayloadRealtime({
-      type: 'unidad.updated',
-      _id: u._id,
-      imei: u.imei,
-      descripcion: u.descripcion,
-      cooperativa_id: String(u.cooperativa_id),
-      contador_total: u.contador_total,
-      contador_diario: u.contador_diario,
-      contador_total_sensor_2: u.contador_total_sensor_2,
-      contador_diario_sensor_2: u.contador_diario_sensor_2,
-      contador_total_sensor_3: u.contador_total_sensor_3,
-      contador_diario_sensor_3: u.contador_diario_sensor_3,
-      puerta: u.puerta,
-      puerta_trasera: u.puerta_trasera,
-      sentido: 'i',
-      is_atm: u.is_atm
-    });
-  });
+  
   const server = net.createServer(onClientConnected);
   server.listen(PORT);
   dbTrackingSystem = client.db('dbtrackingsystem');
