@@ -615,18 +615,18 @@ function conectarSSE(coopId) {
                         unidadesMetaCache[uid].ts = Date.now();
                         fetchUnidadesMeta([uid]).then(map => {
                             if (map && map[uid]) {
-                                unidadesMetaCache[uid] = { data: map[uid], ts: Date.now() };
-                                const li = document.getElementById(uid);
-                                if (li && li.currentU) {
-                                    const m = map[uid];
-                                    li.currentU.ruta_actual = m.ruta_actual || '';
-                                    li.currentU.ruta_fecha = m.ruta_fecha || '';
-                                    li.currentU.ruta_conductor = m.ruta_conductor || '';
-                                    li.currentU.ruta_hora_fin = m.ruta_hora_final || '';
-                                    if (m.tipo_bitacora) li.currentU.bitacora = m.tipo_bitacora;
-                                    try { updateUnidadInList(li.currentU); } catch (e) { console.warn('Error updating li after immediate meta fetch', e); }
+                                    unidadesMetaCache[uid] = { data: map[uid], ts: Date.now() };
+                                    const li = document.getElementById(uid);
+                                    if (li && li.currentU) {
+                                        const m = map[uid] || {};
+                                        if (m.ruta_actual !== undefined && m.ruta_actual !== null) li.currentU.ruta_actual = m.ruta_actual;
+                                        if (m.ruta_fecha !== undefined && m.ruta_fecha !== null) li.currentU.ruta_fecha = m.ruta_fecha;
+                                        if (m.ruta_conductor !== undefined && m.ruta_conductor !== null) li.currentU.ruta_conductor = m.ruta_conductor;
+                                        if (m.ruta_hora_final !== undefined && m.ruta_hora_final !== null) li.currentU.ruta_hora_fin = m.ruta_hora_final;
+                                        if (m.tipo_bitacora !== undefined && m.tipo_bitacora !== null) li.currentU.bitacora = m.tipo_bitacora;
+                                        try { updateUnidadInList(li.currentU); } catch (e) { console.warn('Error updating li after immediate meta fetch', e); }
+                                    }
                                 }
-                            }
                         }).catch(() => {});
                     }
                 } catch (e) {}
@@ -735,11 +735,12 @@ function refreshVisibleUnidadesMeta() {
                             unidadesMetaCache[uid] = { data: map[uid], ts: Date.now() };
                             const li = document.getElementById(uid);
                             if (li && li.currentU) {
-                                li.currentU.ruta_actual = map[uid].ruta_actual || '';
-                                li.currentU.ruta_fecha = map[uid].ruta_fecha || '';
-                                li.currentU.ruta_conductor = map[uid].ruta_conductor || '';
-                                li.currentU.ruta_hora_fin = map[uid].ruta_hora_final || '';
-                                if (map[uid].tipo_bitacora) li.currentU.bitacora = map[uid].tipo_bitacora;
+                                const m = map[uid] || {};
+                                if (m.ruta_actual !== undefined && m.ruta_actual !== null) li.currentU.ruta_actual = m.ruta_actual;
+                                if (m.ruta_fecha !== undefined && m.ruta_fecha !== null) li.currentU.ruta_fecha = m.ruta_fecha;
+                                if (m.ruta_conductor !== undefined && m.ruta_conductor !== null) li.currentU.ruta_conductor = m.ruta_conductor;
+                                if (m.ruta_hora_final !== undefined && m.ruta_hora_final !== null) li.currentU.ruta_hora_fin = m.ruta_hora_final;
+                                if (m.tipo_bitacora !== undefined && m.tipo_bitacora !== null) li.currentU.bitacora = m.tipo_bitacora;
                                 try { updateUnidadInList(li.currentU); } catch (e) { console.warn('Error updating li after meta fetch', e); }
                             }
                         });
