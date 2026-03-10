@@ -237,31 +237,29 @@ class HistoricoController extends Controller
                     $tipo_bitacora = $bitByUnidad[$uid]->tipo_bitacora ?? '';
                 }
 
-                $meta = [
-                    'ruta_actual' => $ruta_descr,
-                    'ruta_fecha' => $ruta_fecha,
-                    'ruta_conductor' => $ruta_conductor,
-                    'ruta_hora_final' => $ruta_hora_final,
-                    'tipo_bitacora' => $tipo_bitacora
-                ];
+                // Build meta only with useful (non-empty) keys so client doesn't receive empty strings
+                $meta = [];
+                if ($ruta_descr !== null && $ruta_descr !== '') $meta['ruta_actual'] = $ruta_descr;
+                if ($ruta_fecha !== null && $ruta_fecha !== '') $meta['ruta_fecha'] = $ruta_fecha;
+                if ($ruta_conductor !== null && $ruta_conductor !== '') $meta['ruta_conductor'] = $ruta_conductor;
+                // client uses 'ruta_hora_fin'
+                if ($ruta_hora_final !== null && $ruta_hora_final !== '') $meta['ruta_hora_fin'] = $ruta_hora_final;
+                if ($tipo_bitacora !== null && $tipo_bitacora !== '') $meta['tipo_bitacora'] = $tipo_bitacora;
 
-                // cache short-term
+                // cache short-term (even an empty object to avoid hot loops)
                 try {
-                    Cache::put(
-                        'unidades_meta_' . $uid,
-                        $meta,
-                        Carbon::now()->addSeconds(15)
-                    );
+                    Cache::put('unidades_meta_' . $uid, $meta, Carbon::now()->addSeconds(15));
                 } catch (\Exception $e) {
                     // ignorar errores de cache
                 }
 
-                $result[$uid] = $meta;
+                // return object ({} in JSON) when there are no keys rather than fields with empty strings
+                $result[$uid] = (object)$meta;
             }
         } catch (Exception $e) {
             // on error, ensure all toFetch keys exist
             foreach ($toFetch as $uid) {
-                $result[$uid] = [ 'ruta_actual' => '', 'ruta_fecha' => '', 'ruta_conductor' => '', 'tipo_bitacora' => '' ];
+                $result[$uid] = (object)[];
             }
         }
 

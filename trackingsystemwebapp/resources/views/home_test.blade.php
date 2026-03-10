@@ -566,6 +566,88 @@ const SERVER_HOUR_OFFSET = -5; // restar 5 horas a fecha (servidor)
 
 let sse = null;
 
+// Meta cache: stores { data: {...}, ts: <ms> } per unidad id
+var unidadesMetaCache = {};
+const META_TTL_MS = 30000; // 30s cache TTL for batch refresh
+
+function applyMetaToLi(uid, meta, source) {
+    try {
+        var li = document.getElementById(uid);
+        if (!li) return;
+        if (!li.currentU) li.currentU = {};
+
+        // Ruta fields: only overwrite from SSE (source === 'sse') or when the LI has no route yet
+        if (meta.ruta_actual && meta.ruta_actual !== '') {
+            if (!li.currentU.ruta_actual || li.currentU.ruta_actual === '' || source === 'sse') {
+                li.currentU.ruta_actual = meta.ruta_actual;
+                li.currentU.ruta_fecha = meta.ruta_fecha || li.currentU.ruta_fecha;
+                li.currentU.ruta_conductor = meta.ruta_conductor || li.currentU.ruta_conductor;
+                li.currentU.ruta_hora_fin = meta.ruta_hora_fin || li.currentU.ruta_hora_fin;
+            }
+        }
+
+        // Other meta (tipo_bitacora / bitacora): update when provided
+        if (meta.tipo_bitacora && meta.tipo_bitacora !== '') {
+            li.currentU.tipo_bitacora = meta.tipo_bitacora;
+        }
+        if (meta.bitacora && meta.bitacora !== '') {
+            li.currentU.bitacora = meta.bitacora;
+        }
+
+        // mark where meta came from and timestamp
+        li._meta_from_sse = (source === 'sse');
+        li._meta_ts = Date.now();
+
+        updateUnidadInList(li.currentU);
+    } catch (e) {
+        console.warn('applyMetaToLi failed', e);
+    }
+}
+
+function fetchUnidadesMeta(ids) {
+    return new Promise((resolve) => {
+        if (!ids || ids.length === 0) return resolve({});
+        $.post('/historico/unidades-meta', { unidad_ids: ids }, function (data) {
+            resolve(data || {});
+        }, 'json').fail(function () {
+            resolve({});
+        });
+    });
+}
+
+function refreshVisibleUnidadesMeta() {
+    try {
+        var lis = Array.from(document.querySelectorAll('#ul_unidades li'));
+        var now = Date.now();
+        var toFetch = [];
+        lis.forEach(function (li) {
+            var uid = li.id;
+            var cache = unidadesMetaCache[uid];
+            if (!cache || (now - cache.ts) > META_TTL_MS) {
+                toFetch.push(uid);
+            }
+        });
+
+        if (toFetch.length === 0) return;
+
+        fetchUnidadesMeta(toFetch).then(function (resp) {
+            Object.keys(resp).forEach(function (uid) {
+                var m = resp[uid];
+                if (!m) return;
+                // cache it
+                unidadesMetaCache[uid] = { data: m, ts: Date.now() };
+                // apply: DO NOT overwrite existing ruta on the LI (unless empty) — only apply route if LI has none
+                applyMetaToLi(uid, m, 'batch');
+            });
+        });
+    } catch (e) {
+        console.warn('refreshVisibleUnidadesMeta failed', e);
+    }
+}
+
+// run periodic refresh to keep non-route meta up-to-date; route fields will not overwrite an existing route
+setInterval(refreshVisibleUnidadesMeta, 20000);
+
 function conectarSSE(coopId) {
 
     if (sse && sse.readyState === EventSource.OPEN) {
@@ -588,7 +670,28 @@ function conectarSSE(coopId) {
             const data = JSON.parse(evt.data);
             console.log(data)
             if (data && data._id) {
+                // First, apply realtime position/marker
                 actualizarUnidadRealtime(data);
+
+                // Merge incoming data into the list entry but preserve existing ruta unless SSE provides it
+                // Cache useful meta from SSE (so it is shown immediately and preserved)
+                const meta = {
+                    ruta_actual: data.ruta_actual || '',
+                    ruta_fecha: data.ruta_fecha || '',
+                    ruta_conductor: data.ruta_conductor || '',
+                    ruta_hora_fin: data.ruta_hora_fin || '',
+                    tipo_bitacora: data.tipo_bitacora || '',
+                    bitacora: data.bitacora || ''
+                };
+
+                // if SSE provided any non-empty meta, cache+apply as 'sse' source
+                const anyMeta = Object.keys(meta).some(k => meta[k] && meta[k] !== '');
+                if (anyMeta) {
+                    unidadesMetaCache[data._id] = { data: meta, ts: Date.now() };
+                    applyMetaToLi(data._id, meta, 'sse');
+                }
+
+                // Now update the rest of the unidad fields in the list
                 updateUnidadInList(data);
             }
         } catch (e) {
@@ -1208,6 +1311,43 @@ $("#velocimetro").myfunc({divFact:10});
                 }
                 
             }
+
+            // After building the UL list, fetch meta for visible units that are missing/expired in cache
+            function fetchMetaForVisibleUnitsPostAppend() {
+                try {
+                    var lis = Array.from(document.querySelectorAll('#ul_unidades li'));
+                    var now = Date.now();
+                    var toFetch = [];
+                    lis.forEach(function (li) {
+                        var uid = li.id;
+                        var cache = unidadesMetaCache[uid];
+                        if (!cache || (now - cache.ts) > META_TTL_MS) {
+                            toFetch.push(uid);
+                        }
+                    });
+                    if (toFetch.length === 0) return;
+                    fetchUnidadesMeta(toFetch).then(function (resp) {
+                        Object.keys(resp).forEach(function (uid) {
+                            var m = resp[uid];
+                            if (!m) return;
+                            unidadesMetaCache[uid] = { data: m, ts: Date.now() };
+                            // apply conservatively (batch source)
+                            applyMetaToLi(uid, m, 'batch');
+                        });
+                    });
+                } catch (e) {
+                    console.warn('fetchMetaForVisibleUnitsPostAppend failed', e);
+                }
+            }
+
+            // Hook into appendUnidades by running after the function completes whenever called
+            // (appendUnidades is called in multiple places; this keeps a single safe post-step)
+            // We call it with a small delay to ensure DOM is updated
+            var _orig_appendUnidades = appendUnidades;
+            appendUnidades = function (data) {
+                _orig_appendUnidades(data);
+                setTimeout(fetchMetaForVisibleUnitsPostAppend, 50);
+            };
             for(var i=currentIndex;i<recorrido.length;i++)
             {
                 posicion={ lat: parseFloat(recorrido[i].lat), lng : parseFloat(recorrido[i].lng) };
@@ -2910,41 +3050,6 @@ $("#velocimetro").myfunc({divFact:10});
             $('#cantidad_movimiento').text(unidad_movimiento);
             $('#cantidad_e').text(unidad_e);
             $('#cantidad_stop').text(unidad_stop);
-            // After building the list, fetch metadata for visible unidades and merge safely
-            (function(){
-                try {
-                    const ul = document.getElementById('ul_unidades');
-                    if (!ul) return;
-                    const ids = [];
-                    ul.querySelectorAll('li').forEach(li => { if (li.id) ids.push(li.id); });
-                    if (ids.length === 0) return;
-                    const toFetch = ids.filter(id => {
-                        const cached = unidadesMetaCache[id];
-                        return !(cached && (Date.now() - cached.ts) < META_TTL_MS);
-                    });
-                    if (toFetch.length === 0) return;
-                    fetchUnidadesMeta(toFetch).then(map => {
-                        Object.keys(map || {}).forEach(uid => {
-                            const m = map[uid] || {};
-                            // consider response useful only if at least one non-empty field exists
-                            const useful = ['ruta_actual','ruta_fecha','ruta_conductor','ruta_hora_final','tipo_bitacora']
-                                .some(k => m[k] !== undefined && m[k] !== null && String(m[k]).trim() !== '');
-                            if (useful) {
-                                unidadesMetaCache[uid] = { data: m, ts: Date.now() };
-                            }
-                            const li = document.getElementById(uid);
-                            if (li && li.currentU && useful) {
-                                if (m.ruta_actual !== undefined && m.ruta_actual !== null && String(m.ruta_actual).trim() !== '') li.currentU.ruta_actual = m.ruta_actual;
-                                if (m.ruta_fecha !== undefined && m.ruta_fecha !== null && String(m.ruta_fecha).trim() !== '') li.currentU.ruta_fecha = m.ruta_fecha;
-                                if (m.ruta_conductor !== undefined && m.ruta_conductor !== null && String(m.ruta_conductor).trim() !== '') li.currentU.ruta_conductor = m.ruta_conductor;
-                                if (m.ruta_hora_final !== undefined && m.ruta_hora_final !== null && String(m.ruta_hora_final).trim() !== '') li.currentU.ruta_hora_fin = m.ruta_hora_final;
-                                if (m.tipo_bitacora !== undefined && m.tipo_bitacora !== null && String(m.tipo_bitacora).trim() !== '') li.currentU.bitacora = m.tipo_bitacora;
-                                try { updateUnidadInList(li.currentU); } catch (e) { console.warn('Error applying unidades-meta', e); }
-                            }
-                        });
-                    }).catch(e => { /* ignore meta fetch errors */ });
-                } catch (e) { /* ignore */ }
-            })();
         }
 
     }
