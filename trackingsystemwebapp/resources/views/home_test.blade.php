@@ -639,7 +639,7 @@ function refreshVisibleUnidadesMeta() {
                 // cache it
                 unidadesMetaCache[uid] = { data: m, ts: Date.now() };
                 // apply: DO NOT overwrite existing ruta on the LI (unless empty) — only apply route if LI has none
-                //applyMetaToLi(uid, m, 'batch');
+                applyMetaToLi(uid, m, 'batch');
             });
         });
     } catch (e) {
@@ -689,7 +689,7 @@ function conectarSSE(coopId) {
                 const anyMeta = Object.keys(meta).some(k => meta[k] && meta[k] !== '');
                 if (anyMeta) {
                     unidadesMetaCache[data._id] = { data: meta, ts: Date.now() };
-                    //applyMetaToLi(data._id, meta, 'sse');
+                    applyMetaToLi(data._id, meta, 'sse');
                 }
 
                 // Now update the rest of the unidad fields in the list
@@ -704,7 +704,7 @@ function conectarSSE(coopId) {
                             var serverMeta = resp && resp[data._id] ? resp[data._id] : null;
                             if (serverMeta) {
                                 unidadesMetaCache[data._id] = { data: serverMeta, ts: Date.now() };
-                                //applyMetaToLi(data._id, serverMeta, 'sse');
+                                applyMetaToLi(data._id, serverMeta, 'sse');
                             }
                         } catch (e) { console.warn('apply server meta after sse failed', e); }
                     }).catch(function(e){ /* ignore */ });
@@ -807,6 +807,9 @@ function updateUnidadInList(unidad) {
             if ((!unidad.ruta_conductor || unidad.ruta_conductor === '') && prev.ruta_conductor) unidad.ruta_conductor = prev.ruta_conductor;
             if ((!unidad.ruta_hora_fin || unidad.ruta_hora_fin === '') && (prev.ruta_hora_fin || prev.ruta_hora_fin === '')) unidad.ruta_hora_fin = prev.ruta_hora_fin;
             if ((!unidad.bitacora || unidad.bitacora === '') && prev.bitacora) unidad.bitacora = prev.bitacora;
+            
+            // Preserve sentido (direction) if incoming payload lacks it
+            //if ((!unidad.sentido || unidad.sentido === '') && prev.sentido) unidad.sentido = prev.sentido;
         }
     } catch (e) {
         console.warn('Merge existing meta failed', e);
@@ -894,7 +897,10 @@ function updateUnidadInList(unidad) {
     var iId = 'i' + unidad._id;
     var gId = 'i' + unidad._id;
     var bId = 'i' + unidad._id;
+    if(unidad._id=='i649b7e4d2243df7b5b0ec623'){
+        console.log(unidad.imei+" "+unidad.sentido)
 
+    }
     var sentido = '';
     if (unidad.sentido){
         if (unidad.sentido == 'i') sentido = '<i class="fa fa-arrow-circle-right" title="IDA" style="color:green"></i>&nbsp&nbsp';
