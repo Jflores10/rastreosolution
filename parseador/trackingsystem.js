@@ -427,22 +427,9 @@ MongoClient.connect(connection, { useUnifiedTopology: true }, function (error, c
       contador_diario_sensor_3: u.contador_diario_sensor_3,
       puerta: u.puerta,
       puerta_trasera: u.puerta_trasera,
+      sentido: 'i',
       is_atm: u.is_atm
     });
-
-    // Enviar solo el 'sentido' inicial desde la BD (publicación mínima y forzada)
-    try {
-      const sentidoInitial = {
-        type: 'unidad.updated',
-        imei: u.imei,
-        unidad_id: u._id,
-        sentido: u.sentido,
-        cooperativa_id: u.cooperativa_id ? String(u.cooperativa_id) : null
-      };
-      enviarALaravelPorWS(sentidoInitial, { force: true });
-    } catch (e) {
-      if (debug) console.error('Error publicando sentido inicial:', e);
-    }
   });
   const server = net.createServer(onClientConnected);
   server.listen(PORT);
@@ -715,6 +702,16 @@ function onClientConnected(socket) {
                     if (err || !result || !result.value) return;
 
                     const unidad = result.value; // 🔥 unidad ya actualizada
+
+                    // Enviar una publicación autorizada basada en la unidad en BD
+                    // Esto garantiza que el campo `sentido` viene desde la tabla `unidads`
+                    // y fuerza el envío sin pasar por el throttle (opts.force = true).
+                    try {
+                      const unidadFromDbPayload = buildUnidadPayloadRealtime(Object.assign({ type: 'unidad.updated' }, unidad));
+                      enviarALaravelPorWS(unidadFromDbPayload, { force: true });
+                    } catch (e) {
+                      if (debug) console.error('Error publicando unidad desde BD:', e);
+                    }
 
                     // ===================== TRABAJO PESADO =====================
                     setImmediate(() => {
