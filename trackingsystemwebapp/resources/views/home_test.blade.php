@@ -569,6 +569,8 @@ let sse = null;
 // Meta cache: stores { data: {...}, ts: <ms> } per unidad id
 var unidadesMetaCache = {};
 const META_TTL_MS = 30000; // 30s cache TTL for batch refresh
+// ensure we only fetch server meta once per unidad when SSE first arrives
+var unidadesMetaFetchedOnce = {};
 
 function applyMetaToLi(uid, meta, source) {
     try {
@@ -646,7 +648,7 @@ function refreshVisibleUnidadesMeta() {
 }
 
 // run periodic refresh to keep non-route meta up-to-date; route fields will not overwrite an existing route
-setInterval(refreshVisibleUnidadesMeta, 30000);
+setInterval(refreshVisibleUnidadesMeta, 20000);
 
 function conectarSSE(coopId) {
 
@@ -694,16 +696,20 @@ function conectarSSE(coopId) {
                 // Now update the rest of the unidad fields in the list
                 updateUnidadInList(data);
 
-                // Fetch server-side unidades-meta for this unidad and apply it immediately.
-                fetchUnidadesMeta([data._id]).then(function(resp) {
-                    try {
-                        var serverMeta = resp && resp[data._id] ? resp[data._id] : null;
-                        if (serverMeta) {
-                            unidadesMetaCache[data._id] = { data: serverMeta, ts: Date.now() };
-                            applyMetaToLi(data._id, serverMeta, 'sse');
-                        }
-                    } catch (e) { console.warn('apply server meta after sse failed', e); }
-                }).catch(function(e){ /* ignore */ });
+                // Fetch server-side unidades-meta for this unidad and apply it immediately,
+                // but only once per unidad while the page is open.
+                if (!unidadesMetaFetchedOnce[data._id]) {
+                    unidadesMetaFetchedOnce[data._id] = true;
+                    fetchUnidadesMeta([data._id]).then(function(resp) {
+                        try {
+                            var serverMeta = resp && resp[data._id] ? resp[data._id] : null;
+                            if (serverMeta) {
+                                unidadesMetaCache[data._id] = { data: serverMeta, ts: Date.now() };
+                                applyMetaToLi(data._id, serverMeta, 'sse');
+                            }
+                        } catch (e) { console.warn('apply server meta after sse failed', e); }
+                    }).catch(function(e){ /* ignore */ });
+                }
             }
         } catch (e) {
             console.error('❌ parse unidad.updated', e);
