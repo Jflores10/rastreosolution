@@ -2910,6 +2910,41 @@ $("#velocimetro").myfunc({divFact:10});
             $('#cantidad_movimiento').text(unidad_movimiento);
             $('#cantidad_e').text(unidad_e);
             $('#cantidad_stop').text(unidad_stop);
+            // After building the list, fetch metadata for visible unidades and merge safely
+            (function(){
+                try {
+                    const ul = document.getElementById('ul_unidades');
+                    if (!ul) return;
+                    const ids = [];
+                    ul.querySelectorAll('li').forEach(li => { if (li.id) ids.push(li.id); });
+                    if (ids.length === 0) return;
+                    const toFetch = ids.filter(id => {
+                        const cached = unidadesMetaCache[id];
+                        return !(cached && (Date.now() - cached.ts) < META_TTL_MS);
+                    });
+                    if (toFetch.length === 0) return;
+                    fetchUnidadesMeta(toFetch).then(map => {
+                        Object.keys(map || {}).forEach(uid => {
+                            const m = map[uid] || {};
+                            // consider response useful only if at least one non-empty field exists
+                            const useful = ['ruta_actual','ruta_fecha','ruta_conductor','ruta_hora_final','tipo_bitacora']
+                                .some(k => m[k] !== undefined && m[k] !== null && String(m[k]).trim() !== '');
+                            if (useful) {
+                                unidadesMetaCache[uid] = { data: m, ts: Date.now() };
+                            }
+                            const li = document.getElementById(uid);
+                            if (li && li.currentU && useful) {
+                                if (m.ruta_actual !== undefined && m.ruta_actual !== null && String(m.ruta_actual).trim() !== '') li.currentU.ruta_actual = m.ruta_actual;
+                                if (m.ruta_fecha !== undefined && m.ruta_fecha !== null && String(m.ruta_fecha).trim() !== '') li.currentU.ruta_fecha = m.ruta_fecha;
+                                if (m.ruta_conductor !== undefined && m.ruta_conductor !== null && String(m.ruta_conductor).trim() !== '') li.currentU.ruta_conductor = m.ruta_conductor;
+                                if (m.ruta_hora_final !== undefined && m.ruta_hora_final !== null && String(m.ruta_hora_final).trim() !== '') li.currentU.ruta_hora_fin = m.ruta_hora_final;
+                                if (m.tipo_bitacora !== undefined && m.tipo_bitacora !== null && String(m.tipo_bitacora).trim() !== '') li.currentU.bitacora = m.tipo_bitacora;
+                                try { updateUnidadInList(li.currentU); } catch (e) { console.warn('Error applying unidades-meta', e); }
+                            }
+                        });
+                    }).catch(e => { /* ignore meta fetch errors */ });
+                } catch (e) { /* ignore */ }
+            })();
         }
 
     }
