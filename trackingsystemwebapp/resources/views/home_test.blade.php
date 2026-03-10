@@ -565,6 +565,9 @@ const GPS_HOUR_OFFSET = -5; // restar 10 horas a fecha_gps
 const SERVER_HOUR_OFFSET = -5; // restar 5 horas a fecha (servidor)
 
 let sse = null;
+const unidadesMetaCache = {}; // unidad_id -> {data, ts}
+const META_TTL_MS = 30 * 1000; // 30s cache
+const META_INTERVAL_MS = 15 * 1000; // 15s between batch requests
 
 function conectarSSE(coopId) {
 
@@ -643,6 +646,73 @@ function conectarSSE(coopId) {
         }
     };
 }
+
+function scheduleMetaRefresh() {
+    // Kick once and then interval
+    refreshVisibleUnidadesMeta();
+    setInterval(refreshVisibleUnidadesMeta, META_INTERVAL_MS);
+}
+
+
+function refreshVisibleUnidadesMeta() {
+    try {
+        // collect visible unidad IDs from the UL
+        const ul = document.getElementById('ul_unidades');
+        if (!ul) return;
+        const ids = [];
+        ul.querySelectorAll('li').forEach(li => {
+            if (li.id) ids.push(li.id);
+        });
+        if (ids.length === 0) return;
+
+        // Filter by cache
+        const toFetch = ids.filter(id => {
+            const cached = unidadesMetaCache[id];
+            return !(cached && (Date.now() - cached.ts) < META_TTL_MS);
+        });
+        if (toFetch.length === 0) return;
+
+        fetchUnidadesMeta(toFetch).then(map => {
+            Object.keys(map).forEach(uid => {
+                unidadesMetaCache[uid] = { data: map[uid], ts: Date.now() };
+                // update UI if li exists
+                const li = document.getElementById(uid);
+                if (li && li.currentU) {
+                    li.currentU.ruta_actual = map[uid].ruta_actual || '';
+                    li.currentU.ruta_fecha = map[uid].ruta_fecha || '';
+                    li.currentU.ruta_conductor = map[uid].ruta_conductor || '';
+                    // map server's ruta_hora_final into client's ruta_hora_fin
+                    li.currentU.ruta_hora_fin = map[uid].ruta_hora_final || '';
+                    // only set tipo_bitacora if present
+                    if (map[uid].tipo_bitacora) li.currentU.bitacora = map[uid].tipo_bitacora;
+                    try { updateUnidadInList(li.currentU); } catch (e) { console.warn('Error updating li after meta fetch', e); }
+                }
+            });
+        }).catch(err => console.warn('Error fetching unidades meta', err));
+    } catch (e) {
+        console.warn('refreshVisibleUnidadesMeta error', e);
+    }
+}
+
+function fetchUnidadesMeta(unidadIds) {
+    return new Promise((resolve, reject) => {
+        try {
+            fetch('/historico/unidades-meta', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]')||{content:''}).content
+                },
+                body: JSON.stringify({ unidad_ids: unidadIds })
+            }).then(r => r.json()).then(json => {
+                resolve(json || {});
+            }).catch(reject);
+        } catch (e) { reject(e); }
+    });
+}
+
+
 
 
 
