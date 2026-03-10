@@ -670,6 +670,7 @@ function conectarSSE(coopId) {
         try {
 
             const data = JSON.parse(evt.data);
+            console.log(data)
             if (data && data._id) {
                 // First, apply realtime position/marker
                 actualizarUnidadRealtime(data);
@@ -897,10 +898,7 @@ function updateUnidadInList(unidad) {
     var iId = 'i' + unidad._id;
     var gId = 'i' + unidad._id;
     var bId = 'i' + unidad._id;
-    if(unidad._id=='649b7eb32243df15b7001223'){
-        console.log(unidad.imei+"--"+JSON.stringify(unidad))
-
-    }
+  
     var sentido = '';
     if (unidad.sentido){
         if (unidad.sentido == 'i') sentido = '<i class="fa fa-arrow-circle-right" title="IDA" style="color:green"></i>&nbsp&nbsp';
