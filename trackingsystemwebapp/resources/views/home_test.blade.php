@@ -578,6 +578,7 @@ const META_FETCH_TIMEOUT_MS = 5000; // timeout por fetch
 let metaRefreshScheduled = false;
 let metaRefreshRunning = false;
 let metaConsecutiveFailures = 0;
+const metaInFlight = {}; // uid -> true when there's an active immediate fetch
 
 function conectarSSE(coopId) {
 
@@ -609,12 +610,11 @@ function conectarSSE(coopId) {
                     const cached = unidadesMetaCache[uid];
                     const needsMeta = !(cached && (Date.now() - cached.ts) < META_TTL_MS);
                     const lacksRuta = !(data.ruta_actual || data.ruta_fecha || data.ruta_conductor || data.ruta_hora_fin);
-                    if (needsMeta && lacksRuta) {
-                        // Marcar timestamp para evitar solicitudes duplicadas mientras se resuelve
-                        unidadesMetaCache[uid] = unidadesMetaCache[uid] || { data: null, ts: 0 };
-                        unidadesMetaCache[uid].ts = Date.now();
+                    if (needsMeta && lacksRuta && !metaInFlight[uid]) {
+                        metaInFlight[uid] = true;
                         fetchUnidadesMeta([uid]).then(map => {
-                            if (map && map[uid]) {
+                            try {
+                                if (map && map[uid] && Object.keys(map[uid]).length > 0) {
                                     unidadesMetaCache[uid] = { data: map[uid], ts: Date.now() };
                                     const li = document.getElementById(uid);
                                     if (li && li.currentU) {
@@ -626,8 +626,12 @@ function conectarSSE(coopId) {
                                         if (m.tipo_bitacora !== undefined && m.tipo_bitacora !== null) li.currentU.bitacora = m.tipo_bitacora;
                                         try { updateUnidadInList(li.currentU); } catch (e) { console.warn('Error updating li after immediate meta fetch', e); }
                                     }
+                                } else {
+                                    // if server returned empty meta, don't overwrite existing cache or UI
+                                    // but we could schedule a retry later (skip for now)
                                 }
-                        }).catch(() => {});
+                            } finally { metaInFlight[uid] = false; }
+                        }).catch(() => { metaInFlight[uid] = false; });
                     }
                 } catch (e) {}
             }
