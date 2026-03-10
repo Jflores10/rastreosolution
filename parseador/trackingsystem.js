@@ -328,13 +328,6 @@ function actualizarSentidoUnidad(dbTrackingSystem, unidad, pdiActual, entrada, c
           function (err) {
             if (err) { console.error('❌ Error actualizando sentido:', err); cb(); return; }
 
-
-
-             buildUnidadPayloadRealtime({
-               imei: unidad.imei,
-               sentido: nuevoSentido
-             });
-
             dbTrackingSystem.collection('historial_sentido').insertOne({
               unidad_id: unidad._id,
               imei: unidad.imei,
@@ -434,9 +427,22 @@ MongoClient.connect(connection, { useUnifiedTopology: true }, function (error, c
       contador_diario_sensor_3: u.contador_diario_sensor_3,
       puerta: u.puerta,
       puerta_trasera: u.puerta_trasera,
-      sentido: u.sentido,
       is_atm: u.is_atm
     });
+
+    // Enviar solo el 'sentido' inicial desde la BD (publicación mínima y forzada)
+    try {
+      const sentidoInitial = {
+        type: 'unidad.updated',
+        imei: u.imei,
+        unidad_id: u._id,
+        sentido: u.sentido,
+        cooperativa_id: u.cooperativa_id ? String(u.cooperativa_id) : null
+      };
+      enviarALaravelPorWS(sentidoInitial, { force: true });
+    } catch (e) {
+      if (debug) console.error('Error publicando sentido inicial:', e);
+    }
   });
   const server = net.createServer(onClientConnected);
   server.listen(PORT);
