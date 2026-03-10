@@ -897,8 +897,8 @@ function updateUnidadInList(unidad) {
     var iId = 'i' + unidad._id;
     var gId = 'i' + unidad._id;
     var bId = 'i' + unidad._id;
-    if(unidad._id=='649b7e4d2243df7b5b0ec623'){
-        console.log(unidad.imei+" "+unidad)
+    if(unidad._id=='649b9aed2243df127f2360a2'){
+        console.log(unidad.imei+" "+JSON.stringify(unidad))
 
     }
     var sentido = '';
