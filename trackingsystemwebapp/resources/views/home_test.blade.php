@@ -763,7 +763,6 @@ function fetchUnidadesMeta(unidadIds) {
     // Normalize and dedupe
     if (!Array.isArray(unidadIds) || unidadIds.length === 0) return Promise.resolve({});
     const ids = Array.from(new Set(unidadIds.map(String)));
-
     return new Promise(async (resolve) => {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), META_FETCH_TIMEOUT_MS);
@@ -775,11 +774,18 @@ function fetchUnidadesMeta(unidadIds) {
                     'X-Requested-With': 'XMLHttpRequest',
                     'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]')||{content:''}).content
                 },
-                body: JSON.stringify({ unidad_ids: unidadIds })
-            }).then(r => r.json()).then(json => {
-                resolve(json || {});
-            }).catch(reject);
-        } catch (e) { reject(e); }
+                body: JSON.stringify({ unidad_ids: ids }),
+                signal: controller.signal
+            });
+            clearTimeout(timeout);
+            if (!resp || !resp.ok) { console.warn('fetchUnidadesMeta HTTP', resp && resp.status); resolve({}); return; }
+            const json = await resp.json();
+            resolve(json || {});
+        } catch (e) {
+            clearTimeout(timeout);
+            console.warn('fetchUnidadesMeta error', e);
+            resolve({});
+        }
     });
 }
 
