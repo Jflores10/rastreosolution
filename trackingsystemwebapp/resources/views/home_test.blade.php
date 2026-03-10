@@ -550,6 +550,9 @@ function iniciarSSEGlobal() {
         || Auth::user()->tipo_usuario->valor==5)
         conectarSSE('*');
     @endif
+
+    // Start periodic meta refresh (safe to call multiple times)
+    try { scheduleMetaRefresh(); } catch (e) { console.warn('scheduleMetaRefresh failed', e); }
 }
 
 // ⚡ Conectar SSE apenas el DOM esté listo
@@ -568,6 +571,13 @@ let sse = null;
 const unidadesMetaCache = {}; // unidad_id -> {data, ts}
 const META_TTL_MS = 30 * 1000; // 30s cache
 const META_INTERVAL_MS = 15 * 1000; // 15s between batch requests
+const META_MAX_BATCH = 200; // máximo ids por request
+const META_FETCH_TIMEOUT_MS = 5000; // timeout por fetch
+
+// internal state for refresh scheduling and concurrency
+let metaRefreshScheduled = false;
+let metaRefreshRunning = false;
+let metaConsecutiveFailures = 0;
 
 function conectarSSE(coopId) {
 
@@ -649,8 +659,16 @@ function conectarSSE(coopId) {
 
 function scheduleMetaRefresh() {
     // Kick once and then interval
+    if (metaRefreshScheduled) return;
+    metaRefreshScheduled = true;
+
+    // Kick once
     refreshVisibleUnidadesMeta();
-    setInterval(refreshVisibleUnidadesMeta, META_INTERVAL_MS);
+
+    // Schedule regular refresh but avoid overlapping runs
+    setInterval(() => {
+        if (!metaRefreshRunning) refreshVisibleUnidadesMeta();
+    }, META_INTERVAL_MS);
 }
 
 
@@ -666,38 +684,64 @@ function refreshVisibleUnidadesMeta() {
         if (ids.length === 0) return;
 
         // Filter by cache
-        const toFetch = ids.filter(id => {
+        const toFetchAll = ids.filter(id => {
             const cached = unidadesMetaCache[id];
             return !(cached && (Date.now() - cached.ts) < META_TTL_MS);
         });
-        if (toFetch.length === 0) return;
+        if (toFetchAll.length === 0) return;
 
-        fetchUnidadesMeta(toFetch).then(map => {
-            Object.keys(map).forEach(uid => {
-                unidadesMetaCache[uid] = { data: map[uid], ts: Date.now() };
-                // update UI if li exists
-                const li = document.getElementById(uid);
-                if (li && li.currentU) {
-                    li.currentU.ruta_actual = map[uid].ruta_actual || '';
-                    li.currentU.ruta_fecha = map[uid].ruta_fecha || '';
-                    li.currentU.ruta_conductor = map[uid].ruta_conductor || '';
-                    // map server's ruta_hora_final into client's ruta_hora_fin
-                    li.currentU.ruta_hora_fin = map[uid].ruta_hora_final || '';
-                    // only set tipo_bitacora if present
-                    if (map[uid].tipo_bitacora) li.currentU.bitacora = map[uid].tipo_bitacora;
-                    try { updateUnidadInList(li.currentU); } catch (e) { console.warn('Error updating li after meta fetch', e); }
+        // mark running to avoid overlap
+        if (metaRefreshRunning) return;
+        metaRefreshRunning = true;
+
+        // Batch requests to avoid huge payloads
+        const batches = [];
+        for (let i = 0; i < toFetchAll.length; i += META_MAX_BATCH) batches.push(toFetchAll.slice(i, i + META_MAX_BATCH));
+
+        (async () => {
+            try {
+                for (const batch of batches) {
+                    try {
+                        const map = await fetchUnidadesMeta(batch);
+                        metaConsecutiveFailures = 0;
+                        Object.keys(map).forEach(uid => {
+                            unidadesMetaCache[uid] = { data: map[uid], ts: Date.now() };
+                            const li = document.getElementById(uid);
+                            if (li && li.currentU) {
+                                li.currentU.ruta_actual = map[uid].ruta_actual || '';
+                                li.currentU.ruta_fecha = map[uid].ruta_fecha || '';
+                                li.currentU.ruta_conductor = map[uid].ruta_conductor || '';
+                                li.currentU.ruta_hora_fin = map[uid].ruta_hora_final || '';
+                                if (map[uid].tipo_bitacora) li.currentU.bitacora = map[uid].tipo_bitacora;
+                                try { updateUnidadInList(li.currentU); } catch (e) { console.warn('Error updating li after meta fetch', e); }
+                            }
+                        });
+                    } catch (e) {
+                        metaConsecutiveFailures++;
+                        console.warn('Error fetching unidades meta batch', e);
+                        // small backoff if repeated failures
+                        if (metaConsecutiveFailures > 3) await new Promise(r => setTimeout(r, 2000));
+                    }
                 }
-            });
-        }).catch(err => console.warn('Error fetching unidades meta', err));
+            } finally {
+                metaRefreshRunning = false;
+            }
+        })();
     } catch (e) {
         console.warn('refreshVisibleUnidadesMeta error', e);
     }
 }
 
 function fetchUnidadesMeta(unidadIds) {
-    return new Promise((resolve, reject) => {
+    // Normalize and dedupe
+    if (!Array.isArray(unidadIds) || unidadIds.length === 0) return Promise.resolve({});
+    const ids = Array.from(new Set(unidadIds.map(String)));
+
+    return new Promise(async (resolve) => {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), META_FETCH_TIMEOUT_MS);
         try {
-            fetch('/historico/unidades-meta', {
+            const resp = await fetch('/historico/unidades-meta', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
