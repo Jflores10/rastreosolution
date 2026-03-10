@@ -646,7 +646,7 @@ function refreshVisibleUnidadesMeta() {
 }
 
 // run periodic refresh to keep non-route meta up-to-date; route fields will not overwrite an existing route
-setInterval(refreshVisibleUnidadesMeta, 20000);
+setInterval(refreshVisibleUnidadesMeta, 30000);
 
 function conectarSSE(coopId) {
 
@@ -693,6 +693,17 @@ function conectarSSE(coopId) {
 
                 // Now update the rest of the unidad fields in the list
                 updateUnidadInList(data);
+
+                // Fetch server-side unidades-meta for this unidad and apply it immediately.
+                fetchUnidadesMeta([data._id]).then(function(resp) {
+                    try {
+                        var serverMeta = resp && resp[data._id] ? resp[data._id] : null;
+                        if (serverMeta) {
+                            unidadesMetaCache[data._id] = { data: serverMeta, ts: Date.now() };
+                            applyMetaToLi(data._id, serverMeta, 'sse');
+                        }
+                    } catch (e) { console.warn('apply server meta after sse failed', e); }
+                }).catch(function(e){ /* ignore */ });
             }
         } catch (e) {
             console.error('❌ parse unidad.updated', e);
