@@ -603,6 +603,33 @@ function conectarSSE(coopId) {
             if (data && data._id) {
                 actualizarUnidadRealtime(data);
                 updateUnidadInList(data);
+                // Si no tenemos meta para esta unidad (o expiró), solicitarla inmediatamente
+                try {
+                    const uid = String(data._id);
+                    const cached = unidadesMetaCache[uid];
+                    const needsMeta = !(cached && (Date.now() - cached.ts) < META_TTL_MS);
+                    const lacksRuta = !(data.ruta_actual || data.ruta_fecha || data.ruta_conductor || data.ruta_hora_fin);
+                    if (needsMeta && lacksRuta) {
+                        // Marcar timestamp para evitar solicitudes duplicadas mientras se resuelve
+                        unidadesMetaCache[uid] = unidadesMetaCache[uid] || { data: null, ts: 0 };
+                        unidadesMetaCache[uid].ts = Date.now();
+                        fetchUnidadesMeta([uid]).then(map => {
+                            if (map && map[uid]) {
+                                unidadesMetaCache[uid] = { data: map[uid], ts: Date.now() };
+                                const li = document.getElementById(uid);
+                                if (li && li.currentU) {
+                                    const m = map[uid];
+                                    li.currentU.ruta_actual = m.ruta_actual || '';
+                                    li.currentU.ruta_fecha = m.ruta_fecha || '';
+                                    li.currentU.ruta_conductor = m.ruta_conductor || '';
+                                    li.currentU.ruta_hora_fin = m.ruta_hora_final || '';
+                                    if (m.tipo_bitacora) li.currentU.bitacora = m.tipo_bitacora;
+                                    try { updateUnidadInList(li.currentU); } catch (e) { console.warn('Error updating li after immediate meta fetch', e); }
+                                }
+                            }
+                        }).catch(() => {});
+                    }
+                } catch (e) {}
             }
         } catch (e) {
             console.error('❌ parse unidad.updated', e);
