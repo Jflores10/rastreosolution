@@ -427,7 +427,6 @@ MongoClient.connect(connection, { useUnifiedTopology: true }, function (error, c
       contador_diario_sensor_3: u.contador_diario_sensor_3,
       puerta: u.puerta,
       puerta_trasera: u.puerta_trasera,
-      sentido: u.sentido,
       is_atm: u.is_atm
     });
   });
