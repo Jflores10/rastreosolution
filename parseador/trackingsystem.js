@@ -328,6 +328,13 @@ function actualizarSentidoUnidad(dbTrackingSystem, unidad, pdiActual, entrada, c
           function (err) {
             if (err) { console.error('❌ Error actualizando sentido:', err); cb(); return; }
 
+
+
+             buildUnidadPayloadRealtime({
+               imei: unidad.imei,
+               sentido: nuevoSentido
+             });
+
             dbTrackingSystem.collection('historial_sentido').insertOne({
               unidad_id: unidad._id,
               imei: unidad.imei,
@@ -427,6 +434,7 @@ MongoClient.connect(connection, { useUnifiedTopology: true }, function (error, c
       contador_diario_sensor_3: u.contador_diario_sensor_3,
       puerta: u.puerta,
       puerta_trasera: u.puerta_trasera,
+      sentido: u.sentido,
       is_atm: u.is_atm
     });
   });
