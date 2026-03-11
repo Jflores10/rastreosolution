@@ -7,6 +7,52 @@
 </style>
 
 <style>
+
+    /* Forzar modal encima de cualquier elemento flotante */
+    .modal-backdrop {
+        z-index: 9998 !important;
+    }
+
+    .modal {
+        z-index: 9999 !important;
+    }
+
+    /* Ajuste botones */
+    .comandos-v .btn{
+        margin-bottom:5px;
+    }
+
+    /* Responsive */
+    @media (max-width:768px){
+
+        #commandModal .modal-dialog{
+            width:95%;
+            margin:10px auto;
+        }
+
+        .btn-group-justified > .btn,
+        .btn-group-justified > .btn-group{
+            display:block;
+            width:100%;
+            margin-bottom:5px;
+        }
+
+        .comandos-v{
+            display:flex;
+            flex-direction:column;
+            width:100%;
+        }
+
+        .comandos-v .btn{
+            width:100%;
+        }
+
+    }
+
+</style>
+
+
+<style>
 .dir-wrap {
     white-space: normal !important;
     word-break: break-word !important;
@@ -319,71 +365,117 @@ Dashboard
   </div>
 </div>
 
-
-<div class="modal fade" id="commandModal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel">
+<div class="modal fade" id="commandModal" tabindex="-1" role="dialog">
   <div class="modal-dialog" role="document">
+
     <div class="modal-content">
+
       <div class="modal-header">
-        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-        <h4 class="modal-title" id="myModalLabel">Consola de comandos</h4>
+        <button type="button" class="close" data-dismiss="modal">
+            <span>&times;</span>
+        </button>
+        <h4 class="modal-title">
+            Consola de comandos
+        </h4>
       </div>
+
       <div class="modal-body">
-        <input type="hidden"  name="latitudc" id="latitudc"  />
-        <input type="hidden"  name="longitudc" id="longitudc" />
 
-        <div class="row">
-            <div class="col-lg-12">
-                
-                <div class="form-group">
-                    <label for="commandImei">IMEI</label>
-                    <input type="text" readonly name="commandImei" id="commandImei" class="form-control" />
-                </div>
-                <div class="form-group">
-                    <label for="commandMessage">Comando</label>
-                    <textarea id="commandMessage" name="commandMessage" class="form-control" rows="3" placeholder="Ingrese el comando a enviar..."></textarea>
-                </div>
-                 <div class="form-group">
-                    <label for="responseMessage">Respuesta</label>
-                    <textarea id="responseMessage" name="responseMessage" class="form-control" rows="3" placeholder="Respuesta recibida..."></textarea>
-                </div>
-                <div class="form-group text-center">
-                    <button id="btnEnviar" type="button" class="btn btn-primary" style="margin-bottom: 15px;">
-                        <i class="fa fa-paper-plane"></i> Enviar comando
-                    </button>
-                </div>
+        <input type="hidden" name="latitudc" id="latitudc">
+        <input type="hidden" name="longitudc" id="longitudc">
 
-                
-                <div class="btn-group btn-group-justified" role="group" aria-label="Comandos">
-                    <a id="btnApagar" class="btn btn-danger" role="button">
-                        <i class="fa fa-lock"></i> Bloquear Vehículo
-                    </a>
-                    <a id="btnEncender" class="btn btn-warning" role="button">
-                        <i class="fa fa-unlock"></i> Desbloquear Vehículo
-                    </a>
-                    <a id="btnReset" class="btn btn-success" role="button">
-                        <i class="fa fa-refresh"></i> Reset
-                    </a>
-                </div>
-                <br>
-                <div class="text-left">
-                    <div class="btn-group comandos-v">
-                        <a id="btnCompartir" class="btn btn-info ">
-                            <i class="fa fa-map-marker"></i> Compartir Ubicación
-                        </a>
-                        <a id="btnFoto" class="btn btn-primary ">
-                            <i class="fa fa-camera"></i> Foto
-                        </a>
-                    </div>
-                </div>
-
-            </div>
+        <div class="form-group">
+            <label>IMEI</label>
+            <input type="text" readonly id="commandImei" class="form-control">
         </div>
+
+        <div class="form-group">
+            <label>Comando</label>
+            <textarea id="commandMessage"
+                      class="form-control"
+                      rows="3"
+                      placeholder="Ingrese el comando a enviar..."></textarea>
+        </div>
+
+        <div class="form-group">
+            <label>Respuesta</label>
+            <textarea id="responseMessage"
+                      class="form-control"
+                      rows="3"
+                      readonly
+                      placeholder="Respuesta recibida..."></textarea>
+        </div>
+
+        <div class="text-center">
+            <button id="btnEnviar"
+                    type="button"
+                    class="btn btn-primary"
+                    style="margin-bottom:15px">
+
+                <i class="fa fa-paper-plane"></i>
+                Enviar comando
+
+            </button>
+        </div>
+
+        <!-- comandos principales -->
+
+        <div class="btn-group btn-group-justified">
+
+            <a id="btnApagar" class="btn btn-danger">
+                <i class="fa fa-lock"></i>
+                Bloquear Vehículo
+            </a>
+
+            <a id="btnEncender" class="btn btn-warning">
+                <i class="fa fa-unlock"></i>
+                Desbloquear Vehículo
+            </a>
+
+            <a id="btnReset" class="btn btn-success">
+                <i class="fa fa-refresh"></i>
+                Reset
+            </a>
+
+        </div>
+
+        <br>
+
+        <!-- comandos secundarios -->
+
+        <div class="btn-group btn-group-justified">
+
+            <a id="btnCompartir" class="btn btn-info">
+                <i class="fa fa-map-marker"></i>
+                Compartir Ubicación
+            </a>
+
+            <a id="btnFoto" class="btn btn-primary">
+                <i class="fa fa-camera"></i>
+                Foto
+            </a>
+             <a id="btnPUbicacion" class="btn btn-success">
+                <i class="fa fa-globe"></i>
+                Petición Ubicación
+            </a>
+
+        </div>
+
       </div>
-    <div class="modal-footer">
-      <button type="button" class="btn btn-default" data-dismiss="modal">
-        <i class="fa fa-times"></i> Cerrar
-      </button>
-    </div>
+
+      <div class="modal-footer">
+
+        <button type="button"
+                class="btn btn-default"
+                data-dismiss="modal">
+
+            <i class="fa fa-times"></i>
+            Cerrar
+
+        </button>
+
+      </div>
+
     </div>
   </div>
 </div>
@@ -2774,6 +2866,23 @@ $("#velocimetro").myfunc({divFact:10});
                 alert('Comando ejecutado exitosamente.');
             }, 'json');
         });
+
+        $('#btnPUbicacion').click(function (e) {
+            var imei = $('#commandImei').val();
+            var message = 'AT+GTRTO=gv300,1,,,,,,FFFF$';
+            $.post('{{ url("/api/command") }}', {
+                imei : imei,
+                message : message
+            }, function (data) {
+                if (data.error)
+                alert('Hubo un error al ejecutar el comando.');
+                else
+                alert('Comando ejecutado exitosamente.');
+            }, 'json');
+        });
+
+
+        
 
         
 
