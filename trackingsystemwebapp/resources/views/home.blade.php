@@ -1676,30 +1676,82 @@ $("#velocimetro").myfunc({divFact:10});
 
     }
 
-    var logTramasInterval = null;
+    let logTramasInterval = null;
+    let logsRequest = null;
+    let lastRenderedLogs = '';
+    let isFetchingLogs = false;
 
     function getLogsTramas() {
-        let urlLogs = '{{url('/api/command/read-logs')}}';
+        if (isFetchingLogs) {
+            return;
+        }
+
+        let urlLogs = '{{ url('/api/command/read-logs') }}';
         let logsContent = $('#logsContent').val();
-        $.get(urlLogs, { content: logsContent }, function (data) {
-            let stringTramas = data.tramas.map(function (item) {
-                return item.created_at + ': ' + item.contenido;
-            }).join('\n');
-            $('#logsTramas').text(stringTramas);
+
+        // cancelar request anterior si sigue viva
+        if (logsRequest && logsRequest.readyState !== 4) {
+            logsRequest.abort();
+        }
+
+        isFetchingLogs = true;
+
+        logsRequest = $.ajax({
+            url: urlLogs,
+            type: 'GET',
+            data: { content: logsContent },
+            dataType: 'json',
+            success: function (data) {
+                if (!data || !data.tramas) {
+                    return;
+                }
+
+                let stringTramas = data.tramas.map(function (item) {
+                    return item.created_at + ': ' + item.contenido;
+                }).join('\n');
+
+                // solo actualizar si cambió
+                if (stringTramas !== lastRenderedLogs) {
+                    $('#logsTramas').text(stringTramas);
+                    lastRenderedLogs = stringTramas;
+                }
+            },
+            error: function (xhr, status) {
+                if (status !== 'abort') {
+                    console.error('Error al obtener logs');
+                }
+            },
+            complete: function () {
+                isFetchingLogs = false;
+            }
         });
     }
 
-    function verLogsTramas()
-    {
+    function verLogsTramas() {
         getLogsTramas();
-        if (logTramasInterval != null) {
+
+        if (logTramasInterval !== null) {
             clearInterval(logTramasInterval);
         }
+
         logTramasInterval = setInterval(function () {
             getLogsTramas();
         }, 10000);
+
         $('#logsModal').modal('show');
     }
+
+    // detener al cerrar modal
+    $('#logsModal').on('hidden.bs.modal', function () {
+        if (logTramasInterval !== null) {
+            clearInterval(logTramasInterval);
+            logTramasInterval = null;
+        }
+
+        if (logsRequest && logsRequest.readyState !== 4) {
+            logsRequest.abort();
+        }
+    });
 
     var unidadRecorridos = [];
     var currentUnidad = null;
