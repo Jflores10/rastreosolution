@@ -132,31 +132,13 @@ class CommandApiController extends Controller
   public function getLogFileTextReversed(Request $request)
   {
     $content = $request->input('content', '');
-    $since = $request->input('since', null);
-    $limit = (int) $request->input('limit', 100);
-    $limit = $limit > 0 ? min($limit, 1000) : 100; // cap limit to avoid heavy queries
-
-    // Select only columns needed to reduce payload and memory
-    $builder = Trama::select('contenido', 'created_at')
-      ->orderBy('created_at', 'desc')
-      ->take($limit);
-
+    $numberOfLines = 100;
+    $builder = Trama::orderBy('created_at', 'desc')
+      ->take($numberOfLines);
     if (!empty($content)) {
-      // Try to avoid leading wildcard for very short queries (helps indexes when available)
-      if (mb_strlen($content) <= 3) {
-        $builder->where('contenido', 'like', $content . '%');
-      } else {
-        $builder->where('contenido', 'like', '%' . $content . '%');
-      }
+      $builder->where('contenido', 'like', '%' . $content . '%');
     }
-
-    if (!empty($since)) {
-      // Expecting ISO datetime or comparable format from client
-      $builder->where('created_at', '>', $since);
-    }
-
     $tramas = $builder->get();
-
     return response()->json([
       'error' => false,
       'tramas' => $tramas

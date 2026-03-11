@@ -412,9 +412,9 @@ Dashboard
             </div>
           </div>
           <div class="row">
-                            <div class="col-lg-12">
-                            <textarea readonly id="logsTramas" name="logsTramas" class="form-control" rows="25" style="background: #222; color: #b9f1c0; font-family: monospace; resize: vertical;"></textarea>
-                        </div>
+            <div class="col-lg-12">
+              <textarea disabled id="logsTramas" name="logsTramas" class="form-control" rows="25" style="background: #222; color: #b9f1c0; font-family: monospace; resize: vertical;"></textarea>
+            </div>
           </div>
         </div>
         <div class="modal-footer" style="background: #f1f1f1;">
@@ -1677,121 +1677,29 @@ $("#velocimetro").myfunc({divFact:10});
     }
 
     var logTramasInterval = null;
-    var lastLogTimestamp = null; // ISO datetime of latest entry received
 
-    // Normalize created_at value from server (string or nested object)
-    function normalizeCreatedAt(item) {
-        if (!item) return '';
-        const v = item.created_at;
-        if (!v) return '';
-        if (typeof v === 'string') return v;
-        if (v.date) return v.date; // common for some serializations
-        if (v.$date) {
-            if (typeof v.$date === 'string') return v.$date;
-            if (v.$date.$numberLong) return new Date(parseInt(v.$date.$numberLong)).toISOString();
-        }
-        if (v.$numberLong) return new Date(parseInt(v.$numberLong)).toISOString();
-        try { return String(v); } catch (e) { return ''; }
-    }
-
-    // Fetch logs, if logsContent is empty we perform incremental append using `since`
     function getLogsTramas() {
         let urlLogs = '{{url('/api/command/read-logs')}}';
-        let logsContent = $('#logsContent').val().trim();
-        let params = { content: logsContent };
-
-        // If we're in streaming mode (no search term) send since to get only new entries
-        if (logsContent === '' && lastLogTimestamp) {
-            params.since = lastLogTimestamp;
-        }
-
-        $.get(urlLogs, params, function (data) {
-            console.debug('getLogsTramas response', data);
-            if (!data || !data.tramas) return;
-
-            // If searching (there's a term), replace textarea with matches and stop polling
-            if (logsContent !== '') {
-                // Return results in chronological order
-                let stringTramas = data.tramas.slice().reverse().map(function (item) {
-                    return normalizeCreatedAt(item) + ': ' + (item.contenido || '');
-                }).join('\n');
-                $('#logsTramas').val(stringTramas);
-
-                // Stop polling while user is searching
-                if (logTramasInterval) { clearInterval(logTramasInterval); logTramasInterval = null; }
-                return;
-            }
-
-            // Streaming mode: append only new lines
-            let tramas = data.tramas;
-            if (tramas.length === 0) return;
-
-            // Server returns newest first (desc). The first element is the most recent.
-            // We set lastLogTimestamp using the most recent returned item.
-            lastLogTimestamp = normalizeCreatedAt(tramas[0]) || lastLogTimestamp;
-
-            // Build new lines in chronological order
-            let newLines = [];
-            tramas.slice().reverse().forEach(function (item) {
-                const itemTs = normalizeCreatedAt(item) || '';
-                const known = $('#logsTramas').data('last_ts') || '';
-                if (!known || itemTs > known) {
-                    newLines.push(itemTs + ': ' + (item.contenido || ''));
-                }
-            });
-
-            if (newLines.length > 0) {
-                let $ta = $('#logsTramas');
-                let current = $ta.val();
-                let appended = (current ? current + '\n' : '') + newLines.join('\n');
-                $ta.val(appended);
-                $ta.scrollTop($ta[0].scrollHeight);
-                $ta.data('last_ts', lastLogTimestamp);
-            }
-        }).fail(function(xhr, status, err){
-            console.error('Error fetching logs', status, err, xhr && xhr.responseText);
+        let logsContent = $('#logsContent').val();
+        $.get(urlLogs, { content: logsContent }, function (data) {
+            let stringTramas = data.tramas.map(function (item) {
+                return item.created_at + ': ' + item.contenido;
+            }).join('\n');
+            $('#logsTramas').text(stringTramas);
         });
     }
 
     function verLogsTramas()
     {
-        // Reset streaming state
-        $('#logsTramas').val('');
-        $('#logsTramas').data('last_ts', null);
-        lastLogTimestamp = null;
-
         getLogsTramas();
-
         if (logTramasInterval != null) {
             clearInterval(logTramasInterval);
         }
-
-        // Start polling only when there's no search term
-        if ($('#logsContent').val().trim() === '') {
-            logTramasInterval = setInterval(function () {
-                getLogsTramas();
-            }, 10000);
-        }
-
+        logTramasInterval = setInterval(function () {
+            getLogsTramas();
+        }, 10000);
         $('#logsModal').modal('show');
     }
-
-    // When user types in the search input, stop/start polling accordingly
-    $(document).on('input', '#logsContent', function () {
-        const val = $(this).val().trim();
-        if (val === '') {
-            // restart polling if not running
-            if (!logTramasInterval) {
-                logTramasInterval = setInterval(getLogsTramas, 10000);
-            }
-        } else {
-            // stop polling while user is actively searching
-            if (logTramasInterval) {
-                clearInterval(logTramasInterval);
-                logTramasInterval = null;
-            }
-        }
-    });
 
     var unidadRecorridos = [];
     var currentUnidad = null;
