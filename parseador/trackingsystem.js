@@ -1432,6 +1432,39 @@ function onClientConnected(socket) {
         });
       }
 
+       // ================== GTRTL ==================
+
+      else if (message.includes(GTRTL) && !message.includes(ACK)) {
+            let imei = 2;
+            let data = message.split(',');
+            let speed = 8;
+            let angle = 9;
+            let height = 10;
+            let longitude = 11;
+            let latitude = 12;
+            let datetime = 13;
+            let fechaGPS = toInteger(data[datetime]);
+
+
+            dbTrackingSystem.collection('unidads').updateOne(
+                { imei: data[imei], estado: 'A' },
+                { $set: { 
+                    fecha_gps: (fechaGPS != 0) ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate() : new Date(),
+                    latitud: toFloat(data[latitude]),
+                    longitud: toFloat(data[longitude]),
+                    velocidad: toFloat(data[speed]),
+                    altura: toFloat(data[height]),
+                    angulo: toInteger(data[angle]),
+                    fecha: new Date(),
+                } },
+                { writeConcern: { w: 0 } },
+                function(err, result) {
+                    if (err) console.log(err);
+                }
+            );
+      }
+
+
       // ================== DEFAULT: siempre registrar TRAMA (BATCH) ==================
       // 🔥 Esto antes era insertOne por cada mensaje, ahora buffer + insertMany.
       TRAMAS_BUFFER.push({
