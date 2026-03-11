@@ -49,6 +49,7 @@ const ADMIN = 'ADMIN';
 const GTLOG = 'GTLOG';
 const GTGOT = 'GTGOT';
 const GTGIN = 'GTGIN';
+const GTRTL = 'GTRTL';
 
 const ACK = 'ACK';
 const GTALC = 'GTALC';
