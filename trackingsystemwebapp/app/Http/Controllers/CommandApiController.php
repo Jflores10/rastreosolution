@@ -131,8 +131,6 @@ class CommandApiController extends Controller
 
   public function getLogFileTextReversed(Request $request)
   {
-  }
-
     $content = $request->input('content', '');
     $since = $request->input('since', null);
     $limit = (int) $request->input('limit', 100);
@@ -144,7 +142,7 @@ class CommandApiController extends Controller
       ->take($limit);
 
     if (!empty($content)) {
-      // Try to avoid leading wildcard for very short queries (helps use indexes when available)
+      // Try to avoid leading wildcard for very short queries (helps indexes when available)
       if (mb_strlen($content) <= 3) {
         $builder->where('contenido', 'like', $content . '%');
       } else {
