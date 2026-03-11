@@ -134,18 +134,17 @@ class CommandApiController extends Controller
       $content = trim($request->input('content', ''));
       $numberOfLines = 100;
 
-      $builder = Trama::query()
-          ->select(['id', 'contenido', 'created_at']) // solo columnas necesarias
-          ->orderByDesc('created_at');
+      $query = Trama::select('id', 'contenido', 'created_at')
+          ->orderBy('created_at', 'desc');
 
-      if ($content !== '') {
-          $builder->where('contenido', 'like', '%' . $content . '%');
+      if ($content != '') {
+          $query->where('contenido', 'like', '%' . $content . '%');
       }
 
-      $tramas = $builder->limit($numberOfLines)->get();
+      $tramas = $query->limit($numberOfLines)->get();
 
       return response()->json([
-          'error'  => false,
+          'error' => false,
           'tramas' => $tramas
       ]);
   }
