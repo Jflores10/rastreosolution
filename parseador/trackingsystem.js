@@ -1435,6 +1435,7 @@ function onClientConnected(socket) {
        // ================== GTRTL ==================
 
       else if (message.includes(GTRTL) && !message.includes(ACK)) {
+          console.log(message)
             let imei = 2;
             let data = message.split(',');
             let speed = 8;
@@ -1463,6 +1464,7 @@ function onClientConnected(socket) {
                 }
             );
       }
+
 
 
       // ================== DEFAULT: siempre registrar TRAMA (BATCH) ==================
