@@ -131,17 +131,22 @@ class CommandApiController extends Controller
 
   public function getLogFileTextReversed(Request $request)
   {
-    $content = $request->input('content', '');
-    $numberOfLines = 100;
-    $builder = Trama::orderBy('created_at', 'desc')
-      ->take($numberOfLines);
-    if (!empty($content)) {
-      $builder->where('contenido', 'like', '%' . $content . '%');
-    }
-    $tramas = $builder->get();
-    return response()->json([
-      'error' => false,
-      'tramas' => $tramas
-    ]);
+      $content = trim($request->input('content', ''));
+      $numberOfLines = 100;
+
+      $builder = Trama::query()
+          ->select(['id', 'contenido', 'created_at']) // solo columnas necesarias
+          ->orderByDesc('created_at');
+
+      if ($content !== '') {
+          $builder->where('contenido', 'like', '%' . $content . '%');
+      }
+
+      $tramas = $builder->limit($numberOfLines)->get();
+
+      return response()->json([
+          'error'  => false,
+          'tramas' => $tramas
+      ]);
   }
 }
