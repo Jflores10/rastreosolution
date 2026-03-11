@@ -412,9 +412,9 @@ Dashboard
             </div>
           </div>
           <div class="row">
-            <div class="col-lg-12">
-              <textarea disabled id="logsTramas" name="logsTramas" class="form-control" rows="25" style="background: #222; color: #b9f1c0; font-family: monospace; resize: vertical;"></textarea>
-            </div>
+                            <div class="col-lg-12">
+                            <textarea readonly id="logsTramas" name="logsTramas" class="form-control" rows="25" style="background: #222; color: #b9f1c0; font-family: monospace; resize: vertical;"></textarea>
+                        </div>
           </div>
         </div>
         <div class="modal-footer" style="background: #f1f1f1;">
@@ -1679,6 +1679,21 @@ $("#velocimetro").myfunc({divFact:10});
     var logTramasInterval = null;
     var lastLogTimestamp = null; // ISO datetime of latest entry received
 
+    // Normalize created_at value from server (string or nested object)
+    function normalizeCreatedAt(item) {
+        if (!item) return '';
+        const v = item.created_at;
+        if (!v) return '';
+        if (typeof v === 'string') return v;
+        if (v.date) return v.date; // common for some serializations
+        if (v.$date) {
+            if (typeof v.$date === 'string') return v.$date;
+            if (v.$date.$numberLong) return new Date(parseInt(v.$date.$numberLong)).toISOString();
+        }
+        if (v.$numberLong) return new Date(parseInt(v.$numberLong)).toISOString();
+        try { return String(v); } catch (e) { return ''; }
+    }
+
     // Fetch logs, if logsContent is empty we perform incremental append using `since`
     function getLogsTramas() {
         let urlLogs = '{{url('/api/command/read-logs')}}';
@@ -1691,13 +1706,14 @@ $("#velocimetro").myfunc({divFact:10});
         }
 
         $.get(urlLogs, params, function (data) {
+            console.debug('getLogsTramas response', data);
             if (!data || !data.tramas) return;
 
             // If searching (there's a term), replace textarea with matches and stop polling
             if (logsContent !== '') {
                 // Return results in chronological order
                 let stringTramas = data.tramas.slice().reverse().map(function (item) {
-                    return item.created_at + ': ' + item.contenido;
+                    return normalizeCreatedAt(item) + ': ' + (item.contenido || '');
                 }).join('\n');
                 $('#logsTramas').val(stringTramas);
 
@@ -1712,15 +1728,15 @@ $("#velocimetro").myfunc({divFact:10});
 
             // Server returns newest first (desc). The first element is the most recent.
             // We set lastLogTimestamp using the most recent returned item.
-            lastLogTimestamp = tramas[0].created_at;
+            lastLogTimestamp = normalizeCreatedAt(tramas[0]) || lastLogTimestamp;
 
             // Build new lines in chronological order
             let newLines = [];
             tramas.slice().reverse().forEach(function (item) {
-                // If textarea is empty we will append all; otherwise only items newer than current content
-                // Rely on timestamp comparison (ISO format expected)
-                if (!lastLogTimestamp || item.created_at > ($('#logsTramas').data('last_ts') || '\\0')) {
-                    newLines.push(item.created_at + ': ' + item.contenido);
+                const itemTs = normalizeCreatedAt(item) || '';
+                const known = $('#logsTramas').data('last_ts') || '';
+                if (!known || itemTs > known) {
+                    newLines.push(itemTs + ': ' + (item.contenido || ''));
                 }
             });
 
@@ -1732,7 +1748,9 @@ $("#velocimetro").myfunc({divFact:10});
                 $ta.scrollTop($ta[0].scrollHeight);
                 $ta.data('last_ts', lastLogTimestamp);
             }
-        }, 'json');
+        }).fail(function(xhr, status, err){
+            console.error('Error fetching logs', status, err, xhr && xhr.responseText);
+        });
     }
 
     function verLogsTramas()
