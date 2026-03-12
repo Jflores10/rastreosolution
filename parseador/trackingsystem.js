@@ -1463,13 +1463,12 @@ function onClientConnected(socket) {
 
                   // ================= ENVIAR AL FRONT =================
                   enviarALaravelPorWS({
-                      type: 'unidad.update',
+                      type: 'unidad.location',
                       unidad_id: unidad._id,
                       imei: data[imei],
                       cooperativa_id: unidad.cooperativa_id ? String(unidad.cooperativa_id) : null,
                       latitud: lat,
                       longitud: lng,
-                      is_location:"si",
                       velocidad_actual: toFloat(data[speed]),
                       angulo: toInteger(data[angle]),
                       altura: toFloat(data[height]),

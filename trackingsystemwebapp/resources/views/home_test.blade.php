@@ -670,7 +670,6 @@ function conectarSSE(coopId) {
         try {
 
             const data = JSON.parse(evt.data);
-            console.log(data)
             if (data && data._id) {
                 // First, apply realtime position/marker
                 actualizarUnidadRealtime(data);
@@ -746,6 +745,14 @@ function conectarSSE(coopId) {
             updateUnidadInList(li.currentU);
         } catch (e) {}
     });
+
+    sse.addEventListener('unidad.location', (evt) => {
+        try {
+            const msg = JSON.parse(evt.data);
+            console.log(msg)
+        } catch (e) {}
+    });
+
 
     // fallback
     sse.onmessage = (evt) => {
@@ -2358,6 +2365,8 @@ $("#velocimetro").myfunc({divFact:10});
             logsRequest.abort();
         }
     });
+
+    
     var unidadRecorridos = [];
     var currentUnidad = null;
 
