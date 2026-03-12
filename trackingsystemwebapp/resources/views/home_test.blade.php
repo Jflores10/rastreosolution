@@ -749,8 +749,43 @@ function conectarSSE(coopId) {
     sse.addEventListener('unidad.location', (evt) => {
         try {
             const msg = JSON.parse(evt.data);
-            console.log(msg)
-        } catch (e) {}
+            console.log('unidad.location', msg);
+
+            // 1) Place marker on map using existing helper
+            try {
+                // actualizarUnidadRealtime already validates lat/lng and calls setMarcadorUnidad
+                actualizarUnidadRealtime(msg);
+            } catch (e) { console.warn('failed to place marker from unidad.location', e); }
+
+            // 2) Show temporary marker icon in the LI for 60 seconds
+            try {
+                // prefer id fields: msg._id or msg.unidad_id
+                const uid = msg._id || msg.unidad_id;
+                if (uid) {
+                    const li = document.getElementById(uid);
+                    if (li) {
+                        // avoid duplicate temp markers
+                        if (!li.querySelector('.temp-marker')) {
+                            // Always use FontAwesome globe icon for temporary marker
+                            var markerEl = document.createElement('span');
+                            markerEl.className = 'temp-marker fa fa-globe';
+                            markerEl.style.color = '#FF4444';
+                            markerEl.style.marginRight = '6px';
+                            markerEl.style.fontSize = '16px';
+
+                            // prepend marker to li content for visibility
+                            li.insertBefore(markerEl, li.firstChild);
+
+                            // remove after 60s
+                            setTimeout(function () {
+                                try { const t = li.querySelector('.temp-marker'); if (t) t.remove(); } catch (e) {}
+                            }, 60000);
+                        }
+                    }
+                }
+            } catch (e) { console.warn('failed to add temporary LI marker', e); }
+
+        } catch (e) { console.warn('parse unidad.location', e); }
     });
 
 
