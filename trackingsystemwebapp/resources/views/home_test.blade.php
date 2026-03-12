@@ -750,6 +750,7 @@ function conectarSSE(coopId) {
         try {
             const msg = JSON.parse(evt.data);
             console.log('unidad.location', msg);
+            zoomUnidad=true;
 
             // 1) Place marker on map using existing helper
             try {
@@ -3182,10 +3183,9 @@ $("#velocimetro").myfunc({divFact:10});
 	}
 
 
- function addMarker(html, latitude, longitude, id, angulo, placa,velocidad, sentido = false)
+    function addMarker(html, latitude, longitude, id, angulo, placa,velocidad, sentido = false)
     {
 
-        console.log("entro marker"+zoomUnidad+"--"+id)
         var icon;
         var mk;
         var colorFlecha='red';
