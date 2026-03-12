@@ -1,6 +1,51 @@
 @extends('layouts.app')
 @section('styles')
 <style>
+
+    /* Forzar modal encima de cualquier elemento flotante */
+    .modal-backdrop {
+        z-index: 9998 !important;
+    }
+
+    .modal {
+        z-index: 9999 !important;
+    }
+
+    /* Ajuste botones */
+    .comandos-v .btn{
+        margin-bottom:5px;
+    }
+
+    /* Responsive */
+    @media (max-width:768px){
+
+        #commandModal .modal-dialog{
+            width:95%;
+            margin:10px auto;
+        }
+
+        .btn-group-justified > .btn,
+        .btn-group-justified > .btn-group{
+            display:block;
+            width:100%;
+            margin-bottom:5px;
+        }
+
+        .comandos-v{
+            display:flex;
+            flex-direction:column;
+            width:100%;
+        }
+
+        .comandos-v .btn{
+            width:100%;
+        }
+
+    }
+
+</style>
+
+<style>
 .dir-wrap {
     white-space: normal !important;
     word-break: break-word !important;
@@ -362,11 +407,22 @@ Dashboard
                     </a>
                 </div>
 
-                <!-- Botón flotado a la derecha -->
-                <div class="clearfix" style="margin-top:10px;">
-                    <a id="btnCompartir" class="btn btn-info pull-left" role="button" target="_blank">
-                        <i class="fa fa-map-marker"></i> Compartir Ubicación
+                <div class="btn-group btn-group-justified">
+
+                    <a id="btnCompartir" class="btn btn-info">
+                        <i class="fa fa-map-marker"></i>
+                        Compartir Ubicación
                     </a>
+
+                    <a id="btnFoto" class="btn btn-primary">
+                        <i class="fa fa-camera"></i>
+                        Foto
+                    </a>
+                    <a id="btnPUbicacion" class="btn btn-success">
+                        <i class="fa fa-globe"></i>
+                        Petición Ubicación
+                    </a>
+
                 </div>
 
             </div>
@@ -753,8 +809,6 @@ function conectarSSE(coopId) {
             zoomUnidad=true;
             zoomUnidadID=msg._id || msg.unidad_id;
             map.setZoom(30);
-
-
             // 1) Place marker on map using existing helper
             try {
                 // actualizarUnidadRealtime already validates lat/lng and calls setMarcadorUnidad
@@ -3405,6 +3459,35 @@ $("#velocimetro").myfunc({divFact:10});
             var url = `https://www.google.com/maps?q=${lat},${lng}`;
             window.open(url, '_blank');
         });
+
+        $('#btnFoto').click(function (e) {
+            var imei = $('#commandImei').val();
+            var message = 'AT+GTTAP=gv300,0,,,2,,,,,FFFF$';
+            $.post('{{ url("/api/command") }}', {
+                imei : imei,
+                message : message
+            }, function (data) {
+                if (data.error)
+                alert('Hubo un error al ejecutar el comando.');
+                else
+                alert('Comando ejecutado exitosamente.');
+            }, 'json');
+        });
+
+        $('#btnPUbicacion').click(function (e) {
+            var imei = $('#commandImei').val();
+            var message = 'AT+GTRTO=gv300,1,,,,,,FFFF$';
+            $.post('{{ url("/api/command") }}', {
+                imei : imei,
+                message : message
+            }, function (data) {
+                if (data.error)
+                alert('Hubo un error al ejecutar el comando.');
+                else
+                alert('Comando ejecutado exitosamente.');
+            }, 'json');
+        });
+
         
 
         $('#ruta').change(function () {
