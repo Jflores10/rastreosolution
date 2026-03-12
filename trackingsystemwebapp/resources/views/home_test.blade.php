@@ -752,6 +752,8 @@ function conectarSSE(coopId) {
             console.log('unidad.location', msg);
             zoomUnidad=true;
             zoomUnidadID=msg._id || msg.unidad_id;
+            map.setZoom(30);
+
 
             // 1) Place marker on map using existing helper
             try {
