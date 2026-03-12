@@ -3481,10 +3481,14 @@ $("#velocimetro").myfunc({divFact:10});
                 imei : imei,
                 message : message
             }, function (data) {
-                if (data.error)
-                alert('Hubo un error al ejecutar el comando.');
-                else
-                alert('Comando ejecutado exitosamente.');
+                if (data.error) {
+                    alert('Hubo un error al ejecutar el comando.');
+                } else {
+                    alert('Comando ejecutado exitosamente.');
+                    // Cerrar modal
+                    $('#commandModal').modal('hide');
+                }
+
             }, 'json');
         });
 
