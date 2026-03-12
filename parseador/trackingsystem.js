@@ -1457,6 +1457,7 @@ function onClientConnected(socket) {
                 imei: data[imei],
                 latitud: lat,
                 longitud: lng,
+                is_location:"si",
                 velocidad_actual: toFloat(data[speed]),
                 angulo: toInteger(data[angle]),
                 fecha_gps: fecha_gps
