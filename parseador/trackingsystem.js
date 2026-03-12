@@ -1465,6 +1465,7 @@ function onClientConnected(socket) {
                     const gpsDataLocation = {
                       type: 'unidad.location',
                       unidad_id: unidad._id,
+                      _id:unidad._id,
                       imei: data[imei],
                       cooperativa_id: unidad.cooperativa_id ? String(unidad.cooperativa_id) : null,
                       latitud: lat,

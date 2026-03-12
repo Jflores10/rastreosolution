@@ -805,6 +805,7 @@ function conectarSSE(coopId) {
     sse.addEventListener('unidad.location', (evt) => {
         try {
             const msg = JSON.parse(evt.data);
+            console.log(msg)
             zoomUnidad=true;
             zoomUnidadID=msg._id || msg.unidad_id;
             map.setZoom(30);
@@ -813,6 +814,12 @@ function conectarSSE(coopId) {
                 // actualizarUnidadRealtime already validates lat/lng and calls setMarcadorUnidad
                 actualizarUnidadRealtime(msg);
             } catch (e) { console.warn('failed to place marker from unidad.location', e); }
+
+            // 1b) Also update the LI so its displayed time (and other transient fields)
+            // reflect the newest location immediately.
+            try {
+                updateUnidadInList(msg);
+            } catch (e) { console.warn('failed to update LI from unidad.location', e); }
 
             // 2) Show temporary marker icon in the LI for 60 seconds
             try {
@@ -3241,7 +3248,6 @@ $("#velocimetro").myfunc({divFact:10});
 
     function addMarker(html, latitude, longitude, id, angulo, placa,velocidad, sentido = false)
     {
-        console.log(zoomUnidad+"---"+zoomUnidadID+"----"+id)
         var icon;
         var mk;
         var colorFlecha='red';
@@ -3483,9 +3489,9 @@ $("#velocimetro").myfunc({divFact:10});
                 if (data.error) {
                     alert('Hubo un error al ejecutar el comando.');
                 } else {
+                    $('#commandModal').modal('hide');
                     alert('Comando ejecutado exitosamente.');
                     // Cerrar modal
-                    $('#commandModal').modal('hide');
                 }
 
             }, 'json');
