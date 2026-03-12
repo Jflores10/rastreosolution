@@ -2300,11 +2300,13 @@ $("#velocimetro").myfunc({divFact:10});
             !isNaN(parseFloat(unidad.latitud)) &&
             !isNaN(parseFloat(unidad.longitud))
         ) {
+            
+            const uid1 = unidad._id || unidad.unidad_id;
             addMarker(
                 popupHtml,
                 unidad.latitud,
                 unidad.longitud,
-                unidad._id,
+                uid1,
                 unidad.angulo,
                 (unidad.orden != null)
                     ? `${unidad.descripcion} (${unidad.orden})`
