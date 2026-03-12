@@ -2294,7 +2294,6 @@ $("#velocimetro").myfunc({divFact:10});
         // =========================
         // MOVER / ACTUALIZAR MARKER
         // =========================
-        console.log("Entro"+unidad.latitud)
         if (
             unidad.latitud !== undefined &&
             unidad.longitud !== undefined &&
@@ -3183,6 +3182,8 @@ $("#velocimetro").myfunc({divFact:10});
 
  function addMarker(html, latitude, longitude, id, angulo, placa,velocidad, sentido = false)
     {
+
+        console.log("entro marker")
         var icon;
         var mk;
         var colorFlecha='red';
