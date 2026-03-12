@@ -770,8 +770,7 @@ function conectarSSE(coopId) {
                             var markerEl = document.createElement('span');
                             markerEl.className = 'temp-marker fa fa-globe';
                             markerEl.style.color = '#FF4444';
-                            markerEl.style.marginRight = '6px';
-                            markerEl.style.fontSize = '16px';
+                            markerEl.style.fontSize = '15px';
 
                             // prepend marker to li content for visibility
                             li.insertBefore(markerEl, li.firstChild);
@@ -2295,6 +2294,7 @@ $("#velocimetro").myfunc({divFact:10});
         // =========================
         // MOVER / ACTUALIZAR MARKER
         // =========================
+        console.log("Entro"+unidad.latitud)
         if (
             unidad.latitud !== undefined &&
             unidad.longitud !== undefined &&
