@@ -3185,7 +3185,7 @@ $("#velocimetro").myfunc({divFact:10});
 
     function addMarker(html, latitude, longitude, id, angulo, placa,velocidad, sentido = false)
     {
-
+        console.log(zoomUnidad+"---"+zoomUnidadID+"----"+id)
         var icon;
         var mk;
         var colorFlecha='red';
