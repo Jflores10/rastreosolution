@@ -1462,7 +1462,7 @@ function onClientConnected(socket) {
                   if (err || !unidad) return;
 
                   // ================= ENVIAR AL FRONT =================
-                  enviarALaravelPorWS({
+                    const gpsDataLocation = {
                       type: 'unidad.location',
                       unidad_id: unidad._id,
                       imei: data[imei],
@@ -1473,7 +1473,10 @@ function onClientConnected(socket) {
                       angulo: toInteger(data[angle]),
                       altura: toFloat(data[height]),
                       fecha_gps: fecha_gps
-                  });
+                  };
+
+                  const unidadLocation = buildUnidadPayloadRealtime(gpsDataLocation);
+                  enviarALaravelPorWS(unidadLocation);
 
               }
           );
