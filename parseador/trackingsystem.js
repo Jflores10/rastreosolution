@@ -1453,11 +1453,10 @@ function onClientConnected(socket) {
                 ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate()
                 : new Date();
             enviarALaravelPorWS({
-                type: 'unidad.updated',
+                type: 'unidad.location',
                 imei: data[imei],
                 latitud: lat,
                 longitud: lng,
-                is_location:"si",
                 velocidad_actual: toFloat(data[speed]),
                 angulo: toInteger(data[angle]),
                 fecha_gps: fecha_gps
