@@ -186,7 +186,7 @@ function enviarALaravelPorWS(data, opts = {}) {
       lastSentByUnit.set(key, { ts: now, lat, lng });
 
       const trackingPayload = { ...data, cooperativa_id: coop, _ts_sent: now };
-        console.log("entrooo1")
+
       redisPub.publish('gps-channel', JSON.stringify(trackingPayload), err => {
         if (err) console.error('❌ Redis tracking publish error:', err);
       });
@@ -1436,7 +1436,7 @@ function onClientConnected(socket) {
        // ================== GTRTL ==================
 
       else if (message.includes(GTRTL) && !message.includes(ACK)) {
-          console.log(message)
+          
           let imei = 2;
           let data = message.split(',');
           let speed = 8;
@@ -1460,7 +1460,6 @@ function onClientConnected(socket) {
               function(err, unidad) {
 
                   if (err || !unidad) return;
-          console.log(unidad)
 
                   // ================= ENVIAR AL FRONT =================
                   enviarALaravelPorWS({
