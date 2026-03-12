@@ -724,48 +724,72 @@ function conectarSSE(coopId) {
 
     sse.addEventListener('unidad.updated', (evt) => {
         try {
-
             const data = JSON.parse(evt.data);
-            if (data && data._id) {
-                // First, apply realtime position/marker
-                actualizarUnidadRealtime(data);
+            if (!(data && data._id)) return;
 
-                // Merge incoming data into the list entry but preserve existing ruta unless SSE provides it
-                // Cache useful meta from SSE (so it is shown immediately and preserved)
-                const meta = {
-                    ruta_actual: data.ruta_actual || '',
-                    ruta_fecha: data.ruta_fecha || '',
-                    ruta_conductor: data.ruta_conductor || '',
-                    ruta_hora_fin: data.ruta_hora_fin || '',
-                    tipo_bitacora: data.tipo_bitacora || '',
-                    bitacora: data.bitacora || ''
-                };
+            // Always update marker on map
+            actualizarUnidadRealtime(data);
 
-                // if SSE provided any non-empty meta, cache+apply as 'sse' source
-                const anyMeta = Object.keys(meta).some(k => meta[k] && meta[k] !== '');
-                if (anyMeta) {
-                    unidadesMetaCache[data._id] = { data: meta, ts: Date.now() };
-                    applyMetaToLi(data._id, meta, 'sse');
-                }
+            // Internal update function that preserves previous behavior
+            function applyUpdate(d) {
+                try {
+                    const meta = {
+                        ruta_actual: d.ruta_actual || '',
+                        ruta_fecha: d.ruta_fecha || '',
+                        ruta_conductor: d.ruta_conductor || '',
+                        ruta_hora_fin: d.ruta_hora_fin || '',
+                        tipo_bitacora: d.tipo_bitacora || '',
+                        bitacora: d.bitacora || ''
+                    };
 
-                // Now update the rest of the unidad fields in the list
-                updateUnidadInList(data);
+                    const anyMeta = Object.keys(meta).some(k => meta[k] && meta[k] !== '');
+                    if (anyMeta) {
+                        unidadesMetaCache[d._id] = { data: meta, ts: Date.now() };
+                        applyMetaToLi(d._id, meta, 'sse');
+                    }
 
-                // Fetch server-side unidades-meta for this unidad and apply it immediately,
-                // but only once per unidad while the page is open.
-                if (!unidadesMetaFetchedOnce[data._id]) {
-                    unidadesMetaFetchedOnce[data._id] = true;
-                    fetchUnidadesMeta([data._id]).then(function(resp) {
-                        try {
-                            var serverMeta = resp && resp[data._id] ? resp[data._id] : null;
-                            if (serverMeta) {
-                                unidadesMetaCache[data._id] = { data: serverMeta, ts: Date.now() };
-                                applyMetaToLi(data._id, serverMeta, 'sse');
-                            }
-                        } catch (e) { console.warn('apply server meta after sse failed', e); }
-                    }).catch(function(e){ /* ignore */ });
-                }
+                    updateUnidadInList(d);
+
+                    if (!unidadesMetaFetchedOnce[d._id]) {
+                        unidadesMetaFetchedOnce[d._id] = true;
+                        fetchUnidadesMeta([d._id]).then(function(resp) {
+                            try {
+                                var serverMeta = resp && resp[d._id] ? resp[d._id] : null;
+                                if (serverMeta) {
+                                    unidadesMetaCache[d._id] = { data: serverMeta, ts: Date.now() };
+                                    applyMetaToLi(d._id, serverMeta, 'sse');
+                                }
+                            } catch (e) { console.warn('apply server meta after sse failed', e); }
+                        }).catch(function(e){ /* ignore */ });
+                    }
+                } catch (e) { console.warn('applyUpdate failed', e); }
             }
+
+            // If LI exists and has an active temp lock (set by unidad.location), defer the list update
+            const uid = data._id;
+            const li = document.getElementById(uid);
+            const now = Date.now();
+            if (li && li._temp_lock_until && now < li._temp_lock_until) {
+                // store pending update and schedule apply when lock expires
+                try {
+                    li._pending_update = data;
+                    if (!li._pending_timer) {
+                        const delay = Math.max(50, li._temp_lock_until - now + 10);
+                        li._pending_timer = setTimeout(function () {
+                            try {
+                                if (li._pending_update) {
+                                    applyUpdate(li._pending_update);
+                                    li._pending_update = null;
+                                }
+                            } catch (e) { console.warn('apply pending update failed', e); }
+                            try { li._pending_timer = null; } catch (e) {}
+                        }, delay);
+                    }
+                } catch (e) { console.warn('failed to defer unidad.updated', e); }
+            } else {
+                applyUpdate(data);
+            }
+
         } catch (e) {
             console.error('❌ parse unidad.updated', e);
         }
