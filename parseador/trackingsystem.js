@@ -1436,52 +1436,48 @@ function onClientConnected(socket) {
        // ================== GTRTL ==================
 
       else if (message.includes(GTRTL) && !message.includes(ACK)) {
-            let imei = 2;
-            let data = message.split(',');
-            let speed = 8;
-            let angle = 9;
-            let height = 10;
-            let longitude = 11;
-            let latitude = 12;
-            let datetime = 13;
-            let fechaGPS = toInteger(data[datetime]);
 
-            let lat = toFloat(data[latitude]);
-            let lng = toFloat(data[longitude]);
+          let imei = 2;
+          let data = message.split(',');
+          let speed = 8;
+          let angle = 9;
+          let height = 10;
+          let longitude = 11;
+          let latitude = 12;
+          let datetime = 13;
 
-            let fecha_gps = (fechaGPS != 0)
-                ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate()
-                : new Date();
-            enviarALaravelPorWS({
-                type: 'unidad.location',
-                imei: data[imei],
-                latitud: lat,
-                longitud: lng,
-                velocidad_actual: toFloat(data[speed]),
-                angulo: toInteger(data[angle]),
-                fecha_gps: fecha_gps
-            });
+          let fechaGPS = toInteger(data[datetime]);
 
-            /*
-            dbTrackingSystem.collection('unidads').updateOne(
-                { imei: data[imei], estado: 'A' },
-                { $set: { 
-                    fecha_gps: (fechaGPS != 0) ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate() : new Date(),
-                    latitud: toFloat(data[latitude]),
-                    longitud: toFloat(data[longitude]),
-                    velocidad: toFloat(data[speed]),
-                    altura: toFloat(data[height]),
-                    angulo: toInteger(data[angle]),
-                    fecha: new Date(),
-                } },
-                { writeConcern: { w: 0 } },
-                function(err, result) {
-                    if (err) console.log(err);
-                }
-            );
-            */
+          let lat = toFloat(data[latitude]);
+          let lng = toFloat(data[longitude]);
+
+          let fecha_gps = (fechaGPS != 0)
+              ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate()
+              : new Date();
+
+          dbTrackingSystem.collection('unidads').findOne(
+              { imei: data[imei], estado: 'A' },
+              function(err, unidad) {
+
+                  if (err || !unidad) return;
+
+                  // ================= ENVIAR AL FRONT =================
+                  enviarALaravelPorWS({
+                      type: 'unidad.location',
+                      unidad_id: unidad._id,
+                      imei: data[imei],
+                      cooperativa_id: unidad.cooperativa_id ? String(unidad.cooperativa_id) : null,
+                      latitud: lat,
+                      longitud: lng,
+                      velocidad_actual: toFloat(data[speed]),
+                      angulo: toInteger(data[angle]),
+                      altura: toFloat(data[height]),
+                      fecha_gps: fecha_gps
+                  });
+
+              }
+          );
       }
-
 
 
       // ================== DEFAULT: siempre registrar TRAMA (BATCH) ==================
