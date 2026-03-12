@@ -730,65 +730,51 @@ function conectarSSE(coopId) {
             // Always update marker on map
             actualizarUnidadRealtime(data);
 
-            // Internal update function that preserves previous behavior
-            function applyUpdate(d) {
-                try {
-                    const meta = {
-                        ruta_actual: d.ruta_actual || '',
-                        ruta_fecha: d.ruta_fecha || '',
-                        ruta_conductor: d.ruta_conductor || '',
-                        ruta_hora_fin: d.ruta_hora_fin || '',
-                        tipo_bitacora: d.tipo_bitacora || '',
-                        bitacora: d.bitacora || ''
-                    };
-
-                    const anyMeta = Object.keys(meta).some(k => meta[k] && meta[k] !== '');
-                    if (anyMeta) {
-                        unidadesMetaCache[d._id] = { data: meta, ts: Date.now() };
-                        applyMetaToLi(d._id, meta, 'sse');
-                    }
-
-                    updateUnidadInList(d);
-
-                    if (!unidadesMetaFetchedOnce[d._id]) {
-                        unidadesMetaFetchedOnce[d._id] = true;
-                        fetchUnidadesMeta([d._id]).then(function(resp) {
-                            try {
-                                var serverMeta = resp && resp[d._id] ? resp[d._id] : null;
-                                if (serverMeta) {
-                                    unidadesMetaCache[d._id] = { data: serverMeta, ts: Date.now() };
-                                    applyMetaToLi(d._id, serverMeta, 'sse');
-                                }
-                            } catch (e) { console.warn('apply server meta after sse failed', e); }
-                        }).catch(function(e){ /* ignore */ });
-                    }
-                } catch (e) { console.warn('applyUpdate failed', e); }
-            }
-
-            // If LI exists and has an active temp lock (set by unidad.location), defer the list update
+            // If the LI has an active temp lock (set by unidad.location), defer the list update
             const uid = data._id;
             const li = document.getElementById(uid);
             const now = Date.now();
+
             if (li && li._temp_lock_until && now < li._temp_lock_until) {
-                // store pending update and schedule apply when lock expires
+                // simply store latest pending update; removal of the icon will apply it
                 try {
                     li._pending_update = data;
-                    if (!li._pending_timer) {
-                        const delay = Math.max(50, li._temp_lock_until - now + 10);
-                        li._pending_timer = setTimeout(function () {
-                            try {
-                                if (li._pending_update) {
-                                    applyUpdate(li._pending_update);
-                                    li._pending_update = null;
-                                }
-                            } catch (e) { console.warn('apply pending update failed', e); }
-                            try { li._pending_timer = null; } catch (e) {}
-                        }, delay);
-                    }
-                } catch (e) { console.warn('failed to defer unidad.updated', e); }
-            } else {
-                applyUpdate(data);
+                } catch (e) { console.warn('failed to set pending update', e); }
+                return;
             }
+
+            // No lock: apply immediately (merge meta + update list)
+            try {
+                const meta = {
+                    ruta_actual: data.ruta_actual || '',
+                    ruta_fecha: data.ruta_fecha || '',
+                    ruta_conductor: data.ruta_conductor || '',
+                    ruta_hora_fin: data.ruta_hora_fin || '',
+                    tipo_bitacora: data.tipo_bitacora || '',
+                    bitacora: data.bitacora || ''
+                };
+
+                const anyMeta = Object.keys(meta).some(k => meta[k] && meta[k] !== '');
+                if (anyMeta) {
+                    unidadesMetaCache[data._id] = { data: meta, ts: Date.now() };
+                    applyMetaToLi(data._id, meta, 'sse');
+                }
+
+                updateUnidadInList(data);
+
+                if (!unidadesMetaFetchedOnce[data._id]) {
+                    unidadesMetaFetchedOnce[data._id] = true;
+                    fetchUnidadesMeta([data._id]).then(function(resp) {
+                        try {
+                            var serverMeta = resp && resp[data._id] ? resp[data._id] : null;
+                            if (serverMeta) {
+                                unidadesMetaCache[data._id] = { data: serverMeta, ts: Date.now() };
+                                applyMetaToLi(data._id, serverMeta, 'sse');
+                            }
+                        } catch (e) { console.warn('apply server meta after sse failed', e); }
+                    }).catch(function(e){ /* ignore */ });
+                }
+            } catch (e) { console.warn('apply unidad.updated failed', e); }
 
         } catch (e) {
             console.error('❌ parse unidad.updated', e);
@@ -845,27 +831,57 @@ function conectarSSE(coopId) {
                 updateUnidadInList(msg);
             } catch (e) { console.warn('failed to update LI from unidad.location', e); }
 
-            // 2) Show temporary marker icon in the LI for 60 seconds
+            // 2) Show temporary marker icon in the LI for 60 seconds and set a lock
             try {
-                // prefer id fields: msg._id or msg.unidad_id
                 const uid = msg._id || msg.unidad_id;
                 if (uid) {
                     const li = document.getElementById(uid);
                     if (li) {
                         // avoid duplicate temp markers
                         if (!li.querySelector('.temp-marker')) {
-                            // Always use FontAwesome globe icon for temporary marker
                             var markerEl = document.createElement('span');
                             markerEl.className = 'temp-marker fa fa-globe';
                             markerEl.style.color = '#FF4444';
                             markerEl.style.fontSize = '15px';
+                            markerEl.style.marginRight = '6px';
 
                             // prepend marker to li content for visibility
                             li.insertBefore(markerEl, li.firstChild);
 
-                            // remove after 60s
+                            // set lock until timestamp (ms)
+                            try { li._temp_lock_until = Date.now() + 60000; } catch (e) {}
+
+                            // remove after 60s, clear lock and apply pending update if any
                             setTimeout(function () {
-                                try { const t = li.querySelector('.temp-marker'); if (t) t.remove(); } catch (e) {}
+                                try {
+                                    const t = li.querySelector('.temp-marker'); if (t) t.remove();
+                                } catch (e) {}
+                                try {
+                                    // clear lock
+                                    li._temp_lock_until = 0;
+                                    // if there was a pending update received while locked, apply it now
+                                    if (li._pending_update) {
+                                        try {
+                                            const pending = li._pending_update;
+                                            li._pending_update = null;
+                                            // apply same logic as unidad.updated immediate path
+                                            const meta = {
+                                                ruta_actual: pending.ruta_actual || '',
+                                                ruta_fecha: pending.ruta_fecha || '',
+                                                ruta_conductor: pending.ruta_conductor || '',
+                                                ruta_hora_fin: pending.ruta_hora_fin || '',
+                                                tipo_bitacora: pending.tipo_bitacora || '',
+                                                bitacora: pending.bitacora || ''
+                                            };
+                                            const anyMeta = Object.keys(meta).some(k => meta[k] && meta[k] !== '');
+                                            if (anyMeta) {
+                                                unidadesMetaCache[pending._id] = { data: meta, ts: Date.now() };
+                                                applyMetaToLi(pending._id, meta, 'sse');
+                                            }
+                                            updateUnidadInList(pending);
+                                        } catch (e) { console.warn('apply pending update on unlock failed', e); }
+                                    }
+                                } catch (e) { console.warn('cleanup after temp marker failed', e); }
                             }, 60000);
                         }
                     }
