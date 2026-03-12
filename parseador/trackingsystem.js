@@ -186,7 +186,7 @@ function enviarALaravelPorWS(data, opts = {}) {
       lastSentByUnit.set(key, { ts: now, lat, lng });
 
       const trackingPayload = { ...data, cooperativa_id: coop, _ts_sent: now };
-
+        console.log("entrooo1")
       redisPub.publish('gps-channel', JSON.stringify(trackingPayload), err => {
         if (err) console.error('❌ Redis tracking publish error:', err);
       });
