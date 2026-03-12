@@ -1436,7 +1436,6 @@ function onClientConnected(socket) {
        // ================== GTRTL ==================
 
       else if (message.includes(GTRTL) && !message.includes(ACK)) {
-          console.log(message)
             let imei = 2;
             let data = message.split(',');
             let speed = 8;
@@ -1447,7 +1446,23 @@ function onClientConnected(socket) {
             let datetime = 13;
             let fechaGPS = toInteger(data[datetime]);
 
+            let lat = toFloat(data[latitude]);
+            let lng = toFloat(data[longitude]);
 
+            let fecha_gps = (fechaGPS != 0)
+                ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate()
+                : new Date();
+            enviarALaravelPorWS({
+                type: 'unidad.updated',
+                imei: data[imei],
+                latitud: lat,
+                longitud: lng,
+                velocidad_actual: toFloat(data[speed]),
+                angulo: toInteger(data[angle]),
+                fecha_gps: fecha_gps
+            });
+
+            /*
             dbTrackingSystem.collection('unidads').updateOne(
                 { imei: data[imei], estado: 'A' },
                 { $set: { 
@@ -1464,6 +1479,7 @@ function onClientConnected(socket) {
                     if (err) console.log(err);
                 }
             );
+            */
       }
 
 
