@@ -53,6 +53,8 @@ const GTRTL = 'GTRTL';
 
 const ACK = 'ACK';
 const GTALC = 'GTALC';
+const BUFF = 'BUFF';
+
 
 const ATM = '*ATM*';
 const DATE_FORMAT = 'YYYY-MM-DD HH:mm:ss';
@@ -79,12 +81,17 @@ function buildUnidadPayloadRealtime(base, extra = {}) {
     const prev = unidadStateCache.get(key) || {};
 
     // Merge: lo nuevo pisa lo viejo, pero NO borra campos
-    const payload = Object.assign({}, prev, base, extra);
+  const payload = Object.assign({}, prev, base, extra);
 
-    // Guardar cache
-    unidadStateCache.set(key, payload);
+  // Do NOT persist raw TCP message into the cache. If callers passed
+  // `_raw_message` it should be used only for the immediate publish
+  // decision in enviarALaravelPorWS, but must not survive in the
+  // cached state (otherwise a single BUFF would block future sends).
+  const cacheCopy = Object.assign({}, payload);
+  try { delete cacheCopy._raw_message; } catch (e) {}
+  unidadStateCache.set(key, cacheCopy);
 
-    return payload;
+  return payload;
 }
 function connectWebSocketClient() {
   try {
@@ -132,6 +139,17 @@ setInterval(flushTramas, TRAMAS_FLUSH_MS);
 function enviarALaravelPorWS(data, opts = {}) {
   try {
     if (!data) return;
+    // If the original raw TCP message included the BUFF marker, avoid
+    // publishing to Redis / XADD. Callers inside onClientConnected attach
+    // the original raw message as `data._raw_message` so we can make the
+    // decision here without changing behavior for other callers that don't
+    // supply that field (eg. actualizarSentidoUnidad).
+    try {
+      if (data._raw_message && String(data._raw_message).includes(BUFF)) {
+        return;
+      }
+    } catch (e) {
+    }
 
     const now = Date.now();
 
@@ -652,7 +670,8 @@ function onClientConnected(socket) {
                     ? moment(data[idx.datetime], DEVICE_DATE_FORMAT).toDate()
                     : now,
                 fecha: now,
-                is_atm: (message.includes(ATM) ? 1 : 0)
+                is_atm: (message.includes(ATM) ? 1 : 0),
+                _raw_message:message 
             };
 
             // ===================== PAYLOAD COMPLETO (CACHE + GPS) =====================
@@ -690,7 +709,7 @@ function onClientConnected(socket) {
                     // Esto garantiza que el campo `sentido` viene desde la tabla `unidads`
                     // y fuerza el envío sin pasar por el throttle (opts.force = true).
                     try {
-                      const unidadFromDbPayload = buildUnidadPayloadRealtime(Object.assign({ type: 'unidad.updated' }, unidad));
+                      const unidadFromDbPayload = buildUnidadPayloadRealtime(Object.assign({ type: 'unidad.updated', _raw_message: gpsData._raw_message }, unidad));
                       enviarALaravelPorWS(unidadFromDbPayload, { force: true });
                     } catch (e) {
                       if (debug) console.error('Error publicando unidad desde BD:', e);
@@ -1144,7 +1163,8 @@ function onClientConnected(socket) {
                             fecha: fecha_gps,
                             cooperativa_id: document.cooperativa_id
                                 ? String(document.cooperativa_id).trim()
-                                : null
+                                : null,
+                            _raw_message:message
                         });
 
                     }
@@ -1190,7 +1210,8 @@ function onClientConnected(socket) {
                             fecha: fecha_gps,
                             cooperativa_id: document.cooperativa_id
                                 ? String(document.cooperativa_id).trim()
-                                : null
+                                : null,
+                            _raw_message:message
                         });
                     }
                 }
@@ -1473,7 +1494,8 @@ function onClientConnected(socket) {
                       velocidad_actual: toFloat(data[speed]),
                       angulo: toInteger(data[angle]),
                       altura: toFloat(data[height]),
-                      fecha_gps: fecha_gps
+                      fecha_gps: fecha_gps,
+                      _raw_message: message
                   };
 
                   const unidadLocation = buildUnidadPayloadRealtime(gpsDataLocation);
