@@ -139,17 +139,17 @@ setInterval(flushTramas, TRAMAS_FLUSH_MS);
 function enviarALaravelPorWS(data, opts = {}) {
   try {
     if (!data) return;
-    // If the original raw TCP message included the BUFF marker, avoid
-    // publishing to Redis / XADD. Callers inside onClientConnected attach
-    // the original raw message as `data._raw_message` so we can make the
-    // decision here without changing behavior for other callers that don't
-    // supply that field (eg. actualizarSentidoUnidad).
+
+    // Si el mensaje raw contiene BUFF, es una trama en buffer del dispositivo.
+    // Solo se omite el envío SSE/Redis al front, el resto del procesamiento
+    // (inserts en BD, recorridos, etc.) continúa normal desde el caller.
+    let isBuff = false;
     try {
       if (data._raw_message && String(data._raw_message).includes(BUFF)) {
-        return;
+        isBuff = true;
       }
-    } catch (e) {
-    }
+    } catch (e) {}
+    if (isBuff) return;
 
     const now = Date.now();
 
@@ -287,7 +287,9 @@ function hexToBitPosition(hexString) {
 }
 
 // ===================== SENTIDO =====================
-function actualizarSentidoUnidad(dbTrackingSystem, unidad, pdiActual, entrada, cb) {
+function actualizarSentidoUnidad(dbTrackingSystem, unidad, pdiActual, entrada, rawMessage, cb) {
+  // Soporte para llamadas sin rawMessage: actualizarSentidoUnidad(db, unidad, pdi, entrada, cb)
+  if (typeof rawMessage === 'function') { cb = rawMessage; rawMessage = null; }
   if (typeof cb !== 'function') cb = function () { };
 
   if (entrada !== 1) { cb(); return; } // Solo procesar entrada
@@ -362,7 +364,8 @@ function actualizarSentidoUnidad(dbTrackingSystem, unidad, pdiActual, entrada, c
                   unidad_id: unidad._id,
                   imei: unidad.imei || null,
                   nuevo_sentido: nuevoSentido,
-                  cooperativa_id: (unidad.cooperativa_id ? String(unidad.cooperativa_id) : null)
+                  cooperativa_id: (unidad.cooperativa_id ? String(unidad.cooperativa_id) : null),
+                  _raw_message: rawMessage || null   // ✅ añadido
                 };
                 enviarALaravelPorWS(sentidoEvent);
               } catch (e) {
@@ -678,7 +681,10 @@ function onClientConnected(socket) {
             const unidadPayload = buildUnidadPayloadRealtime(gpsData);
 
             // 🔥🔥🔥 ENVIAR AL FRONT INMEDIATO
-            enviarALaravelPorWS(unidadPayload);
+            // Si es +RESP (no BUFF), forzar envío saltando throttle para que nunca
+            // se bloquee por coordenadas iguales tras recibir varios +BUFF previos.
+            const isRespMessage = !message.includes(BUFF);
+            enviarALaravelPorWS(unidadPayload, { force: isRespMessage });
 
             // ===================== ACTUALIZAR BD (NO BLOQUEA) =====================
             dbTrackingSystem.collection('unidads').findOneAndUpdate(
@@ -710,7 +716,8 @@ function onClientConnected(socket) {
                     // y fuerza el envío sin pasar por el throttle (opts.force = true).
                     try {
                       const unidadFromDbPayload = buildUnidadPayloadRealtime(Object.assign({ type: 'unidad.updated', _raw_message: gpsData._raw_message }, unidad));
-                      enviarALaravelPorWS(unidadFromDbPayload, { force: true });
+                      // Si es +RESP (no BUFF), forzar envío siempre (saltamos throttle)
+                      enviarALaravelPorWS(unidadFromDbPayload, { force: isRespMessage });
                     } catch (e) {
                       if (debug) console.error('Error publicando unidad desde BD:', e);
                     }
@@ -913,7 +920,7 @@ function onClientConnected(socket) {
               contador_total: document.contador_total,
               js: true
             }, { writeConcern: { w: 0 } }, function (err) {
-              if (!err) actualizarSentidoUnidad(dbTrackingSystem, document, pdi, entrada);
+              if (!err) actualizarSentidoUnidad(dbTrackingSystem, document, pdi, entrada, message);  // ✅
             });
           }
         });
@@ -978,7 +985,7 @@ function onClientConnected(socket) {
               contador_total: document.contador_total,
               js: true
             }, { writeConcern: { w: 0 } }, function (err) {
-              if (!err) actualizarSentidoUnidad(dbTrackingSystem, document, pdi, inout);
+              if (!err) actualizarSentidoUnidad(dbTrackingSystem, document, pdi, inout, message);  // ✅
             });
           }
         });
