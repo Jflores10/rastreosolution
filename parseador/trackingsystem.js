@@ -140,16 +140,17 @@ function enviarALaravelPorWS(data, opts = {}) {
   try {
     if (!data) return;
 
-    // Si el mensaje raw contiene BUFF, es una trama en buffer del dispositivo.
-    // Solo se omite el envío SSE/Redis al front, el resto del procesamiento
-    // (inserts en BD, recorridos, etc.) continúa normal desde el caller.
+    // Detectar si el mensaje raw es BUFF (trama en buffer del dispositivo).
+    // Los BUFF SÍ se envían al front, pero con is_buff:true para que el front
+    // pueda mostrar el parpadeo del ícono. Lo que NO hacemos con BUFF es:
+    // - actualizar el throttle (skipThrottleUpdate implícito)
+    // - forzar envío (no force)
     let isBuff = false;
     try {
       if (data._raw_message && String(data._raw_message).includes(BUFF)) {
         isBuff = true;
       }
     } catch (e) {}
-    if (isBuff) return;
 
     const now = Date.now();
 
@@ -158,7 +159,7 @@ function enviarALaravelPorWS(data, opts = {}) {
       const coopEvt = String(data.cooperativa_id || '').trim();
       if (!coopEvt) return;
 
-      const eventPayload = { ...data, _ts_sent: now };
+      const eventPayload = { ...data, is_buff: isBuff, _ts_sent: now };
 
       redisPub.publish('gps-channel', JSON.stringify(eventPayload), err => {
         if (err) console.error('❌ Redis event publish error:', err);
@@ -187,23 +188,26 @@ function enviarALaravelPorWS(data, opts = {}) {
             if (cached && cached.cooperativa_id) {
                 coop = cached.cooperativa_id;
             }
-
         }
         coop = String(coop || '').trim();
         if (!coop) return; // aquí sí, no hay forma
 
       // Throttle inteligente: solo limita si NO hay movimiento
+      // Los BUFF nunca actualizan el throttle (no consumen el slot de tiempo)
       const prev = lastSentByUnit.get(key);
       const lat = Number(data.latitud);
       const lng = Number(data.longitud);
 
       const moved = !prev || prev.lat !== lat || prev.lng !== lng;
 
-      if (!opts.force && !moved && prev && (now - prev.ts) < MIN_SEND_MS) return;
+      if (!opts.force && !isBuff && !moved && prev && (now - prev.ts) < MIN_SEND_MS) return;
 
-      lastSentByUnit.set(key, { ts: now, lat, lng });
+      // Solo actualizar el throttle para mensajes RESP (no BUFF)
+      if (!isBuff && !opts.skipThrottleUpdate) {
+        lastSentByUnit.set(key, { ts: now, lat, lng });
+      }
 
-      const trackingPayload = { ...data, cooperativa_id: coop, _ts_sent: now };
+      const trackingPayload = { ...data, cooperativa_id: coop, is_buff: isBuff, _ts_sent: now };
 
       redisPub.publish('gps-channel', JSON.stringify(trackingPayload), err => {
         if (err) console.error('❌ Redis tracking publish error:', err);
@@ -681,10 +685,11 @@ function onClientConnected(socket) {
             const unidadPayload = buildUnidadPayloadRealtime(gpsData);
 
             // 🔥🔥🔥 ENVIAR AL FRONT INMEDIATO
-            // Si es +RESP (no BUFF), forzar envío saltando throttle para que nunca
-            // se bloquee por coordenadas iguales tras recibir varios +BUFF previos.
+            // Si es +RESP (no BUFF), forzar envío saltando throttle.
+            // skipThrottleUpdate: no consume el slot de throttle aquí;
+            // el post-BD (con datos completos) lo hace.
             const isRespMessage = !message.includes(BUFF);
-            enviarALaravelPorWS(unidadPayload, { force: isRespMessage });
+            enviarALaravelPorWS(unidadPayload, { force: isRespMessage, skipThrottleUpdate: isRespMessage });
 
             // ===================== ACTUALIZAR BD (NO BLOQUEA) =====================
             dbTrackingSystem.collection('unidads').findOneAndUpdate(

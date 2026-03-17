@@ -11,6 +11,15 @@
         z-index: 9999 !important;
     }
 
+    /* BUFF blinking marker animation */
+    @keyframes blink-marker {
+        0%, 100% { opacity: 1; }
+        50%       { opacity: 0.15; }
+    }
+    .marker-buff-blink {
+        animation: blink-marker 0.65s ease-in-out infinite;
+    }
+
     /* Ajuste botones */
     .comandos-v .btn{
         margin-bottom:5px;
@@ -706,6 +715,27 @@ function refreshVisibleUnidadesMeta() {
 // run periodic refresh to keep non-route meta up-to-date; route fields will not overwrite an existing route
 setInterval(refreshVisibleUnidadesMeta, 20000);
 
+/**
+ * Activa o desactiva el parpadeo del fa-map-marker en el LI de una unidad.
+ * isBuff=true  → agrega .marker-buff-blink al ícono y marca li._is_buff=true
+ * isBuff=false → remueve la clase y marca li._is_buff=false
+ */
+function setBuffBlink(uid, isBuff) {
+    try {
+        if (!uid) return;
+        const li = document.getElementById(uid);
+        if (!li) return;
+        li._is_buff = !!isBuff;
+        const markerEl = document.getElementById('i' + uid);
+        if (!markerEl) return;
+        if (isBuff) {
+            markerEl.classList.add('marker-buff-blink');
+        } else {
+            markerEl.classList.remove('marker-buff-blink');
+        }
+    } catch (e) { /* silencioso */ }
+}
+
 function conectarSSE(coopId) {
 
     if (sse && sse.readyState === EventSource.OPEN) {
@@ -726,6 +756,15 @@ function conectarSSE(coopId) {
         try {
             const data = JSON.parse(evt.data);
             if (!(data && data._id)) return;
+
+            // Si es BUFF: solo parpadear, NO actualizar nada en el front
+            if (data.is_buff) {
+                setBuffBlink(data._id, true);
+                return;
+            }
+
+            // RESP: detener parpadeo (si estaba activo) y procesar normalmente
+            setBuffBlink(data._id, false);
 
             // Always update marker on map
             actualizarUnidadRealtime(data);
@@ -786,8 +825,15 @@ function conectarSSE(coopId) {
             const data = JSON.parse(evt.data);
             console.log(data)
 
+            // Si es BUFF: solo parpadear, NO actualizar sentido ni lista
+            if (data.is_buff) {
+                setBuffBlink(data.unidad_id, true);
+                return;
+            }
+
             const li = document.getElementById(data.unidad_id);
             if (li && li.currentU) {
+                setBuffBlink(data.unidad_id, false);
                 li.currentU.sentido = data.nuevo_sentido;
                 updateUnidadInList(li.currentU);
             }
@@ -801,6 +847,14 @@ function conectarSSE(coopId) {
 
             const li = document.getElementById(msg.unidad_id);
             if (!li || !li.currentU) return;
+
+            // Si es BUFF: solo parpadear, NO actualizar estado de puertas ni lista
+            if (msg.is_buff) {
+                setBuffBlink(msg.unidad_id, true);
+                return;
+            }
+
+            setBuffBlink(msg.unidad_id, false);
 
             if (msg.puerta === 'DELANTERA') {
                 li.currentU.puerta = msg.estado;
@@ -1199,6 +1253,14 @@ function updateUnidadInList(unidad) {
     }
 
     li.innerHTML = html;
+    // Si la unidad está en modo BUFF, re-aplicar la clase de parpadeo
+    // (li.innerHTML la borra al reconstruir el contenido)
+    if (li._is_buff) {
+        try {
+            var bEl = document.getElementById('i' + unidad._id);
+            if (bEl) bEl.classList.add('marker-buff-blink');
+        } catch (e) {}
+    }
     li.currentU = unidad;
     li.currentFechagps = fecha_gps_marker;
     li.currentFechagpsC = fecha_gps_marker_c;
