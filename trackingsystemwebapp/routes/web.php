@@ -9,6 +9,8 @@ Route::group(['middleware' => ['auth', 'usuario']], function () {
     Route::get('sesiones', 'SesionController@index');
     Route::get('/', 'HomeController@index');
     Route::post('/home', 'HomeController@search');
+    Route::post('/home-test', 'HomeController@search');
+
     Route::get('/home', 'HomeController@index');
 
     Route::get('/home-test', 'HomeController@index2');

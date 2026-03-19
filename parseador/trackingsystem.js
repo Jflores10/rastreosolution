@@ -1242,22 +1242,42 @@ function onClientConnected(socket) {
             let datetime = 11;
             let fechaGPS = toInteger(data[datetime]);
 
-
-            dbTrackingSystem.collection('unidads').updateOne(
+            dbTrackingSystem.collection('unidads').findOne(
                 { imei: data[imei], estado: 'A' },
-                { $set: { 
-                    ignicionf: 'on',
-                    fecha_gps: (fechaGPS != 0) ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate() : new Date(),
-                    latitud: toFloat(data[latitude]),
-                    longitud: toFloat(data[longitude]),
-                    velocidad: toFloat(data[speed]),
-                    altura: toFloat(data[height]),
-                    angulo: toInteger(data[angle]),
-                    fecha: new Date(),
-                } },
-                { writeConcern: { w: 0 } },
-                function(err, result) {
-                    if (err) console.log(err);
+                function(err, unidad) {
+                    if (err || !unidad) return;
+
+                    dbTrackingSystem.collection('unidads').updateOne(
+                        { _id: unidad._id },
+                        { $set: {
+                            ignicionf: 'on',
+                            fecha_gps: (fechaGPS != 0) ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate() : new Date(),
+                            latitud: toFloat(data[latitude]),
+                            longitud: toFloat(data[longitude]),
+                            velocidad_actual: toFloat(data[speed]),
+                            altura: toFloat(data[height]),
+                            angulo: toInteger(data[angle]),
+                            fecha: new Date()
+                        }},
+                        { writeConcern: { w: 0 } },
+                        function(uErr) { if (uErr) console.log(uErr); }
+                    );
+
+                    enviarALaravelPorWS({
+                        type: 'unidad.ignicion',
+                        unidad_id: unidad._id,
+                        _id: unidad._id,
+                        imei: unidad.imei,
+                        ignicionf: 'on',
+                        latitud: toFloat(data[latitude]),
+                        longitud: toFloat(data[longitude]),
+                        velocidad_actual: toFloat(data[speed]),
+                        angulo: toInteger(data[angle]),
+                        fecha_gps: (fechaGPS != 0) ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate() : new Date(),
+                        fecha: new Date(),
+                        cooperativa_id: unidad.cooperativa_id ? String(unidad.cooperativa_id).trim() : null,
+                        _raw_message: message
+                    });
                 }
             );
         }
@@ -1272,23 +1292,43 @@ function onClientConnected(socket) {
             let latitude = 10;
             let datetime = 11;
             let fechaGPS = toInteger(data[datetime]);
-           
 
-            dbTrackingSystem.collection('unidads').updateOne(
+            dbTrackingSystem.collection('unidads').findOne(
                 { imei: data[imei], estado: 'A' },
-                { $set: { 
-                    ignicionf: 'off',
-                    fecha_gps: (fechaGPS != 0) ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate() : new Date(),
-                    latitud: toFloat(data[latitude]),
-                    longitud: toFloat(data[longitude]),
-                    velocidad: toFloat(data[speed]),
-                    altura: toFloat(data[height]),
-                    angulo: toInteger(data[angle]),
-                    fecha: new Date(),
-                } },
-                { writeConcern: { w: 0 } },
-                function(err, result) {
-                    if (err) console.log(err);
+                function(err, unidad) {
+                    if (err || !unidad) return;
+
+                    dbTrackingSystem.collection('unidads').updateOne(
+                        { _id: unidad._id },
+                        { $set: {
+                            ignicionf: 'off',
+                            fecha_gps: (fechaGPS != 0) ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate() : new Date(),
+                            latitud: toFloat(data[latitude]),
+                            longitud: toFloat(data[longitude]),
+                            velocidad_actual: toFloat(data[speed]),
+                            altura: toFloat(data[height]),
+                            angulo: toInteger(data[angle]),
+                            fecha: new Date()
+                        }},
+                        { writeConcern: { w: 0 } },
+                        function(uErr) { if (uErr) console.log(uErr); }
+                    );
+
+                    enviarALaravelPorWS({
+                        type: 'unidad.ignicion',
+                        unidad_id: unidad._id,
+                        _id: unidad._id,
+                        imei: unidad.imei,
+                        ignicionf: 'off',
+                        latitud: toFloat(data[latitude]),
+                        longitud: toFloat(data[longitude]),
+                        velocidad_actual: toFloat(data[speed]),
+                        angulo: toInteger(data[angle]),
+                        fecha_gps: (fechaGPS != 0) ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate() : new Date(),
+                        fecha: new Date(),
+                        cooperativa_id: unidad.cooperativa_id ? String(unidad.cooperativa_id).trim() : null,
+                        _raw_message: message
+                    });
                 }
             );
         }
