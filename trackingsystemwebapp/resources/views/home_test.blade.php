@@ -951,6 +951,7 @@ function conectarSSE(coopId) {
     sse.addEventListener('unidad.ignicion', (evt) => {
         try {
             const msg = JSON.parse(evt.data);
+            console.log(msg)
             if (!msg || !msg._id) return;
 
             const uid = String(msg._id);
@@ -966,8 +967,8 @@ function conectarSSE(coopId) {
             const iconId = 'ignicion_' + uid;
             const iconEl = document.getElementById(iconId);
             const newHtml = (msg.ignicionf === 'on')
-                ? '<i id="' + iconId + '" class="fa fa-dot-circle-o" title="IG ON"  style="color:green"></i>&nbsp&nbsp'
-                : '<i id="' + iconId + '" class="fa fa-dot-circle-o" title="IG OFF" style="color:red"></i>&nbsp&nbsp';
+                ? '<i id="' + iconId + '" class="fa fa-dot-circle-o" title="IG ON"  style="color:green; pointer-events:none; cursor:default;"></i>&nbsp&nbsp'
+                : '<i id="' + iconId + '" class="fa fa-dot-circle-o" title="IG OFF" style="color:red; pointer-events:none; cursor:default;"></i>&nbsp&nbsp';
 
             if (iconEl) {
                 const tmp = document.createElement('span');
@@ -1046,7 +1047,7 @@ function updateUnidadInList(unidad) {
             if ((!unidad.ruta_conductor || unidad.ruta_conductor === '') && prev.ruta_conductor) unidad.ruta_conductor = prev.ruta_conductor;
             if ((!unidad.ruta_hora_fin || unidad.ruta_hora_fin === '') && (prev.ruta_hora_fin || prev.ruta_hora_fin === '')) unidad.ruta_hora_fin = prev.ruta_hora_fin;
             if ((!unidad.bitacora || unidad.bitacora === '') && prev.bitacora) unidad.bitacora = prev.bitacora;
-
+            
             // Preserve sentido (direction) if incoming payload lacks it
             //if ((!unidad.sentido || unidad.sentido === '') && prev.sentido) unidad.sentido = prev.sentido;
         }
@@ -1143,13 +1144,6 @@ function updateUnidadInList(unidad) {
         else if (unidad.sentido == 'r') sentido = '<i class="fa fa-arrow-circle-left" title="RETORNO" style="color:#001672"></i>&nbsp&nbsp';
     }
 
-    var ignicionf = '';
-    if (unidad.ignicionf) {
-        var _ignId = 'ignicion_' + unidad._id;
-        if (unidad.ignicionf === 'on')  ignicionf = '<i id="' + _ignId + '" class="fa fa-dot-circle-o" title="IG ON"  style="color:green"></i>&nbsp&nbsp';
-        else if (unidad.ignicionf === 'off') ignicionf = '<i id="' + _ignId + '" class="fa fa-dot-circle-o" title="IG OFF" style="color:red"></i>&nbsp&nbsp';
-    }
-
     // Campos auxiliares que pueden venir en el payload
     var ruta_actual = unidad.ruta_actual || '';
     var ruta_fecha = unidad.ruta_fecha || '';
@@ -1197,7 +1191,7 @@ function updateUnidadInList(unidad) {
             html += '' +
                 ((unidad.climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                 ((unidad.rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
-                sentido + ignicionf + '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#F44336"></i>&nbsp' +
+                sentido + '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#F44336"></i>&nbsp' +
                 (unidad.descripcion || '') + '&nbsp&nbsp <i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ (unidad.latitud||'') +'\',\''+ (unidad.longitud||'') +'\');" class="fa fa-map-marker" style="color:#F44336"></i>&nbsp' + (fecha_gps_marker || '-') + '  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(velocidad_num) + '' +
                 '&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#F44336"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#F44336"></i>&nbsp' + (unidad.contador_total||'') + " | " + (unidad.contador_diario||'') +
                 '&nbsp&nbsp&nbsp' + ((unidad.is_atm !== undefined && unidad.is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'') +
@@ -1221,7 +1215,7 @@ function updateUnidadInList(unidad) {
             html += '' +
                 ((unidad.climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                 ((unidad.rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
-                ignicionf + '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#f49a16"></i>&nbsp' + (unidad.descripcion||'') +
+                '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#f49a16"></i>&nbsp' + (unidad.descripcion||'') +
                 '&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ (unidad.latitud||'') +'\',\''+ (unidad.longitud||'') +'\');" class="fa fa-map-marker" style="color:#f49a16"></i>&nbsp' + (fecha_gps_marker || '-') + '  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(velocidad_num) + '' +
                 '&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#f49a16"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#f49a16"></i>&nbsp' + (unidad.contador_total||'') + " | " + (unidad.contador_diario||'') +
                 '&nbsp&nbsp&nbsp|&nbsp&nbsp';
@@ -1244,7 +1238,7 @@ function updateUnidadInList(unidad) {
             html += '' +
                 ((unidad.climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                 ((unidad.rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
-                sentido + ignicionf + '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#00AA88"></i>&nbsp' + (unidad.descripcion||'') +
+                sentido + '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#00AA88"></i>&nbsp' + (unidad.descripcion||'') +
                 '&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ (unidad.latitud||'') +'\',\''+ (unidad.longitud||'') +'\');" class="fa fa-map-marker" style="color:#00AA88"></i>&nbsp' + (fecha_gps_marker || '-') + '  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(velocidad_num) + '' +
                 '&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#00AA88"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#00AA88"></i>&nbsp' + (unidad.contador_total||'') + " | " + (unidad.contador_diario||'') +
                 '&nbsp&nbsp&nbsp|&nbsp&nbsp';
@@ -1267,7 +1261,7 @@ function updateUnidadInList(unidad) {
             html += '' +
                 ((unidad.climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                 ((unidad.rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
-                ignicionf + '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#990073"></i>&nbsp' + (unidad.descripcion||'') +
+                '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#990073"></i>&nbsp' + (unidad.descripcion||'') +
                 '&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ (unidad.latitud||'') +'\',\''+ (unidad.longitud||'') +'\');" class="fa fa-map-marker" style="color:#990073"></i>&nbsp' + (fecha_gps_marker || '-') + '  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(velocidad_num) + '' +
                 '&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#990073"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#990073"></i>&nbsp' + (unidad.contador_total||'') + " | " + (unidad.contador_diario||'') +
                 '&nbsp&nbsp&nbsp|&nbsp&nbsp';
