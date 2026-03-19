@@ -1306,7 +1306,21 @@ function updateUnidadInList(unidad) {
     li.currentFechagpsC = fecha_gps_marker_c;
 
     li.currentFecha = fecha_servidor;
-  
+
+    // Aplicar filtro de búsqueda activo: si hay texto en #consulta,
+    // mostrar sólo las unidades cuyo imei o descripcion coincidan.
+    try {
+        var _consulta = (document.getElementById('consulta').value || '').trim().toLowerCase();
+        if (_consulta !== '') {
+            var _imei = String(unidad.imei || '').toLowerCase();
+            var _desc = String(unidad.descripcion || '').toLowerCase();
+            var _match = _imei.indexOf(_consulta) !== -1 || _desc.indexOf(_consulta) !== -1;
+            li.style.display = _match ? '' : 'none';
+        } else {
+            li.style.display = '';
+        }
+    } catch (e) {}
+
     li.onclick = function () {
         selectUnidad(this.currentU,this.currentFechagpsC,this.currentFecha,1); 
     };
