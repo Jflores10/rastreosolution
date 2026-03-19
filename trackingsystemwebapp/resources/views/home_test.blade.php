@@ -726,7 +726,7 @@ function setBuffBlink(uid, isBuff) {
         const li = document.getElementById(uid);
         if (!li) return;
         li._is_buff = !!isBuff;
-        const markerEl = document.getElementById('i' + uid);
+        const markerEl = document.getElementById('g' + uid);
         if (!markerEl) return;
         if (isBuff) {
             markerEl.classList.add('marker-buff-blink');
@@ -1135,7 +1135,7 @@ function updateUnidadInList(unidad) {
     if (!fecha_gps) estado = 'no_envia_trama';
 
     var iId = 'i' + unidad._id;
-    var gId = 'i' + unidad._id;
+    var gId = 'g' + unidad._id;
     var bId = 'i' + unidad._id;
   
     var sentido = '';
@@ -1297,7 +1297,7 @@ function updateUnidadInList(unidad) {
     // (li.innerHTML la borra al reconstruir el contenido)
     if (li._is_buff) {
         try {
-            var bEl = document.getElementById('i' + unidad._id);
+            var bEl = document.getElementById('g' + unidad._id);
             if (bEl) bEl.classList.add('marker-buff-blink');
         } catch (e) {}
     }
@@ -3224,7 +3224,7 @@ $("#velocimetro").myfunc({divFact:10});
                     estado = 'no_envia_trama';
                     
                 var iId = 'i' + data.unidades[i]._id; 
-                var gId = 'i' + data.unidades[i]._id; 
+                var gId = 'g' + data.unidades[i]._id; 
                 var bId = 'i' + data.unidades[i]._id; 
                 console.log(data.unidades[i].climatizada);
 
