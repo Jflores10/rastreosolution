@@ -20,6 +20,15 @@
         animation: blink-marker 0.65s ease-in-out infinite;
     }
 
+    /* Power ON blinking bolt animation (GTMPN) */
+    @keyframes blink-bolt {
+        0%, 100% { opacity: 1; }
+        50%       { opacity: 0.15; }
+    }
+    .bolt-power-blink {
+        animation: blink-bolt 0.65s ease-in-out infinite;
+    }
+
     /* Ajuste botones */
     .comandos-v .btn{
         margin-bottom:5px;
@@ -985,6 +994,52 @@ function conectarSSE(coopId) {
         } catch (e) { console.warn('parse unidad.ignicion', e); }
     });
 
+    // ================== unidad.power (GTMPN / GTMPF) ==================
+    // GTMPN (power=on)  → parpadea fa-bolt hasta que llegue GTMPF
+    // GTMPF (power=off) → detiene parpadeo del fa-bolt
+    sse.addEventListener('unidad.power', (evt) => {
+        try {
+            const msg = JSON.parse(evt.data);
+            console.log('unidad.power', msg);
+            if (!msg || !msg._id) return;
+
+            const uid = String(msg._id);
+            const li = document.getElementById(uid);
+            if (!li) return;
+
+            // Persistir en currentU y en la bandera del LI
+            if (li.currentU) {
+                li.currentU.power     = msg.power;
+                li.currentU.latitud   = msg.latitud   || li.currentU.latitud;
+                li.currentU.longitud  = msg.longitud  || li.currentU.longitud;
+                li.currentU.fecha_gps = msg.fecha_gps || li.currentU.fecha_gps;
+                li.currentU.fecha     = msg.fecha     || li.currentU.fecha;
+                li.currentU.velocidad_actual = msg.velocidad_actual != null ? msg.velocidad_actual : li.currentU.velocidad_actual;
+                li.currentU.angulo    = msg.angulo    != null ? msg.angulo : li.currentU.angulo;
+            }
+
+            const boltEl = document.getElementById('bolt_' + uid);
+
+            if (msg.power === 'on') {
+                // GTMPN: encender parpadeo del bolt
+                li._is_power_blink = true;
+                if (boltEl) boltEl.classList.add('bolt-power-blink');
+                // Actualizar mapa con la nueva posición
+                try { actualizarUnidadRealtime(msg); } catch(e) {}
+                // Actualizar LI con nuevas coords/fecha
+                try { updateUnidadInList(li.currentU); } catch(e) {}
+            } else {
+                // GTMPF: apagar parpadeo del bolt
+                li._is_power_blink = false;
+                if (boltEl) boltEl.classList.remove('bolt-power-blink');
+                // Actualizar mapa y LI también
+                try { actualizarUnidadRealtime(msg); } catch(e) {}
+                try { updateUnidadInList(li.currentU); } catch(e) {}
+            }
+
+        } catch (e) { console.warn('parse unidad.power', e); }
+    });
+
 
     // fallback
     sse.onmessage = (evt) => {
@@ -1193,7 +1248,7 @@ function updateUnidadInList(unidad) {
                 ((unidad.rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                 sentido + '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#F44336"></i>&nbsp' +
                 (unidad.descripcion || '') + '&nbsp&nbsp <i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ (unidad.latitud||'') +'\',\''+ (unidad.longitud||'') +'\');" class="fa fa-map-marker" style="color:#F44336"></i>&nbsp' + (fecha_gps_marker || '-') + '  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(velocidad_num) + '' +
-                '&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#F44336"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#F44336"></i>&nbsp' + (unidad.contador_total||'') + " | " + (unidad.contador_diario||'') +
+                '&nbsp&nbsp&nbsp<i id="bolt_' + unidad._id + '" class="fa fa-bolt" style="color:#F44336"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#F44336"></i>&nbsp' + (unidad.contador_total||'') + " | " + (unidad.contador_diario||'') +
                 '&nbsp&nbsp&nbsp' + ((unidad.is_atm !== undefined && unidad.is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'') +
                 '&nbsp&nbsp&nbsp|&nbsp&nbsp';
 
@@ -1217,7 +1272,7 @@ function updateUnidadInList(unidad) {
                 ((unidad.rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                 '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#f49a16"></i>&nbsp' + (unidad.descripcion||'') +
                 '&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ (unidad.latitud||'') +'\',\''+ (unidad.longitud||'') +'\');" class="fa fa-map-marker" style="color:#f49a16"></i>&nbsp' + (fecha_gps_marker || '-') + '  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(velocidad_num) + '' +
-                '&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#f49a16"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#f49a16"></i>&nbsp' + (unidad.contador_total||'') + " | " + (unidad.contador_diario||'') +
+                '&nbsp&nbsp&nbsp<i id="bolt_' + unidad._id + '" class="fa fa-bolt" style="color:#f49a16"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#f49a16"></i>&nbsp' + (unidad.contador_total||'') + " | " + (unidad.contador_diario||'') +
                 '&nbsp&nbsp&nbsp|&nbsp&nbsp';
 
             html += (unidad.puerta ? ((unidad.puerta==='PUERTA ABIERTA (DELANTERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta:
@@ -1240,7 +1295,7 @@ function updateUnidadInList(unidad) {
                 ((unidad.rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                 sentido + '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#00AA88"></i>&nbsp' + (unidad.descripcion||'') +
                 '&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ (unidad.latitud||'') +'\',\''+ (unidad.longitud||'') +'\');" class="fa fa-map-marker" style="color:#00AA88"></i>&nbsp' + (fecha_gps_marker || '-') + '  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(velocidad_num) + '' +
-                '&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#00AA88"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#00AA88"></i>&nbsp' + (unidad.contador_total||'') + " | " + (unidad.contador_diario||'') +
+                '&nbsp&nbsp&nbsp<i id="bolt_' + unidad._id + '" class="fa fa-bolt" style="color:#00AA88"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#00AA88"></i>&nbsp' + (unidad.contador_total||'') + " | " + (unidad.contador_diario||'') +
                 '&nbsp&nbsp&nbsp|&nbsp&nbsp';
 
             html += (unidad.puerta ? ((unidad.puerta==='PUERTA ABIERTA (DELANTERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta:
@@ -1263,7 +1318,7 @@ function updateUnidadInList(unidad) {
                 ((unidad.rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                 '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#990073"></i>&nbsp' + (unidad.descripcion||'') +
                 '&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ (unidad.latitud||'') +'\',\''+ (unidad.longitud||'') +'\');" class="fa fa-map-marker" style="color:#990073"></i>&nbsp' + (fecha_gps_marker || '-') + '  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(velocidad_num) + '' +
-                '&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#990073"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#990073"></i>&nbsp' + (unidad.contador_total||'') + " | " + (unidad.contador_diario||'') +
+                '&nbsp&nbsp&nbsp<i id="bolt_' + unidad._id + '" class="fa fa-bolt" style="color:#990073"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#990073"></i>&nbsp' + (unidad.contador_total||'') + " | " + (unidad.contador_diario||'') +
                 '&nbsp&nbsp&nbsp|&nbsp&nbsp';
 
             html += (unidad.puerta ? ((unidad.puerta==='PUERTA ABIERTA (DELANTERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta:
@@ -1299,6 +1354,13 @@ function updateUnidadInList(unidad) {
         try {
             var bEl = document.getElementById('g' + unidad._id);
             if (bEl) bEl.classList.add('marker-buff-blink');
+        } catch (e) {}
+    }
+    // Si el bolt estaba parpadeando (GTMPN activo), re-aplicar la clase
+    if (li._is_power_blink) {
+        try {
+            var boltEl = document.getElementById('bolt_' + unidad._id);
+            if (boltEl) boltEl.classList.add('bolt-power-blink');
         } catch (e) {}
     }
     li.currentU = unidad;

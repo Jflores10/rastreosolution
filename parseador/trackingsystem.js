@@ -1263,6 +1263,9 @@ function onClientConnected(socket) {
                         function(uErr) { if (uErr) console.log(uErr); }
                     );
 
+                    // Persistir ignicionf='on' en el cache para que los GTFRI posteriores lo incluyan
+                    buildUnidadPayloadRealtime({ imei: unidad.imei, _id: unidad._id, ignicionf: 'on' });
+
                     enviarALaravelPorWS({
                         type: 'unidad.ignicion',
                         unidad_id: unidad._id,
@@ -1314,6 +1317,9 @@ function onClientConnected(socket) {
                         function(uErr) { if (uErr) console.log(uErr); }
                     );
 
+                    // Persistir ignicionf='off' en el cache para que los GTFRI posteriores lo incluyan
+                    buildUnidadPayloadRealtime({ imei: unidad.imei, _id: unidad._id, ignicionf: 'off' });
+
                     enviarALaravelPorWS({
                         type: 'unidad.ignicion',
                         unidad_id: unidad._id,
@@ -1349,23 +1355,59 @@ function onClientConnected(socket) {
         dbTrackingSystem.collection('unidads').findOne({ imei: data[imei], estado: 'A' }, function (err, document) {
           if (err) console.log(err);
           else if (document) {
+            const fecha_gps = (fechaGPS != 0) ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate() : new Date();
+            const now = new Date();
+            const lat = toFloat(data[latitude]);
+            const lng = toFloat(data[longitude]);
+
             dbTrackingSystem.collection('recorridos').insertOne({
               imei: data[imei],
               tipo: GTIGF,
-              fecha_gps: (fechaGPS != 0) ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate() : new Date(),
-              latitud: toFloat(data[latitude]),
-              longitud: toFloat(data[longitude]),
+              fecha_gps: fecha_gps,
+              latitud: lat,
+              longitud: lng,
               velocidad: toFloat(data[speed]),
               altura: toFloat(data[height]),
               angulo: toInteger(data[angle]),
               unidad_id: document._id,
-              fecha: (document.fecha != null) ? new Date(document.fecha) : new Date(),
+              fecha: now,
               js: true
             }, { writeConcern: { w: 0 } });
 
+            // Actualizar coordenadas, fechas y alerta en la unidad
             dbTrackingSystem.collection('unidads').updateOne({ _id: document._id }, {
-              $set: { alerta_desconx_message: 'Dispositivo GPS apagado ', alerta_desconx_fecha: (fechaGPS != 0) ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate() : new Date() }
+              $set: {
+                latitud: lat,
+                longitud: lng,
+                velocidad_actual: toFloat(data[speed]),
+                angulo: toInteger(data[angle]),
+                fecha_gps: fecha_gps,
+                fecha: now,
+                power: 'off',
+                alerta_desconx_message: 'Dispositivo GPS apagado',
+                alerta_desconx_fecha: fecha_gps
+              }
             }, { writeConcern: { w: 0 } });
+
+            // Persistir power='off' en el cache
+            buildUnidadPayloadRealtime({ imei: document.imei, _id: document._id, power: 'off' });
+
+            // Publicar evento SSE
+            enviarALaravelPorWS({
+              type: 'unidad.power',
+              unidad_id: document._id,
+              _id: document._id,
+              imei: document.imei,
+              power: 'off',
+              latitud: lat,
+              longitud: lng,
+              velocidad_actual: toFloat(data[speed]),
+              angulo: toInteger(data[angle]),
+              fecha_gps: fecha_gps,
+              fecha: now,
+              cooperativa_id: document.cooperativa_id ? String(document.cooperativa_id).trim() : null,
+              _raw_message: message
+            });
           }
         });
       }
@@ -1384,23 +1426,59 @@ function onClientConnected(socket) {
         dbTrackingSystem.collection('unidads').findOne({ imei: data[imei], estado: 'A' }, function (err, document) {
           if (err) console.log(err);
           else if (document) {
+            const fecha_gps = (fechaGPS != 0) ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate() : new Date();
+            const now = new Date();
+            const lat = toFloat(data[latitude]);
+            const lng = toFloat(data[longitude]);
+
             dbTrackingSystem.collection('recorridos').insertOne({
               imei: data[imei],
               tipo: GTIGN,
-              fecha_gps: (fechaGPS != 0) ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate() : new Date(),
-              latitud: toFloat(data[latitude]),
-              longitud: toFloat(data[longitude]),
+              fecha_gps: fecha_gps,
+              latitud: lat,
+              longitud: lng,
               velocidad: toFloat(data[speed]),
               altura: toFloat(data[height]),
               angulo: toInteger(data[angle]),
               unidad_id: document._id,
-              fecha: (document.fecha != null) ? new Date(document.fecha) : new Date(),
+              fecha: now,
               js: true
             }, { writeConcern: { w: 0 } });
 
+            // Actualizar coordenadas, fechas y alerta en la unidad
             dbTrackingSystem.collection('unidads').updateOne({ _id: document._id }, {
-              $set: { alerta_desconx_message: 'Dispositivo GPS encendido ', alerta_desconx_fecha: (fechaGPS != 0) ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate() : new Date() }
+              $set: {
+                latitud: lat,
+                longitud: lng,
+                velocidad_actual: toFloat(data[speed]),
+                angulo: toInteger(data[angle]),
+                fecha_gps: fecha_gps,
+                fecha: now,
+                power: 'on',
+                alerta_desconx_message: 'Dispositivo GPS encendido',
+                alerta_desconx_fecha: fecha_gps
+              }
             }, { writeConcern: { w: 0 } });
+
+            // Persistir power='on' en el cache
+            buildUnidadPayloadRealtime({ imei: document.imei, _id: document._id, power: 'on' });
+
+            // Publicar evento SSE
+            enviarALaravelPorWS({
+              type: 'unidad.power',
+              unidad_id: document._id,
+              _id: document._id,
+              imei: document.imei,
+              power: 'on',
+              latitud: lat,
+              longitud: lng,
+              velocidad_actual: toFloat(data[speed]),
+              angulo: toInteger(data[angle]),
+              fecha_gps: fecha_gps,
+              fecha: now,
+              cooperativa_id: document.cooperativa_id ? String(document.cooperativa_id).trim() : null,
+              _raw_message: message
+            });
           }
         });
       }
