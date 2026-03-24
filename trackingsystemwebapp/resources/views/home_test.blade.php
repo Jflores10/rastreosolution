@@ -1102,6 +1102,8 @@ function updateUnidadInList(unidad) {
             if ((!unidad.ruta_conductor || unidad.ruta_conductor === '') && prev.ruta_conductor) unidad.ruta_conductor = prev.ruta_conductor;
             if ((!unidad.ruta_hora_fin || unidad.ruta_hora_fin === '') && (prev.ruta_hora_fin || prev.ruta_hora_fin === '')) unidad.ruta_hora_fin = prev.ruta_hora_fin;
             if ((!unidad.bitacora || unidad.bitacora === '') && prev.bitacora) unidad.bitacora = prev.bitacora;
+            // Preserve ignicionf: never lose it when GTFRI payload arrives without it
+            if (!unidad.ignicionf && prev.ignicionf) unidad.ignicionf = prev.ignicionf;
             
             // Preserve sentido (direction) if incoming payload lacks it
             //if ((!unidad.sentido || unidad.sentido === '') && prev.sentido) unidad.sentido = prev.sentido;
@@ -1361,6 +1363,28 @@ function updateUnidadInList(unidad) {
         try {
             var boltEl = document.getElementById('bolt_' + unidad._id);
             if (boltEl) boltEl.classList.add('bolt-power-blink');
+        } catch (e) {}
+    }
+    // Re-inyectar el icono de ignición si ignicionf está activo.
+    // El switch/case nunca lo incluye en el HTML, así que hay que añadirlo
+    // después de cada re-render para que no desaparezca con cada GTFRI.
+    if (unidad.ignicionf === 'on' || unidad.ignicionf === 'off') {
+        try {
+            var ignIconId = 'ignicion_' + unidad._id;
+            // Si el icono ya está en el DOM (render anterior), actualizarlo
+            var existingIgnEl = document.getElementById(ignIconId);
+            var ignHtml = (unidad.ignicionf === 'on')
+                ? '<i id="' + ignIconId + '" class="fa fa-dot-circle-o" title="IG ON"  style="color:green; pointer-events:none; cursor:default;"></i>&nbsp;&nbsp;'
+                : '<i id="' + ignIconId + '" class="fa fa-dot-circle-o" title="IG OFF" style="color:red;   pointer-events:none; cursor:default;"></i>&nbsp;&nbsp;';
+            if (existingIgnEl) {
+                var tmpIgn = document.createElement('span');
+                tmpIgn.innerHTML = ignHtml;
+                existingIgnEl.parentNode.replaceChild(tmpIgn.firstChild, existingIgnEl);
+            } else {
+                var tmpIgn2 = document.createElement('span');
+                tmpIgn2.innerHTML = ignHtml;
+                li.insertBefore(tmpIgn2.firstChild, li.firstChild);
+            }
         } catch (e) {}
     }
     li.currentU = unidad;
