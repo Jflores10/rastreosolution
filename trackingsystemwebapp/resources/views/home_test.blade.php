@@ -960,7 +960,7 @@ function conectarSSE(coopId) {
     sse.addEventListener('unidad.ignicion', (evt) => {
         try {
             const msg = JSON.parse(evt.data);
-            console.log(msg)
+            console.log(msg);
             if (!msg || !msg._id) return;
 
             const uid = String(msg._id);
