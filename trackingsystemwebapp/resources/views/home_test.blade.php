@@ -716,11 +716,6 @@ function applyMetaToLi(uid, meta, source) {
 function injectIgnicionBeforeBus(li, uid, html) {
     // Buscar el fa-bus por id, o por clase dentro del li como fallback
     var busEl = document.getElementById('i' + uid);
-    if (!busEl || busEl.parentNode !== li) {
-        // Fallback: buscar el primer fa-bus hijo del li
-        var buses = li.querySelectorAll('i.fa-bus');
-        busEl = (buses && buses.length > 0) ? buses[0] : null;
-    }
     var tmp = document.createElement('span');
     tmp.innerHTML = html;
     var node = tmp.firstChild;
