@@ -685,7 +685,7 @@ function applyMetaToLi(uid, meta, source) {
                     var _iconHtml = (meta.ignicionf === 'on')
                         ? '<i id="' + _iconId + '" class="fa fa-dot-circle-o" title="IG ON"  style="color:green; pointer-events:none; cursor:default;"></i>&nbsp;&nbsp;'
                         : '<i id="' + _iconId + '" class="fa fa-dot-circle-o" title="IG OFF" style="color:red;   pointer-events:none; cursor:default;"></i>&nbsp;&nbsp;';
-                    if (_iconEl) {
+                    if (_iconEl && li.contains(_iconEl)) {
                         var _tmp = document.createElement('span');
                         _tmp.innerHTML = _iconHtml;
                         _iconEl.parentNode.replaceChild(_tmp.firstChild, _iconEl);
@@ -1023,12 +1023,11 @@ function conectarSSE(coopId) {
                 ? '<i id="' + iconId + '" class="fa fa-dot-circle-o" title="IG ON"  style="color:green; pointer-events:none; cursor:default;"></i>&nbsp&nbsp'
                 : '<i id="' + iconId + '" class="fa fa-dot-circle-o" title="IG OFF" style="color:red; pointer-events:none; cursor:default;"></i>&nbsp&nbsp';
 
-            if (iconEl) {
+            if (iconEl && li.contains(iconEl)) {
                 const tmp = document.createElement('span');
                 tmp.innerHTML = newHtml;
                 iconEl.parentNode.replaceChild(tmp.firstChild, iconEl);
             } else {
-                // Icon not in DOM yet — insert it immediately before the fa-bus icon
                 injectIgnicionBeforeBus(li, uid, newHtml);
             }
 
@@ -1407,23 +1406,16 @@ function updateUnidadInList(unidad) {
         } catch (e) {}
     }
     // Re-inyectar el icono de ignición si ignicionf está activo.
-    // El switch/case nunca lo incluye en el HTML, así que hay que añadirlo
-    // después de cada re-render para que no desaparezca con cada GTFRI.
+    // IMPORTANTE: li.innerHTML acaba de destruir todo el contenido anterior,
+    // por lo que el icono previo ya NO está en el DOM aunque getElementById
+    // pueda devolver el nodo huérfano. Siempre inyectar desde cero.
     if (unidad.ignicionf === 'on' || unidad.ignicionf === 'off') {
         try {
             var ignIconId = 'ignicion_' + unidad._id;
-            // Si el icono ya está en el DOM (render anterior), actualizarlo
-            var existingIgnEl = document.getElementById(ignIconId);
             var ignHtml = (unidad.ignicionf === 'on')
                 ? '<i id="' + ignIconId + '" class="fa fa-dot-circle-o" title="IG ON"  style="color:green; pointer-events:none; cursor:default;"></i>&nbsp;&nbsp;'
                 : '<i id="' + ignIconId + '" class="fa fa-dot-circle-o" title="IG OFF" style="color:red;   pointer-events:none; cursor:default;"></i>&nbsp;&nbsp;';
-            if (existingIgnEl) {
-                var tmpIgn = document.createElement('span');
-                tmpIgn.innerHTML = ignHtml;
-                existingIgnEl.parentNode.replaceChild(tmpIgn.firstChild, existingIgnEl);
-            } else {
-                injectIgnicionBeforeBus(li, unidad._id, ignHtml);
-            }
+            injectIgnicionBeforeBus(li, unidad._id, ignHtml);
         } catch (e) {}
     }
     li.currentU = unidad;
