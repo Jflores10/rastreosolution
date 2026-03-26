@@ -692,7 +692,13 @@ function applyMetaToLi(uid, meta, source) {
                     } else {
                         var _tmp2 = document.createElement('span');
                         _tmp2.innerHTML = _iconHtml;
-                        li.insertBefore(_tmp2.firstChild, li.firstChild);
+                        // Prefer to insert before the bus icon so ignition appears left of the bus.
+                        var busEl = li.querySelector('.fa-bus');
+                        if (busEl && busEl.parentNode) {
+                            busEl.parentNode.insertBefore(_tmp2.firstChild, busEl);
+                        } else {
+                            li.insertBefore(_tmp2.firstChild, li.firstChild);
+                        }
                     }
                 } catch(e) {}
             }
@@ -1016,11 +1022,15 @@ function conectarSSE(coopId) {
                 tmp.innerHTML = newHtml;
                 iconEl.parentNode.replaceChild(tmp.firstChild, iconEl);
             } else {
-                // Icon not in DOM yet (unit hasn't had a full render with ignicionf) —
-                // prepend it to the LI so it becomes visible immediately
+                // Icon not in DOM yet — insert it before the bus icon when possible
                 const tmp = document.createElement('span');
                 tmp.innerHTML = newHtml;
-                li.insertBefore(tmp.firstChild, li.firstChild);
+                const busEl = li.querySelector('.fa-bus');
+                if (busEl && busEl.parentNode) {
+                    busEl.parentNode.insertBefore(tmp.firstChild, busEl);
+                } else {
+                    li.insertBefore(tmp.firstChild, li.firstChild);
+                }
             }
 
         } catch (e) { console.warn('parse unidad.ignicion', e); }
@@ -1770,7 +1780,12 @@ $("#velocimetro").myfunc({divFact:10});
                                 : '<i id="' + _ignIconId + '" class="fa fa-dot-circle-o" title="IG OFF" style="color:red;   pointer-events:none; cursor:default;"></i>&nbsp;&nbsp;';
                             var _tmpI = document.createElement('span');
                             _tmpI.innerHTML = _ignHtml;
-                            _li.insertBefore(_tmpI.firstChild, _li.firstChild);
+                            var _bus = _li.querySelector('.fa-bus');
+                            if (_bus && _bus.parentNode) {
+                                _bus.parentNode.insertBefore(_tmpI.firstChild, _bus);
+                            } else {
+                                _li.insertBefore(_tmpI.firstChild, _li.firstChild);
+                            }
                         }
                     } catch(e) {}
                 }, 10);
@@ -3536,7 +3551,12 @@ $("#velocimetro").myfunc({divFact:10});
                                 : '<i id="' + _ignIconId + '" class="fa fa-dot-circle-o" title="IG OFF" style="color:red;   pointer-events:none; cursor:default;"></i>&nbsp;&nbsp;';
                             var _tmpIgn = document.createElement('span');
                             _tmpIgn.innerHTML = _ignHtml;
-                            currentLi.insertBefore(_tmpIgn.firstChild, currentLi.firstChild);
+                            var _bus2 = currentLi.querySelector('.fa-bus');
+                            if (_bus2 && _bus2.parentNode) {
+                                _bus2.parentNode.insertBefore(_tmpIgn.firstChild, _bus2);
+                            } else {
+                                currentLi.insertBefore(_tmpIgn.firstChild, currentLi.firstChild);
+                            }
                         }
                     } catch(e) {}
                 }
