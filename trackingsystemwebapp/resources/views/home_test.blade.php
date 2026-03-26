@@ -692,7 +692,12 @@ function applyMetaToLi(uid, meta, source) {
                     } else {
                         var _tmp2 = document.createElement('span');
                         _tmp2.innerHTML = _iconHtml;
-                        li.insertBefore(_tmp2.firstChild, li.firstChild);
+                        var _busEl = li.querySelector('.fa-bus');
+                        if (_busEl) {
+                            _busEl.parentNode.insertBefore(_tmp2.firstChild, _busEl);
+                        } else {
+                            li.insertBefore(_tmp2.firstChild, li.firstChild);
+                        }
                     }
                 } catch(e) {}
             }
@@ -1016,11 +1021,15 @@ function conectarSSE(coopId) {
                 tmp.innerHTML = newHtml;
                 iconEl.parentNode.replaceChild(tmp.firstChild, iconEl);
             } else {
-                // Icon not in DOM yet (unit hasn't had a full render with ignicionf) —
-                // prepend it to the LI so it becomes visible immediately
+                // Icon not in DOM yet — insert before fa-bus so position is correct
                 const tmp = document.createElement('span');
                 tmp.innerHTML = newHtml;
-                li.insertBefore(tmp.firstChild, li.firstChild);
+                const busEl = li.querySelector('.fa-bus');
+                if (busEl) {
+                    busEl.parentNode.insertBefore(tmp.firstChild, busEl);
+                } else {
+                    li.insertBefore(tmp.firstChild, li.firstChild);
+                }
             }
 
         } catch (e) { console.warn('parse unidad.ignicion', e); }
