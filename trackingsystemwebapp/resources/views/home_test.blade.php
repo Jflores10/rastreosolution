@@ -690,9 +690,7 @@ function applyMetaToLi(uid, meta, source) {
                         _tmp.innerHTML = _iconHtml;
                         _iconEl.parentNode.replaceChild(_tmp.firstChild, _iconEl);
                     } else {
-                        var _tmp2 = document.createElement('span');
-                        _tmp2.innerHTML = _iconHtml;
-                        li.insertBefore(_tmp2.firstChild, li.firstChild);
+                        injectIgnicionBeforeBus(li, uid, _iconHtml);
                     }
                 } catch(e) {}
             }
@@ -705,6 +703,26 @@ function applyMetaToLi(uid, meta, source) {
         updateUnidadInList(li.currentU);
     } catch (e) {
         console.warn('applyMetaToLi failed', e);
+    }
+}
+
+/**
+ * Inserta el HTML del icono de ignición justo ANTES del fa-bus del LI.
+ * El fa-bus tiene id="i<uid>". Si no se encuentra, cae en insertBefore el bus.
+ * @param {HTMLElement} li   - el elemento <li> de la unidad
+ * @param {string}      uid  - el _id de la unidad (string)
+ * @param {string}      html - el HTML del icono a insertar
+ */
+function injectIgnicionBeforeBus(li, uid, html) {
+    var busEl = document.getElementById('i' + uid);
+    var tmp = document.createElement('span');
+    tmp.innerHTML = html;
+    var node = tmp.firstChild;
+    if (busEl && busEl.parentNode === li) {
+        li.insertBefore(node, busEl);
+    } else {
+        // fallback: put at the end of the decorative prefix icons (before first text node)
+        li.insertBefore(node, li.firstChild);
     }
 }
 
@@ -1016,11 +1034,8 @@ function conectarSSE(coopId) {
                 tmp.innerHTML = newHtml;
                 iconEl.parentNode.replaceChild(tmp.firstChild, iconEl);
             } else {
-                // Icon not in DOM yet (unit hasn't had a full render with ignicionf) —
-                // prepend it to the LI so it becomes visible immediately
-                const tmp = document.createElement('span');
-                tmp.innerHTML = newHtml;
-                li.insertBefore(tmp.firstChild, li.firstChild);
+                // Icon not in DOM yet — insert it immediately before the fa-bus icon
+                injectIgnicionBeforeBus(li, uid, newHtml);
             }
 
         } catch (e) { console.warn('parse unidad.ignicion', e); }
@@ -1413,9 +1428,7 @@ function updateUnidadInList(unidad) {
                 tmpIgn.innerHTML = ignHtml;
                 existingIgnEl.parentNode.replaceChild(tmpIgn.firstChild, existingIgnEl);
             } else {
-                var tmpIgn2 = document.createElement('span');
-                tmpIgn2.innerHTML = ignHtml;
-                li.insertBefore(tmpIgn2.firstChild, li.firstChild);
+                injectIgnicionBeforeBus(li, unidad._id, ignHtml);
             }
         } catch (e) {}
     }
@@ -1768,9 +1781,7 @@ $("#velocimetro").myfunc({divFact:10});
                             var _ignHtml = (_ignf === 'on')
                                 ? '<i id="' + _ignIconId + '" class="fa fa-dot-circle-o" title="IG ON"  style="color:green; pointer-events:none; cursor:default;"></i>&nbsp;&nbsp;'
                                 : '<i id="' + _ignIconId + '" class="fa fa-dot-circle-o" title="IG OFF" style="color:red;   pointer-events:none; cursor:default;"></i>&nbsp;&nbsp;';
-                            var _tmpI = document.createElement('span');
-                            _tmpI.innerHTML = _ignHtml;
-                            _li.insertBefore(_tmpI.firstChild, _li.firstChild);
+                            injectIgnicionBeforeBus(_li, String(_u._id), _ignHtml);
                         }
                     } catch(e) {}
                 }, 10);
@@ -3534,9 +3545,7 @@ $("#velocimetro").myfunc({divFact:10});
                             var _ignHtml = (_ignf === 'on')
                                 ? '<i id="' + _ignIconId + '" class="fa fa-dot-circle-o" title="IG ON"  style="color:green; pointer-events:none; cursor:default;"></i>&nbsp;&nbsp;'
                                 : '<i id="' + _ignIconId + '" class="fa fa-dot-circle-o" title="IG OFF" style="color:red;   pointer-events:none; cursor:default;"></i>&nbsp;&nbsp;';
-                            var _tmpIgn = document.createElement('span');
-                            _tmpIgn.innerHTML = _ignHtml;
-                            currentLi.insertBefore(_tmpIgn.firstChild, currentLi.firstChild);
+                            injectIgnicionBeforeBus(currentLi, data.unidades[i]._id, _ignHtml);
                         }
                     } catch(e) {}
                 }
