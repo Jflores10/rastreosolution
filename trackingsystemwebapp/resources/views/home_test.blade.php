@@ -708,21 +708,28 @@ function applyMetaToLi(uid, meta, source) {
 
 /**
  * Inserta el HTML del icono de ignición justo ANTES del fa-bus del LI.
- * El fa-bus tiene id="i<uid>". Si no se encuentra, cae en insertBefore el bus.
+ * El fa-bus tiene id="i<uid>". Si no se encuentra, busca el primer fa-bus dentro del li.
  * @param {HTMLElement} li   - el elemento <li> de la unidad
  * @param {string}      uid  - el _id de la unidad (string)
  * @param {string}      html - el HTML del icono a insertar
  */
 function injectIgnicionBeforeBus(li, uid, html) {
+    // Buscar el fa-bus por id, o por clase dentro del li como fallback
     var busEl = document.getElementById('i' + uid);
+    if (!busEl || busEl.parentNode !== li) {
+        // Fallback: buscar el primer fa-bus hijo del li
+        var buses = li.querySelectorAll('i.fa-bus');
+        busEl = (buses && buses.length > 0) ? buses[0] : null;
+    }
     var tmp = document.createElement('span');
     tmp.innerHTML = html;
     var node = tmp.firstChild;
     if (busEl && busEl.parentNode === li) {
+        // Insertar ANTES del fa-bus (a su izquierda)
         li.insertBefore(node, busEl);
     } else {
-        // fallback: put at the end of the decorative prefix icons (before first text node)
-        li.insertBefore(node, li.firstChild);
+        // Fallback final: agregar al final del li
+        li.appendChild(node);
     }
 }
 
