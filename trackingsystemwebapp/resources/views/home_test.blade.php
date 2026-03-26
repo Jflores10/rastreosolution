@@ -757,6 +757,24 @@ function refreshVisibleUnidadesMeta() {
 // run periodic refresh to keep non-route meta up-to-date; route fields will not overwrite an existing route
 setInterval(refreshVisibleUnidadesMeta, 20000);
 
+// Timer periódico: cada 10 s verifica si algún bolt con tiempo_power activo ya expiró
+// y detiene el parpadeo automáticamente. (PRUEBAS: 10 s — producción: 60000)
+setInterval(function () {
+    document.querySelectorAll('#ul_unidades li').forEach(function (li) {
+        if (!li._is_power_blink) return;
+        if (!li._tiempo_power_update || !li._tiempo_power) {
+            li._is_power_blink = false;
+            return;
+        }
+        var _horasRest = li._tiempo_power - ((Date.now() - new Date(li._tiempo_power_update).getTime()) / 3600000);
+        if (_horasRest <= 0) {
+            li._is_power_blink = false;
+            var _boltEl = li.querySelector('.fa-bolt');
+            if (_boltEl) _boltEl.classList.remove('bolt-power-blink');
+        }
+    });
+}, 10000); // PRUEBAS: 10 s (producción: 60000)
+
 /**
  * Activa o desactiva el parpadeo del fa-map-marker en el LI de una unidad.
  * isBuff=true  → agrega .marker-buff-blink al ícono y marca li._is_buff=true
@@ -1036,8 +1054,8 @@ function conectarSSE(coopId) {
     });
 
     // ================== unidad.power (GTMPN / GTMPF) ==================
-    // GTMPN (power=on)  → parpadea fa-bolt hasta que llegue GTMPF
-    // GTMPF (power=off) → detiene parpadeo del fa-bolt
+    // Cada GTMPN/GTMPF acumula 24h en tiempo_power (descontando tiempo transcurrido).
+    // El bolt parpadea mientras queden horas restantes en tiempo_power.
     sse.addEventListener('unidad.power', (evt) => {
         try {
             const msg = JSON.parse(evt.data);
@@ -1048,35 +1066,38 @@ function conectarSSE(coopId) {
             const li = document.getElementById(uid);
             if (!li) return;
 
-            // Persistir en currentU y en la bandera del LI
+            // Persistir en currentU y en las banderas del LI
             if (li.currentU) {
-                li.currentU.power     = msg.power;
-                li.currentU.latitud   = msg.latitud   || li.currentU.latitud;
-                li.currentU.longitud  = msg.longitud  || li.currentU.longitud;
-                li.currentU.fecha_gps = msg.fecha_gps || li.currentU.fecha_gps;
-                li.currentU.fecha     = msg.fecha     || li.currentU.fecha;
-                li.currentU.velocidad_actual = msg.velocidad_actual != null ? msg.velocidad_actual : li.currentU.velocidad_actual;
-                li.currentU.angulo    = msg.angulo    != null ? msg.angulo : li.currentU.angulo;
+                li.currentU.power               = msg.power;
+                li.currentU.tiempo_power        = msg.tiempo_power        != null ? msg.tiempo_power        : li.currentU.tiempo_power;
+                li.currentU.tiempo_power_update = msg.tiempo_power_update != null ? msg.tiempo_power_update : li.currentU.tiempo_power_update;
+                li.currentU.latitud             = msg.latitud   || li.currentU.latitud;
+                li.currentU.longitud            = msg.longitud  || li.currentU.longitud;
+                li.currentU.fecha_gps           = msg.fecha_gps || li.currentU.fecha_gps;
+                li.currentU.fecha               = msg.fecha     || li.currentU.fecha;
+                li.currentU.velocidad_actual    = msg.velocidad_actual != null ? msg.velocidad_actual : li.currentU.velocidad_actual;
+                li.currentU.angulo              = msg.angulo    != null ? msg.angulo : li.currentU.angulo;
             }
+
+            // Guardar datos de tiempo_power en el LI para que el timer periódico y
+            // el bloque post-render puedan evaluarlos sin tener que leer currentU.
+            li._tiempo_power        = (msg.tiempo_power != null) ? parseFloat(msg.tiempo_power) : 0;
+            li._tiempo_power_update = msg.tiempo_power_update ? new Date(msg.tiempo_power_update) : new Date();
+
+            // Calcular horas restantes al momento de recibir el evento
+            const _horasRestantes = li._tiempo_power - ((Date.now() - li._tiempo_power_update.getTime()) / 3600000);
+            li._is_power_blink = _horasRestantes > 0;
 
             const boltEl = document.getElementById('bolt_' + uid);
-
-            if (msg.power === 'on') {
-                // GTMPN: encender parpadeo del bolt
-                li._is_power_blink = true;
+            if (li._is_power_blink) {
                 if (boltEl) boltEl.classList.add('bolt-power-blink');
-                // Actualizar mapa con la nueva posición
-                try { actualizarUnidadRealtime(msg); } catch(e) {}
-                // Actualizar LI con nuevas coords/fecha
-                try { updateUnidadInList(li.currentU); } catch(e) {}
             } else {
-                // GTMPF: apagar parpadeo del bolt
-                li._is_power_blink = false;
                 if (boltEl) boltEl.classList.remove('bolt-power-blink');
-                // Actualizar mapa y LI también
-                try { actualizarUnidadRealtime(msg); } catch(e) {}
-                try { updateUnidadInList(li.currentU); } catch(e) {}
             }
+
+            // Actualizar mapa y LI con nuevas coords/fecha
+            try { actualizarUnidadRealtime(msg); } catch(e) {}
+            try { updateUnidadInList(li.currentU); } catch(e) {}
 
         } catch (e) { console.warn('parse unidad.power', e); }
     });
@@ -1408,11 +1429,18 @@ function updateUnidadInList(unidad) {
             if (bEl) bEl.classList.add('marker-buff-blink');
         } catch (e) {}
     }
-    // Si el bolt estaba parpadeando (GTMPN activo), re-aplicar la clase
+    // Si el bolt estaba parpadeando (tiempo_power activo), re-evaluar y re-aplicar la clase
     if (li._is_power_blink) {
         try {
-            var boltEl = document.getElementById('bolt_' + unidad._id);
-            if (boltEl) boltEl.classList.add('bolt-power-blink');
+            // Re-evaluar horas restantes antes de re-aplicar (puede haber expirado)
+            if (li._tiempo_power_update) {
+                const _horasRest = (li._tiempo_power || 0) - ((Date.now() - new Date(li._tiempo_power_update).getTime()) / 3600000);
+                li._is_power_blink = _horasRest > 0;
+            }
+            if (li._is_power_blink) {
+                var boltEl = document.getElementById('bolt_' + unidad._id);
+                if (boltEl) boltEl.classList.add('bolt-power-blink');
+            }
         } catch (e) {}
     }
     li.currentU = unidad;
@@ -3507,6 +3535,19 @@ $("#velocimetro").myfunc({divFact:10});
                     currentLi.onclick = function () {
                         selectUnidad(this.currentU,this.currentFechagps,this.currentFecha,1);
                     };
+                    // Establecer estado inicial del bolt blink según tiempo_power guardado en BD
+                    var _tp  = (currentU.tiempo_power != null) ? parseFloat(currentU.tiempo_power) : 0;
+                    var _tpu = currentU.tiempo_power_update ? new Date(currentU.tiempo_power_update) : null;
+                    if (_tp > 0 && _tpu) {
+                        var _horasRestI = _tp - ((Date.now() - _tpu.getTime()) / 3600000);
+                        if (_horasRestI > 0) {
+                            currentLi._is_power_blink        = true;
+                            currentLi._tiempo_power          = _tp;
+                            currentLi._tiempo_power_update   = _tpu;
+                            var _boltElI = currentLi.querySelector('.fa-bolt');
+                            if (_boltElI) _boltElI.classList.add('bolt-power-blink');
+                        }
+                    }
                 }
             }
     

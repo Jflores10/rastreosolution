@@ -1360,6 +1360,14 @@ function onClientConnected(socket) {
             const lat = toFloat(data[latitude]);
             const lng = toFloat(data[longitude]);
 
+            // ── Calcular tiempo_power acumulado ──
+            // Restar horas transcurridas desde la última actualización, luego sumar 24h
+            const prevTiempoPower = (document.tiempo_power != null) ? parseFloat(document.tiempo_power) : 0;
+            const prevUpdate = document.tiempo_power_update ? new Date(document.tiempo_power_update) : now;
+            const horasTranscurridas = (now.getTime() - prevUpdate.getTime()) / (1000 * 3600);
+            const tiempoPowerRestante = Math.max(0, prevTiempoPower - horasTranscurridas);
+            const nuevoTiempoPower = tiempoPowerRestante + (5 / 60); // PRUEBAS: 5 min (producción: 24h)
+
             dbTrackingSystem.collection('recorridos').insertOne({
               imei: data[imei],
               tipo: GTIGF,
@@ -1384,13 +1392,15 @@ function onClientConnected(socket) {
                 fecha_gps: fecha_gps,
                 fecha: now,
                 power: 'off',
+                tiempo_power: nuevoTiempoPower,
+                tiempo_power_update: now,
                 alerta_desconx_message: 'Dispositivo GPS apagado',
                 alerta_desconx_fecha: fecha_gps
               }
             }, { writeConcern: { w: 0 } });
 
-            // Persistir power='off' en el cache
-            buildUnidadPayloadRealtime({ imei: document.imei, _id: document._id, power: 'off' });
+            // Persistir en el cache
+            buildUnidadPayloadRealtime({ imei: document.imei, _id: document._id, power: 'off', tiempo_power: nuevoTiempoPower, tiempo_power_update: now });
 
             // Publicar evento SSE
             enviarALaravelPorWS({
@@ -1399,6 +1409,8 @@ function onClientConnected(socket) {
               _id: document._id,
               imei: document.imei,
               power: 'off',
+              tiempo_power: nuevoTiempoPower,
+              tiempo_power_update: now,
               latitud: lat,
               longitud: lng,
               velocidad_actual: toFloat(data[speed]),
@@ -1431,6 +1443,13 @@ function onClientConnected(socket) {
             const lat = toFloat(data[latitude]);
             const lng = toFloat(data[longitude]);
 
+            // ── Calcular tiempo_power acumulado ──
+            const prevTiempoPower = (document.tiempo_power != null) ? parseFloat(document.tiempo_power) : 0;
+            const prevUpdate = document.tiempo_power_update ? new Date(document.tiempo_power_update) : now;
+            const horasTranscurridas = (now.getTime() - prevUpdate.getTime()) / (1000 * 3600);
+            const tiempoPowerRestante = Math.max(0, prevTiempoPower - horasTranscurridas);
+            const nuevoTiempoPower = tiempoPowerRestante + (5 / 60); // PRUEBAS: 5 min (producción: 24h)
+
             dbTrackingSystem.collection('recorridos').insertOne({
               imei: data[imei],
               tipo: GTIGN,
@@ -1455,13 +1474,15 @@ function onClientConnected(socket) {
                 fecha_gps: fecha_gps,
                 fecha: now,
                 power: 'on',
+                tiempo_power: nuevoTiempoPower,
+                tiempo_power_update: now,
                 alerta_desconx_message: 'Dispositivo GPS encendido',
                 alerta_desconx_fecha: fecha_gps
               }
             }, { writeConcern: { w: 0 } });
 
-            // Persistir power='on' en el cache
-            buildUnidadPayloadRealtime({ imei: document.imei, _id: document._id, power: 'on' });
+            // Persistir en el cache
+            buildUnidadPayloadRealtime({ imei: document.imei, _id: document._id, power: 'on', tiempo_power: nuevoTiempoPower, tiempo_power_update: now });
 
             // Publicar evento SSE
             enviarALaravelPorWS({
@@ -1470,6 +1491,8 @@ function onClientConnected(socket) {
               _id: document._id,
               imei: document.imei,
               power: 'on',
+              tiempo_power: nuevoTiempoPower,
+              tiempo_power_update: now,
               latitud: lat,
               longitud: lng,
               velocidad_actual: toFloat(data[speed]),
