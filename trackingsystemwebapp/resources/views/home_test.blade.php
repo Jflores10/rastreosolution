@@ -692,13 +692,7 @@ function applyMetaToLi(uid, meta, source) {
                     } else {
                         var _tmp2 = document.createElement('span');
                         _tmp2.innerHTML = _iconHtml;
-                        // Prefer to insert before the bus icon so ignition appears left of the bus.
-                        var busEl = li.querySelector('.fa-bus');
-                        if (busEl && busEl.parentNode) {
-                            busEl.parentNode.insertBefore(_tmp2.firstChild, busEl);
-                        } else {
-                            li.insertBefore(_tmp2.firstChild, li.firstChild);
-                        }
+                        li.insertBefore(_tmp2.firstChild, li.firstChild);
                     }
                 } catch(e) {}
             }
@@ -1022,15 +1016,11 @@ function conectarSSE(coopId) {
                 tmp.innerHTML = newHtml;
                 iconEl.parentNode.replaceChild(tmp.firstChild, iconEl);
             } else {
-                // Icon not in DOM yet — insert it before the bus icon when possible
+                // Icon not in DOM yet (unit hasn't had a full render with ignicionf) —
+                // prepend it to the LI so it becomes visible immediately
                 const tmp = document.createElement('span');
                 tmp.innerHTML = newHtml;
-                const busEl = li.querySelector('.fa-bus');
-                if (busEl && busEl.parentNode) {
-                    busEl.parentNode.insertBefore(tmp.firstChild, busEl);
-                } else {
-                    li.insertBefore(tmp.firstChild, li.firstChild);
-                }
+                li.insertBefore(tmp.firstChild, li.firstChild);
             }
 
         } catch (e) { console.warn('parse unidad.ignicion', e); }
@@ -1284,13 +1274,22 @@ function updateUnidadInList(unidad) {
     */
     var html = '';
 
+    // Icono de ignición (se incluye directamente en el HTML antes del fa-bus)
+    var ignIconId = 'ignicion_' + unidad._id;
+    var ignicionHtml = '';
+    if (unidad.ignicionf === 'on' || unidad.ignicionf === 'off') {
+        ignicionHtml = (unidad.ignicionf === 'on')
+            ? '<i id="' + ignIconId + '" class="fa fa-dot-circle-o" title="IG ON"  style="color:green; pointer-events:none; cursor:default;"></i>&nbsp;&nbsp;'
+            : '<i id="' + ignIconId + '" class="fa fa-dot-circle-o" title="IG OFF" style="color:red;   pointer-events:none; cursor:default;"></i>&nbsp;&nbsp;';
+    }
+
     // Generar exactamente el HTML con el mismo look según estado
     switch (estado) {
         case 'D':
             html += '' +
                 ((unidad.climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                 ((unidad.rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
-                sentido + '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#F44336"></i>&nbsp' +
+                sentido + ignicionHtml + '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#F44336"></i>&nbsp' +
                 (unidad.descripcion || '') + '&nbsp&nbsp <i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ (unidad.latitud||'') +'\',\''+ (unidad.longitud||'') +'\');" class="fa fa-map-marker" style="color:#F44336"></i>&nbsp' + (fecha_gps_marker || '-') + '  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(velocidad_num) + '' +
                 '&nbsp&nbsp&nbsp<i id="bolt_' + unidad._id + '" class="fa fa-bolt" style="color:#F44336"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#F44336"></i>&nbsp' + (unidad.contador_total||'') + " | " + (unidad.contador_diario||'') +
                 '&nbsp&nbsp&nbsp' + ((unidad.is_atm !== undefined && unidad.is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'') +
@@ -1314,7 +1313,7 @@ function updateUnidadInList(unidad) {
             html += '' +
                 ((unidad.climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                 ((unidad.rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
-                '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#f49a16"></i>&nbsp' + (unidad.descripcion||'') +
+                ignicionHtml + '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#f49a16"></i>&nbsp' + (unidad.descripcion||'') +
                 '&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ (unidad.latitud||'') +'\',\''+ (unidad.longitud||'') +'\');" class="fa fa-map-marker" style="color:#f49a16"></i>&nbsp' + (fecha_gps_marker || '-') + '  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(velocidad_num) + '' +
                 '&nbsp&nbsp&nbsp<i id="bolt_' + unidad._id + '" class="fa fa-bolt" style="color:#f49a16"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#f49a16"></i>&nbsp' + (unidad.contador_total||'') + " | " + (unidad.contador_diario||'') +
                 '&nbsp&nbsp&nbsp|&nbsp&nbsp';
@@ -1337,7 +1336,7 @@ function updateUnidadInList(unidad) {
             html += '' +
                 ((unidad.climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                 ((unidad.rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
-                sentido + '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#00AA88"></i>&nbsp' + (unidad.descripcion||'') +
+                sentido + ignicionHtml + '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#00AA88"></i>&nbsp' + (unidad.descripcion||'') +
                 '&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ (unidad.latitud||'') +'\',\''+ (unidad.longitud||'') +'\');" class="fa fa-map-marker" style="color:#00AA88"></i>&nbsp' + (fecha_gps_marker || '-') + '  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(velocidad_num) + '' +
                 '&nbsp&nbsp&nbsp<i id="bolt_' + unidad._id + '" class="fa fa-bolt" style="color:#00AA88"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#00AA88"></i>&nbsp' + (unidad.contador_total||'') + " | " + (unidad.contador_diario||'') +
                 '&nbsp&nbsp&nbsp|&nbsp&nbsp';
@@ -1360,7 +1359,7 @@ function updateUnidadInList(unidad) {
             html += '' +
                 ((unidad.climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                 ((unidad.rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
-                '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#990073"></i>&nbsp' + (unidad.descripcion||'') +
+                ignicionHtml + '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#990073"></i>&nbsp' + (unidad.descripcion||'') +
                 '&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ (unidad.latitud||'') +'\',\''+ (unidad.longitud||'') +'\');" class="fa fa-map-marker" style="color:#990073"></i>&nbsp' + (fecha_gps_marker || '-') + '  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(velocidad_num) + '' +
                 '&nbsp&nbsp&nbsp<i id="bolt_' + unidad._id + '" class="fa fa-bolt" style="color:#990073"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#990073"></i>&nbsp' + (unidad.contador_total||'') + " | " + (unidad.contador_diario||'') +
                 '&nbsp&nbsp&nbsp|&nbsp&nbsp';
@@ -1405,28 +1404,6 @@ function updateUnidadInList(unidad) {
         try {
             var boltEl = document.getElementById('bolt_' + unidad._id);
             if (boltEl) boltEl.classList.add('bolt-power-blink');
-        } catch (e) {}
-    }
-    // Re-inyectar el icono de ignición si ignicionf está activo.
-    // El switch/case nunca lo incluye en el HTML, así que hay que añadirlo
-    // después de cada re-render para que no desaparezca con cada GTFRI.
-    if (unidad.ignicionf === 'on' || unidad.ignicionf === 'off') {
-        try {
-            var ignIconId = 'ignicion_' + unidad._id;
-            // Si el icono ya está en el DOM (render anterior), actualizarlo
-            var existingIgnEl = document.getElementById(ignIconId);
-            var ignHtml = (unidad.ignicionf === 'on')
-                ? '<i id="' + ignIconId + '" class="fa fa-dot-circle-o" title="IG ON"  style="color:green; pointer-events:none; cursor:default;"></i>&nbsp;&nbsp;'
-                : '<i id="' + ignIconId + '" class="fa fa-dot-circle-o" title="IG OFF" style="color:red;   pointer-events:none; cursor:default;"></i>&nbsp;&nbsp;';
-            if (existingIgnEl) {
-                var tmpIgn = document.createElement('span');
-                tmpIgn.innerHTML = ignHtml;
-                existingIgnEl.parentNode.replaceChild(tmpIgn.firstChild, existingIgnEl);
-            } else {
-                var tmpIgn2 = document.createElement('span');
-                tmpIgn2.innerHTML = ignHtml;
-                li.insertBefore(tmpIgn2.firstChild, li.firstChild);
-            }
         } catch (e) {}
     }
     li.currentU = unidad;
@@ -1760,35 +1737,6 @@ $("#velocimetro").myfunc({divFact:10});
             appendUnidades = function (data) {
                 _orig_appendUnidades(data);
                 setTimeout(fetchMetaForVisibleUnitsPostAppend, 50);
-
-                // Safety net: re-inject ignition icon for any unit that has ignicionf
-                // in case the main loop missed it or the LI was already in DOM.
-                setTimeout(function() {
-                    try {
-                        if (!data || !data.unidades) return;
-                        for (var _i = 0; _i < data.unidades.length; _i++) {
-                            var _u = data.unidades[_i];
-                            var _ignf = _u.ignicionf;
-                            if (_ignf !== 'on' && _ignf !== 'off') continue;
-                            var _li = document.getElementById(String(_u._id));
-                            if (!_li) continue;
-                            var _ignIconId = 'ignicion_' + _u._id;
-                            // Only inject if not already present (main loop already added it)
-                            if (document.getElementById(_ignIconId)) continue;
-                            var _ignHtml = (_ignf === 'on')
-                                ? '<i id="' + _ignIconId + '" class="fa fa-dot-circle-o" title="IG ON"  style="color:green; pointer-events:none; cursor:default;"></i>&nbsp;&nbsp;'
-                                : '<i id="' + _ignIconId + '" class="fa fa-dot-circle-o" title="IG OFF" style="color:red;   pointer-events:none; cursor:default;"></i>&nbsp;&nbsp;';
-                            var _tmpI = document.createElement('span');
-                            _tmpI.innerHTML = _ignHtml;
-                            var _bus = _li.querySelector('.fa-bus');
-                            if (_bus && _bus.parentNode) {
-                                _bus.parentNode.insertBefore(_tmpI.firstChild, _bus);
-                            } else {
-                                _li.insertBefore(_tmpI.firstChild, _li.firstChild);
-                            }
-                        }
-                    } catch(e) {}
-                }, 10);
             };
             for(var i=currentIndex;i<recorrido.length;i++)
             {
@@ -3395,6 +3343,17 @@ $("#velocimetro").myfunc({divFact:10});
                         sentido='<i class="fa fa-arrow-circle-left" title="RETORNO" style="color:#001672"></i>&nbsp&nbsp';
                     }
                 }
+
+                // Icono de ignición — se incluye directamente en el HTML antes del fa-bus
+                var _ignIconIdI = 'ignicion_' + data.unidades[i]._id;
+                var ignicionHtmlI = '';
+                var _ignfI = data.unidades[i].ignicionf;
+                if (_ignfI === 'on' || _ignfI === 'off') {
+                    ignicionHtmlI = (_ignfI === 'on')
+                        ? '<i id="' + _ignIconIdI + '" class="fa fa-dot-circle-o" title="IG ON"  style="color:green; pointer-events:none; cursor:default;"></i>&nbsp;&nbsp;'
+                        : '<i id="' + _ignIconIdI + '" class="fa fa-dot-circle-o" title="IG OFF" style="color:red;   pointer-events:none; cursor:default;"></i>&nbsp;&nbsp;';
+                }
+
                 switch(estado)
                 {
                     case 'D':
@@ -3403,7 +3362,7 @@ $("#velocimetro").myfunc({divFact:10});
                                 '<li class="list-group-item" id=\''+ data.unidades[i]._id + '\'>'+
                                     ((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                                     ((data.unidades[i].rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
-                                sentido+'<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1);" class="fa fa-bus" style="color:#F44336"></i>&nbsp'+ 
+                                sentido+ignicionHtmlI+'<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1);" class="fa fa-bus" style="color:#F44336"></i>&nbsp'+ 
                                 data.unidades[i].descripcion+'&nbsp&nbsp <i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ data.unidades[i].latitud+'\',\''+ data.unidades[i].longitud+'\');" class="fa fa-map-marker" style="color:#F44336"></i>&nbsp'+fecha_gps+'  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp'+  Math.round(data.unidades[i].velocidad_actual)+''+'&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#F44336"></i>&nbsp'+voltaje
                                 +'&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#F44336"></i>&nbsp'+data.unidades[i].contador_total+" | "+data.unidades[i].contador_diario
                                 +'&nbsp&nbsp&nbsp'+((data.unidades[i].is_atm !== "undefined")?((data.unidades[i].is_atm===0)?'':((data.unidades[i].is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'')):'')
@@ -3434,7 +3393,7 @@ $("#velocimetro").myfunc({divFact:10});
                                 '<li class="list-group-item" id=\''+ data.unidades[i]._id + '\'>'+
                                     ((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                                     ((data.unidades[i].rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
-                                '<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1);" class="fa fa-bus" style="color:#f49a16"></i>&nbsp'+ data.unidades[i].descripcion
+                                ignicionHtmlI+'<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1);" class="fa fa-bus" style="color:#f49a16"></i>&nbsp'+ data.unidades[i].descripcion
                                 +'&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ data.unidades[i].latitud+'\',\''+ data.unidades[i].longitud+'\');" class="fa fa-map-marker" style="color:#f49a16"></i>&nbsp'+fecha_gps+'  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp'+ Math.round(data.unidades[i].velocidad_actual)+''+'&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#f49a16"></i>&nbsp'+voltaje
                                 +'&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#f49a16"></i>&nbsp'+data.unidades[i].contador_total+" | "+data.unidades[i].contador_diario
                                 +'&nbsp&nbsp&nbsp'+((data.unidades[i].is_atm !== "undefined")?((data.unidades[i].is_atm===0)?'':((data.unidades[i].is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'')):'')
@@ -3465,7 +3424,7 @@ $("#velocimetro").myfunc({divFact:10});
                                 '<li class="list-group-item" id=\''+ data.unidades[i]._id + '\'>'+
                                     ((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                                     ((data.unidades[i].rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
-                                sentido+'<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1);" class="fa fa-bus" style="color:#00AA88"></i>&nbsp'+ data.unidades[i].descripcion
+                                sentido+ignicionHtmlI+'<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1);" class="fa fa-bus" style="color:#00AA88"></i>&nbsp'+ data.unidades[i].descripcion
                                 +'&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ data.unidades[i].latitud+'\',\''+ data.unidades[i].longitud+'\');" class="fa fa-map-marker" style="color:#00AA88"></i>&nbsp'+fecha_gps+'  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp'+ Math.round(data.unidades[i].velocidad_actual)+''+'&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#00AA88"></i>&nbsp'+voltaje+'&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#00AA88"></i>&nbsp'
                                 +data.unidades[i].contador_total+" | "+data.unidades[i].contador_diario
                                 +'&nbsp&nbsp&nbsp'+((data.unidades[i].is_atm !== "undefined")?((data.unidades[i].is_atm===0)?'':((data.unidades[i].is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'')):'')
@@ -3501,7 +3460,7 @@ $("#velocimetro").myfunc({divFact:10});
                                 '<li class="list-group-item" id=\'' + data.unidades[i]._id + '\'>' +
                                 ((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                                 ((data.unidades[i].rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
-                                '<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1);" class="fa fa-bus" style="color:#990073"></i>&nbsp' + data.unidades[i].descripcion 
+                                ignicionHtmlI+'<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1);" class="fa fa-bus" style="color:#990073"></i>&nbsp' + data.unidades[i].descripcion 
                                 + '&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ data.unidades[i].latitud+'\',\''+ data.unidades[i].longitud+'\');" class="fa fa-map-marker" style="color:#990073"></i>&nbsp' + fecha_gps + '  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(data.unidades[i].velocidad_actual) + '' + '&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#990073"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#990073"></i>&nbsp' + data.unidades[i].contador_total 
                                 + " | " + data.unidades[i].contador_diario
                                 +'&nbsp&nbsp&nbsp'+((data.unidades[i].is_atm !== "undefined")?((data.unidades[i].is_atm===0)?'':((data.unidades[i].is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'')):'')
@@ -3539,26 +3498,6 @@ $("#velocimetro").myfunc({divFact:10});
                     currentLi.onclick = function () {
                         selectUnidad(this.currentU,this.currentFechagps,this.currentFecha,1);
                     };
-
-                    // Inject ignition icon immediately from DB value so it shows on initial load.
-                    // The switch/case HTML never includes it, so we must add it here too.
-                    try {
-                        var _ignf = data.unidades[i].ignicionf;
-                        if (_ignf === 'on' || _ignf === 'off') {
-                            var _ignIconId = 'ignicion_' + data.unidades[i]._id;
-                            var _ignHtml = (_ignf === 'on')
-                                ? '<i id="' + _ignIconId + '" class="fa fa-dot-circle-o" title="IG ON"  style="color:green; pointer-events:none; cursor:default;"></i>&nbsp;&nbsp;'
-                                : '<i id="' + _ignIconId + '" class="fa fa-dot-circle-o" title="IG OFF" style="color:red;   pointer-events:none; cursor:default;"></i>&nbsp;&nbsp;';
-                            var _tmpIgn = document.createElement('span');
-                            _tmpIgn.innerHTML = _ignHtml;
-                            var _bus2 = currentLi.querySelector('.fa-bus');
-                            if (_bus2 && _bus2.parentNode) {
-                                _bus2.parentNode.insertBefore(_tmpIgn.firstChild, _bus2);
-                            } else {
-                                currentLi.insertBefore(_tmpIgn.firstChild, currentLi.firstChild);
-                            }
-                        }
-                    } catch(e) {}
                 }
             }
     
