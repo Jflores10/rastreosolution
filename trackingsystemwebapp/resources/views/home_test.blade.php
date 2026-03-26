@@ -685,12 +685,14 @@ function applyMetaToLi(uid, meta, source) {
                     var _iconHtml = (meta.ignicionf === 'on')
                         ? '<i id="' + _iconId + '" class="fa fa-dot-circle-o" title="IG ON"  style="color:green; pointer-events:none; cursor:default;"></i>&nbsp;&nbsp;'
                         : '<i id="' + _iconId + '" class="fa fa-dot-circle-o" title="IG OFF" style="color:red;   pointer-events:none; cursor:default;"></i>&nbsp;&nbsp;';
-                    if (_iconEl && li.contains(_iconEl)) {
+                    if (_iconEl) {
                         var _tmp = document.createElement('span');
                         _tmp.innerHTML = _iconHtml;
                         _iconEl.parentNode.replaceChild(_tmp.firstChild, _iconEl);
                     } else {
-                        injectIgnicionBeforeBus(li, uid, _iconHtml);
+                        var _tmp2 = document.createElement('span');
+                        _tmp2.innerHTML = _iconHtml;
+                        li.insertBefore(_tmp2.firstChild, li.firstChild);
                     }
                 } catch(e) {}
             }
@@ -704,20 +706,6 @@ function applyMetaToLi(uid, meta, source) {
     } catch (e) {
         console.warn('applyMetaToLi failed', e);
     }
-}
-
-/**
- * Inserta el HTML del icono de ignición al INICIO del LI (primera posición).
- * @param {HTMLElement} li   - el elemento <li> de la unidad
- * @param {string}      uid  - el _id de la unidad (sin uso, conservado por firma)
- * @param {string}      html - el HTML del icono a insertar
- */
-function injectIgnicionBeforeBus(li, uid, html) {
-    var tmp = document.createElement('span');
-    tmp.innerHTML = html;
-    var node = tmp.firstChild;
-    // Siempre al inicio del LI, antes de snowflake/rampa/bus
-    li.insertBefore(node, li.firstChild);
 }
 
 function fetchUnidadesMeta(ids) {
@@ -1023,12 +1011,16 @@ function conectarSSE(coopId) {
                 ? '<i id="' + iconId + '" class="fa fa-dot-circle-o" title="IG ON"  style="color:green; pointer-events:none; cursor:default;"></i>&nbsp&nbsp'
                 : '<i id="' + iconId + '" class="fa fa-dot-circle-o" title="IG OFF" style="color:red; pointer-events:none; cursor:default;"></i>&nbsp&nbsp';
 
-            if (iconEl && li.contains(iconEl)) {
+            if (iconEl) {
                 const tmp = document.createElement('span');
                 tmp.innerHTML = newHtml;
                 iconEl.parentNode.replaceChild(tmp.firstChild, iconEl);
             } else {
-                injectIgnicionBeforeBus(li, uid, newHtml);
+                // Icon not in DOM yet (unit hasn't had a full render with ignicionf) —
+                // prepend it to the LI so it becomes visible immediately
+                const tmp = document.createElement('span');
+                tmp.innerHTML = newHtml;
+                li.insertBefore(tmp.firstChild, li.firstChild);
             }
 
         } catch (e) { console.warn('parse unidad.ignicion', e); }
@@ -1282,22 +1274,13 @@ function updateUnidadInList(unidad) {
     */
     var html = '';
 
-    // Icono de ignición — se incluye directamente en el HTML antes del fa-bus
-    var ignIconId  = 'ignicion_' + unidad._id;
-    var ignIconHtml = '';
-    if (unidad.ignicionf === 'on') {
-        ignIconHtml = '<i id="' + ignIconId + '" class="fa fa-dot-circle-o" title="IG ON"  style="color:green; pointer-events:none; cursor:default;"></i>&nbsp;&nbsp;';
-    } else if (unidad.ignicionf === 'off') {
-        ignIconHtml = '<i id="' + ignIconId + '" class="fa fa-dot-circle-o" title="IG OFF" style="color:red;   pointer-events:none; cursor:default;"></i>&nbsp;&nbsp;';
-    }
-
     // Generar exactamente el HTML con el mismo look según estado
     switch (estado) {
         case 'D':
             html += '' +
                 ((unidad.climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                 ((unidad.rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
-                sentido + ignIconHtml + '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#F44336"></i>&nbsp' +
+                sentido + '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#F44336"></i>&nbsp' +
                 (unidad.descripcion || '') + '&nbsp&nbsp <i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ (unidad.latitud||'') +'\',\''+ (unidad.longitud||'') +'\');" class="fa fa-map-marker" style="color:#F44336"></i>&nbsp' + (fecha_gps_marker || '-') + '  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(velocidad_num) + '' +
                 '&nbsp&nbsp&nbsp<i id="bolt_' + unidad._id + '" class="fa fa-bolt" style="color:#F44336"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#F44336"></i>&nbsp' + (unidad.contador_total||'') + " | " + (unidad.contador_diario||'') +
                 '&nbsp&nbsp&nbsp' + ((unidad.is_atm !== undefined && unidad.is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'') +
@@ -1321,7 +1304,7 @@ function updateUnidadInList(unidad) {
             html += '' +
                 ((unidad.climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                 ((unidad.rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
-                ignIconHtml + '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#f49a16"></i>&nbsp' + (unidad.descripcion||'') +
+                '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#f49a16"></i>&nbsp' + (unidad.descripcion||'') +
                 '&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ (unidad.latitud||'') +'\',\''+ (unidad.longitud||'') +'\');" class="fa fa-map-marker" style="color:#f49a16"></i>&nbsp' + (fecha_gps_marker || '-') + '  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(velocidad_num) + '' +
                 '&nbsp&nbsp&nbsp<i id="bolt_' + unidad._id + '" class="fa fa-bolt" style="color:#f49a16"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#f49a16"></i>&nbsp' + (unidad.contador_total||'') + " | " + (unidad.contador_diario||'') +
                 '&nbsp&nbsp&nbsp|&nbsp&nbsp';
@@ -1344,7 +1327,7 @@ function updateUnidadInList(unidad) {
             html += '' +
                 ((unidad.climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                 ((unidad.rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
-                sentido + ignIconHtml + '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#00AA88"></i>&nbsp' + (unidad.descripcion||'') +
+                sentido + '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#00AA88"></i>&nbsp' + (unidad.descripcion||'') +
                 '&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ (unidad.latitud||'') +'\',\''+ (unidad.longitud||'') +'\');" class="fa fa-map-marker" style="color:#00AA88"></i>&nbsp' + (fecha_gps_marker || '-') + '  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(velocidad_num) + '' +
                 '&nbsp&nbsp&nbsp<i id="bolt_' + unidad._id + '" class="fa fa-bolt" style="color:#00AA88"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#00AA88"></i>&nbsp' + (unidad.contador_total||'') + " | " + (unidad.contador_diario||'') +
                 '&nbsp&nbsp&nbsp|&nbsp&nbsp';
@@ -1367,7 +1350,7 @@ function updateUnidadInList(unidad) {
             html += '' +
                 ((unidad.climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                 ((unidad.rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
-                ignIconHtml + '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#990073"></i>&nbsp' + (unidad.descripcion||'') +
+                '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#990073"></i>&nbsp' + (unidad.descripcion||'') +
                 '&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ (unidad.latitud||'') +'\',\''+ (unidad.longitud||'') +'\');" class="fa fa-map-marker" style="color:#990073"></i>&nbsp' + (fecha_gps_marker || '-') + '  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(velocidad_num) + '' +
                 '&nbsp&nbsp&nbsp<i id="bolt_' + unidad._id + '" class="fa fa-bolt" style="color:#990073"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#990073"></i>&nbsp' + (unidad.contador_total||'') + " | " + (unidad.contador_diario||'') +
                 '&nbsp&nbsp&nbsp|&nbsp&nbsp';
@@ -1414,7 +1397,28 @@ function updateUnidadInList(unidad) {
             if (boltEl) boltEl.classList.add('bolt-power-blink');
         } catch (e) {}
     }
-    // El icono de ignición ya va incluido en el html del switch/case — no hay re-inyección necesaria.
+    // Re-inyectar el icono de ignición si ignicionf está activo.
+    // El switch/case nunca lo incluye en el HTML, así que hay que añadirlo
+    // después de cada re-render para que no desaparezca con cada GTFRI.
+    if (unidad.ignicionf === 'on' || unidad.ignicionf === 'off') {
+        try {
+            var ignIconId = 'ignicion_' + unidad._id;
+            // Si el icono ya está en el DOM (render anterior), actualizarlo
+            var existingIgnEl = document.getElementById(ignIconId);
+            var ignHtml = (unidad.ignicionf === 'on')
+                ? '<i id="' + ignIconId + '" class="fa fa-dot-circle-o" title="IG ON"  style="color:green; pointer-events:none; cursor:default;"></i>&nbsp;&nbsp;'
+                : '<i id="' + ignIconId + '" class="fa fa-dot-circle-o" title="IG OFF" style="color:red;   pointer-events:none; cursor:default;"></i>&nbsp;&nbsp;';
+            if (existingIgnEl) {
+                var tmpIgn = document.createElement('span');
+                tmpIgn.innerHTML = ignHtml;
+                existingIgnEl.parentNode.replaceChild(tmpIgn.firstChild, existingIgnEl);
+            } else {
+                var tmpIgn2 = document.createElement('span');
+                tmpIgn2.innerHTML = ignHtml;
+                li.insertBefore(tmpIgn2.firstChild, li.firstChild);
+            }
+        } catch (e) {}
+    }
     li.currentU = unidad;
     li.currentFechagps = fecha_gps_marker;
     li.currentFechagpsC = fecha_gps_marker_c;
@@ -1764,7 +1768,9 @@ $("#velocimetro").myfunc({divFact:10});
                             var _ignHtml = (_ignf === 'on')
                                 ? '<i id="' + _ignIconId + '" class="fa fa-dot-circle-o" title="IG ON"  style="color:green; pointer-events:none; cursor:default;"></i>&nbsp;&nbsp;'
                                 : '<i id="' + _ignIconId + '" class="fa fa-dot-circle-o" title="IG OFF" style="color:red;   pointer-events:none; cursor:default;"></i>&nbsp;&nbsp;';
-                            injectIgnicionBeforeBus(_li, String(_u._id), _ignHtml);
+                            var _tmpI = document.createElement('span');
+                            _tmpI.innerHTML = _ignHtml;
+                            _li.insertBefore(_tmpI.firstChild, _li.firstChild);
                         }
                     } catch(e) {}
                 }, 10);
@@ -3528,7 +3534,9 @@ $("#velocimetro").myfunc({divFact:10});
                             var _ignHtml = (_ignf === 'on')
                                 ? '<i id="' + _ignIconId + '" class="fa fa-dot-circle-o" title="IG ON"  style="color:green; pointer-events:none; cursor:default;"></i>&nbsp;&nbsp;'
                                 : '<i id="' + _ignIconId + '" class="fa fa-dot-circle-o" title="IG OFF" style="color:red;   pointer-events:none; cursor:default;"></i>&nbsp;&nbsp;';
-                            injectIgnicionBeforeBus(currentLi, data.unidades[i]._id, _ignHtml);
+                            var _tmpIgn = document.createElement('span');
+                            _tmpIgn.innerHTML = _ignHtml;
+                            currentLi.insertBefore(_tmpIgn.firstChild, currentLi.firstChild);
                         }
                     } catch(e) {}
                 }
