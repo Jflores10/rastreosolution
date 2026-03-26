@@ -707,25 +707,17 @@ function applyMetaToLi(uid, meta, source) {
 }
 
 /**
- * Inserta el HTML del icono de ignición justo ANTES del fa-bus del LI.
- * El fa-bus tiene id="i<uid>". Si no se encuentra, busca el primer fa-bus dentro del li.
+ * Inserta el HTML del icono de ignición al INICIO del LI (primera posición).
  * @param {HTMLElement} li   - el elemento <li> de la unidad
- * @param {string}      uid  - el _id de la unidad (string)
+ * @param {string}      uid  - el _id de la unidad (sin uso, conservado por firma)
  * @param {string}      html - el HTML del icono a insertar
  */
 function injectIgnicionBeforeBus(li, uid, html) {
-    // Buscar el fa-bus por id, o por clase dentro del li como fallback
-    var busEl = document.getElementById('i' + uid);
     var tmp = document.createElement('span');
     tmp.innerHTML = html;
     var node = tmp.firstChild;
-    if (busEl && busEl.parentNode === li) {
-        // Insertar ANTES del fa-bus (a su izquierda)
-        li.insertBefore(node, busEl);
-    } else {
-        // Fallback final: agregar al final del li
-        li.appendChild(node);
-    }
+    // Siempre al inicio del LI, antes de snowflake/rampa/bus
+    li.insertBefore(node, li.firstChild);
 }
 
 function fetchUnidadesMeta(ids) {
