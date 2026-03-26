@@ -158,6 +158,15 @@ class HistoricoController extends Controller
         }
 
         try {
+            // Batch fetch ignicionf from unidades (single query, only the field we need)
+            $unidadesIgnicion = Unidad::whereIn('_id', $toFetch)
+                ->where('estado', 'A')
+                ->get(['_id', 'ignicionf']);
+            $ignicionByUnidad = [];
+            foreach ($unidadesIgnicion as $u) {
+                $ignicionByUnidad[(string)$u->_id] = $u->ignicionf ?? null;
+            }
+
             // Batch fetch despachos for the given unidades within today range
             $despachos = Despacho::orderBy('fecha', 'asc')
                 ->where('estado', 'P')
@@ -245,6 +254,9 @@ class HistoricoController extends Controller
                 // client uses 'ruta_hora_fin'
                 if ($ruta_hora_final !== null && $ruta_hora_final !== '') $meta['ruta_hora_fin'] = $ruta_hora_final;
                 if ($tipo_bitacora !== null && $tipo_bitacora !== '') $meta['tipo_bitacora'] = $tipo_bitacora;
+                // ignicionf: always include when present (on/off) so the front-end can show the icon on initial load
+                $ignf = $ignicionByUnidad[$uid] ?? null;
+                if ($ignf === 'on' || $ignf === 'off') $meta['ignicionf'] = $ignf;
 
                 // cache short-term (even an empty object to avoid hot loops)
                 try {
@@ -933,29 +945,31 @@ class HistoricoController extends Controller
                                 $latitud_geo=$documento["latitud"];
                                 $longitud_geo=$documento["longitud"];
                                 if($user->tipo_usuario->valor==1 && !isset($documento['gps_address'])){//OSM DIRECCIONES SOLO DISTRIBUIDORES
-                                    $client = new Client();
-                                    $urlFinal='https://nominatim.openstreetmap.org/reverse?format=json&lat='.$documento["latitud"]. '&lon='.$documento["longitud"];
-                                    $res = $client->get($urlFinal, [
-                                        'verify' => false
-                                    ]);
+                                    try {
+                                        $client = new Client();
+                                        $urlFinal='https://nominatim.openstreetmap.org/reverse?format=json&lat='.$documento["latitud"]. '&lon='.$documento["longitud"];
+                                        $res = $client->get($urlFinal, [
+                                            'verify'          => false,
+                                            'timeout'         => 5,
+                                            'connect_timeout' => 3,
+                                        ]);
 
-                                    // $res = $client->request('GET',$urlFinal );
-
-                                    $code = $res->getStatusCode();
-                                    if ($code === 200) {
-                                        $json = json_decode($res->getBody());
-                                        if (!isset($json->error))
-                                        {
-                                            $ubicacion=$json->display_name;
-                                            $documento['gps_address'] = $ubicacion;
-                                            $documento->save();
+                                        $code = $res->getStatusCode();
+                                        if ($code === 200) {
+                                            $json = json_decode($res->getBody());
+                                            if (!isset($json->error)) {
+                                                $ubicacion = $json->display_name;
+                                                $documento['gps_address'] = $ubicacion;
+                                                $documento->save();
+                                            } else {
+                                                $ubicacion = 'Ubicacion no disponible';
+                                            }
+                                        } else {
+                                            $ubicacion = 'Ubicacion no disponible';
                                         }
-                                        else
-                                            $ubicacion='Error al traer ubicación';
-                                    }else{
-                                        $ubicacion='Error al traer ubicación';
+                                    } catch (\Exception $e) {
+                                        $ubicacion = 'Ubicacion no disponible';
                                     }
-                                    // return $ubicacion;
                                 }
                             }
                         } 

@@ -670,6 +670,34 @@ function applyMetaToLi(uid, meta, source) {
             li.currentU.bitacora = meta.bitacora;
         }
 
+        // ignicionf: persist into currentU and inject/update icon surgically without a full re-render.
+        // This is the authoritative value from the DB on initial load (or periodic refresh).
+        // Only update if the meta provides it AND there is no more-recent SSE value already applied.
+        if (meta.ignicionf === 'on' || meta.ignicionf === 'off') {
+            // Never overwrite an ignicionf that arrived via a live SSE event (unidad.ignicion).
+            // We detect that by checking li._ignicion_from_sse flag set in the SSE listener.
+            if (!li._ignicion_from_sse) {
+                li.currentU.ignicionf = meta.ignicionf;
+                // Inject or replace the ignicion icon in the LI
+                try {
+                    var _iconId  = 'ignicion_' + uid;
+                    var _iconEl  = document.getElementById(_iconId);
+                    var _iconHtml = (meta.ignicionf === 'on')
+                        ? '<i id="' + _iconId + '" class="fa fa-dot-circle-o" title="IG ON"  style="color:green; pointer-events:none; cursor:default;"></i>&nbsp;&nbsp;'
+                        : '<i id="' + _iconId + '" class="fa fa-dot-circle-o" title="IG OFF" style="color:red;   pointer-events:none; cursor:default;"></i>&nbsp;&nbsp;';
+                    if (_iconEl) {
+                        var _tmp = document.createElement('span');
+                        _tmp.innerHTML = _iconHtml;
+                        _iconEl.parentNode.replaceChild(_tmp.firstChild, _iconEl);
+                    } else {
+                        var _tmp2 = document.createElement('span');
+                        _tmp2.innerHTML = _iconHtml;
+                        li.insertBefore(_tmp2.firstChild, li.firstChild);
+                    }
+                } catch(e) {}
+            }
+        }
+
         // mark where meta came from and timestamp
         li._meta_from_sse = (source === 'sse');
         li._meta_ts = Date.now();
@@ -966,6 +994,10 @@ function conectarSSE(coopId) {
             const uid = String(msg._id);
             const li = document.getElementById(uid);
             if (!li) return;
+
+            // Mark that this unit's ignicionf was set by a live SSE event.
+            // applyMetaToLi will not overwrite this with a stale DB value.
+            li._ignicion_from_sse = true;
 
             // Persist into currentU so future full re-renders include the last known value
             if (li.currentU) {
@@ -1718,6 +1750,30 @@ $("#velocimetro").myfunc({divFact:10});
             appendUnidades = function (data) {
                 _orig_appendUnidades(data);
                 setTimeout(fetchMetaForVisibleUnitsPostAppend, 50);
+
+                // Safety net: re-inject ignition icon for any unit that has ignicionf
+                // in case the main loop missed it or the LI was already in DOM.
+                setTimeout(function() {
+                    try {
+                        if (!data || !data.unidades) return;
+                        for (var _i = 0; _i < data.unidades.length; _i++) {
+                            var _u = data.unidades[_i];
+                            var _ignf = _u.ignicionf;
+                            if (_ignf !== 'on' && _ignf !== 'off') continue;
+                            var _li = document.getElementById(String(_u._id));
+                            if (!_li) continue;
+                            var _ignIconId = 'ignicion_' + _u._id;
+                            // Only inject if not already present (main loop already added it)
+                            if (document.getElementById(_ignIconId)) continue;
+                            var _ignHtml = (_ignf === 'on')
+                                ? '<i id="' + _ignIconId + '" class="fa fa-dot-circle-o" title="IG ON"  style="color:green; pointer-events:none; cursor:default;"></i>&nbsp;&nbsp;'
+                                : '<i id="' + _ignIconId + '" class="fa fa-dot-circle-o" title="IG OFF" style="color:red;   pointer-events:none; cursor:default;"></i>&nbsp;&nbsp;';
+                            var _tmpI = document.createElement('span');
+                            _tmpI.innerHTML = _ignHtml;
+                            _li.insertBefore(_tmpI.firstChild, _li.firstChild);
+                        }
+                    } catch(e) {}
+                }, 10);
             };
             for(var i=currentIndex;i<recorrido.length;i++)
             {
@@ -3467,8 +3523,22 @@ $("#velocimetro").myfunc({divFact:10});
                     currentLi.currentFecha = currentFecha;
                     currentLi.onclick = function () {
                         selectUnidad(this.currentU,this.currentFechagps,this.currentFecha,1);
-                        //velocimetro_change(data.unidades[i].velocidad_actual);
                     };
+
+                    // Inject ignition icon immediately from DB value so it shows on initial load.
+                    // The switch/case HTML never includes it, so we must add it here too.
+                    try {
+                        var _ignf = data.unidades[i].ignicionf;
+                        if (_ignf === 'on' || _ignf === 'off') {
+                            var _ignIconId = 'ignicion_' + data.unidades[i]._id;
+                            var _ignHtml = (_ignf === 'on')
+                                ? '<i id="' + _ignIconId + '" class="fa fa-dot-circle-o" title="IG ON"  style="color:green; pointer-events:none; cursor:default;"></i>&nbsp;&nbsp;'
+                                : '<i id="' + _ignIconId + '" class="fa fa-dot-circle-o" title="IG OFF" style="color:red;   pointer-events:none; cursor:default;"></i>&nbsp;&nbsp;';
+                            var _tmpIgn = document.createElement('span');
+                            _tmpIgn.innerHTML = _ignHtml;
+                            currentLi.insertBefore(_tmpIgn.firstChild, currentLi.firstChild);
+                        }
+                    } catch(e) {}
                 }
             }
     
