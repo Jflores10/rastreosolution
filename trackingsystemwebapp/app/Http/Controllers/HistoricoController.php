@@ -161,10 +161,15 @@ class HistoricoController extends Controller
             // Batch fetch ignicionf from unidades (single query, only the field we need)
             $unidadesIgnicion = Unidad::whereIn('_id', $toFetch)
                 ->where('estado', 'A')
-                ->get(['_id', 'ignicionf']);
+                ->get(['_id', 'ignicionf', 'tiempo_power', 'tiempo_power_update']);
             $ignicionByUnidad = [];
+            $tiempoPowerByUnidad = [];
             foreach ($unidadesIgnicion as $u) {
                 $ignicionByUnidad[(string)$u->_id] = $u->ignicionf ?? null;
+                $tiempoPowerByUnidad[(string)$u->_id] = [
+                    'tiempo_power'        => $u->tiempo_power ?? 0,
+                    'tiempo_power_update' => $u->tiempo_power_update ?? null,
+                ];
             }
 
             // Batch fetch despachos for the given unidades within today range
@@ -257,6 +262,32 @@ class HistoricoController extends Controller
                 // ignicionf: always include when present (on/off) so the front-end can show the icon on initial load
                 $ignf = $ignicionByUnidad[$uid] ?? null;
                 if ($ignf === 'on' || $ignf === 'off') $meta['ignicionf'] = $ignf;
+
+                // tiempo_power: incluir siempre para que el front pueda evaluar si el bolt debe parpadear
+                $tpData = $tiempoPowerByUnidad[$uid] ?? ['tiempo_power' => 0, 'tiempo_power_update' => null];
+                $tp  = (float)($tpData['tiempo_power'] ?? 0);
+                $tpu = $tpData['tiempo_power_update'];
+
+                // Serializar tiempo_power_update a ISO 8601 legible por JS
+                $tpu_iso = null;
+                if ($tpu !== null) {
+                    try {
+                        $tpu_iso = $tpu->toDateTime()->format('Y-m-d\TH:i:s\Z');
+                    } catch (\Exception $e) { $tpu_iso = null; }
+                }
+
+                // Calcular horas restantes y exponer bolt_activo para que el JS no tenga que calcular
+                $bolt_activo = false;
+                if ($tp > 0 && $tpu_iso !== null) {
+                    $now = new DateTime('now', new \DateTimeZone('UTC'));
+                    $fechaUpdate = new DateTime($tpu_iso, new \DateTimeZone('UTC'));
+                    $horasTranscurridas = ($now->getTimestamp() - $fechaUpdate->getTimestamp()) / 3600;
+                    $bolt_activo = ($tp - $horasTranscurridas) > 0;
+                }
+
+                $meta['tiempo_power']        = $tp;
+                $meta['tiempo_power_update'] = $tpu_iso;
+                $meta['bolt_activo']         = $bolt_activo;
 
                 // cache short-term (even an empty object to avoid hot loops)
                 try {

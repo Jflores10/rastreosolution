@@ -707,6 +707,34 @@ function applyMetaToLi(uid, meta, source) {
         li._meta_from_sse = (source === 'sse');
         li._meta_ts = Date.now();
 
+        // tiempo_power / bolt_activo: aplicar desde meta batch (getUnidadesMeta)
+        // Solo aplica cuando viene del batch (no SSE), ya que el SSE tiene su propio handler
+        if (source !== 'sse' && meta.bolt_activo !== undefined) {
+            var _tpMeta  = (meta.tiempo_power != null) ? parseFloat(meta.tiempo_power) : 0;
+            var _tpuMeta = null;
+            if (meta.tiempo_power_update) {
+                try {
+                    _tpuMeta = new Date(meta.tiempo_power_update);
+                    if (isNaN(_tpuMeta.getTime())) _tpuMeta = null;
+                } catch(e) { _tpuMeta = null; }
+            }
+            // Solo actualizar si el LI no tiene ya un valor más reciente del SSE
+            if (!li._is_power_blink || !li._tiempo_power_update) {
+                li._tiempo_power        = _tpMeta;
+                li._tiempo_power_update = _tpuMeta;
+                li._is_power_blink      = !!meta.bolt_activo;
+                // Aplicar/quitar clase bolt de inmediato
+                var _boltMetaEl = li.querySelector('.fa-bolt');
+                if (_boltMetaEl) {
+                    if (li._is_power_blink) {
+                        _boltMetaEl.classList.add('bolt-power-blink');
+                    } else {
+                        _boltMetaEl.classList.remove('bolt-power-blink');
+                    }
+                }
+            }
+        }
+
         updateUnidadInList(li.currentU);
     } catch (e) {
         console.warn('applyMetaToLi failed', e);
@@ -3537,7 +3565,20 @@ $("#velocimetro").myfunc({divFact:10});
                     };
                     // Establecer estado inicial del bolt blink según tiempo_power guardado en BD
                     var _tp  = (currentU.tiempo_power != null) ? parseFloat(currentU.tiempo_power) : 0;
-                    var _tpu = currentU.tiempo_power_update ? new Date(currentU.tiempo_power_update) : null;
+                    var _tpuRaw = currentU.tiempo_power_update;
+                    // tiempo_power_update puede llegar como string ISO, objeto {$date:...} de MongoDB, o null
+                    var _tpu = null;
+                    if (_tpuRaw) {
+                        try {
+                            // MongoDB extended JSON: {"$date": "..."} o {"$date": <ms>}
+                            if (typeof _tpuRaw === 'object' && _tpuRaw.$date) {
+                                _tpu = new Date(_tpuRaw.$date);
+                            } else {
+                                _tpu = new Date(_tpuRaw);
+                            }
+                            if (isNaN(_tpu.getTime())) _tpu = null;
+                        } catch(e) { _tpu = null; }
+                    }
                     if (_tp > 0 && _tpu) {
                         var _horasRestI = _tp - ((Date.now() - _tpu.getTime()) / 3600000);
                         if (_horasRestI > 0) {
