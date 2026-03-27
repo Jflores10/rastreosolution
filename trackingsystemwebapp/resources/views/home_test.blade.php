@@ -708,30 +708,25 @@ function applyMetaToLi(uid, meta, source) {
         li._meta_ts = Date.now();
 
         // tiempo_power / bolt_activo: aplicar desde meta batch (getUnidadesMeta)
-        // Solo aplica cuando viene del batch (no SSE), ya que el SSE tiene su propio handler
+        // Misma lógica que ruta_actual: se guarda en currentU para que updateUnidadInList
+        // lo lea directamente, igual que lee ruta_actual desde currentU.
         if (source !== 'sse' && meta.bolt_activo !== undefined) {
             var _tpMeta  = (meta.tiempo_power != null) ? parseFloat(meta.tiempo_power) : 0;
-            var _tpuMeta = null;
-            if (meta.tiempo_power_update) {
-                try {
-                    _tpuMeta = new Date(meta.tiempo_power_update);
-                    if (isNaN(_tpuMeta.getTime())) _tpuMeta = null;
-                } catch(e) { _tpuMeta = null; }
-            }
-            // Solo actualizar si el LI no tiene ya un valor más reciente del SSE
-            if (!li._is_power_blink || !li._tiempo_power_update) {
+            var _tpuMeta = (meta.tiempo_power_update != null) ? meta.tiempo_power_update : null;
+
+            // Aplicar si:
+            //  a) currentU no tiene tiempo_power aún (recarga de página / primera carga)
+            //  b) bolt_activo es false → el servidor dice que ya expiró, siempre limpiar
+            var _noTienePower = !li.currentU.tiempo_power || !li.currentU.tiempo_power_update;
+            var _debeApagar   = !meta.bolt_activo;
+            if (_noTienePower || _debeApagar) {
+                // Guardar en currentU exactamente igual que ruta_actual
+                li.currentU.tiempo_power        = _tpMeta;
+                li.currentU.tiempo_power_update = _tpuMeta;
+                // Mantener también en el LI para el timer periódico (60s)
                 li._tiempo_power        = _tpMeta;
-                li._tiempo_power_update = _tpuMeta;
+                li._tiempo_power_update = _tpuMeta ? new Date(_tpuMeta) : null;
                 li._is_power_blink      = !!meta.bolt_activo;
-                // Aplicar/quitar clase bolt de inmediato
-                var _boltMetaEl = li.querySelector('.fa-bolt');
-                if (_boltMetaEl) {
-                    if (li._is_power_blink) {
-                        _boltMetaEl.classList.add('bolt-power-blink');
-                    } else {
-                        _boltMetaEl.classList.remove('bolt-power-blink');
-                    }
-                }
             }
         }
 
@@ -1194,6 +1189,9 @@ function updateUnidadInList(unidad) {
             if ((!unidad.bitacora || unidad.bitacora === '') && prev.bitacora) unidad.bitacora = prev.bitacora;
             // Preserve ignicionf: never lose it when GTFRI payload arrives without it
             if (!unidad.ignicionf && prev.ignicionf) unidad.ignicionf = prev.ignicionf;
+            // Preserve tiempo_power: igual que ruta_actual, se mantiene en currentU entre updates
+            if ((unidad.tiempo_power == null || unidad.tiempo_power === 0) && prev.tiempo_power) unidad.tiempo_power = prev.tiempo_power;
+            if (!unidad.tiempo_power_update && prev.tiempo_power_update) unidad.tiempo_power_update = prev.tiempo_power_update;
             
             // Preserve sentido (direction) if incoming payload lacks it
             //if ((!unidad.sentido || unidad.sentido === '') && prev.sentido) unidad.sentido = prev.sentido;
@@ -1457,20 +1455,29 @@ function updateUnidadInList(unidad) {
             if (bEl) bEl.classList.add('marker-buff-blink');
         } catch (e) {}
     }
-    // Si el bolt estaba parpadeando (tiempo_power activo), re-evaluar y re-aplicar la clase
-    if (li._is_power_blink) {
-        try {
-            // Re-evaluar horas restantes antes de re-aplicar (puede haber expirado)
-            if (li._tiempo_power_update) {
-                const _horasRest = (li._tiempo_power || 0) - ((Date.now() - new Date(li._tiempo_power_update).getTime()) / 3600000);
-                li._is_power_blink = _horasRest > 0;
+    // Evaluar bolt-power-blink leyendo tiempo_power desde currentU (igual que ruta_actual),
+    // con fallback a las propiedades del LI (establecidas por el SSE unidad.power).
+    try {
+        var _tp  = (unidad.tiempo_power != null) ? parseFloat(unidad.tiempo_power) : (li._tiempo_power || 0);
+        var _tpu = unidad.tiempo_power_update || (li._tiempo_power_update ? new Date(li._tiempo_power_update).toISOString() : null);
+        var _boltActivo = false;
+        if (_tp > 0 && _tpu) {
+            var _horasRest = _tp - ((Date.now() - new Date(_tpu).getTime()) / 3600000);
+            _boltActivo = _horasRest > 0;
+        }
+        // Sincronizar las propiedades del LI con lo que tenemos en currentU
+        li._tiempo_power        = _tp;
+        li._tiempo_power_update = _tpu ? new Date(_tpu) : null;
+        li._is_power_blink      = _boltActivo;
+        var boltEl = document.getElementById('bolt_' + unidad._id);
+        if (boltEl) {
+            if (_boltActivo) {
+                boltEl.classList.add('bolt-power-blink');
+            } else {
+                boltEl.classList.remove('bolt-power-blink');
             }
-            if (li._is_power_blink) {
-                var boltEl = document.getElementById('bolt_' + unidad._id);
-                if (boltEl) boltEl.classList.add('bolt-power-blink');
-            }
-        } catch (e) {}
-    }
+        }
+    } catch (e) {}
     li.currentU = unidad;
     li.currentFechagps = fecha_gps_marker;
     li.currentFechagpsC = fecha_gps_marker_c;
@@ -3596,6 +3603,10 @@ $("#velocimetro").myfunc({divFact:10});
             $('#cantidad_movimiento').text(unidad_movimiento);
             $('#cantidad_e').text(unidad_e);
             $('#cantidad_stop').text(unidad_stop);
+
+            // Aplicar tiempo_power/bolt_activo desde getUnidadesMeta inmediatamente
+            // al cargar/recargar la página, sin esperar el setInterval de 20s.
+            setTimeout(function () { refreshVisibleUnidadesMeta(); }, 0);
         }
 
     }
