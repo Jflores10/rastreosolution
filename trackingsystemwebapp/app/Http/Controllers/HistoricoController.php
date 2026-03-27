@@ -142,14 +142,10 @@ class HistoricoController extends Controller
         $desde = Carbon::createFromFormat('Y-m-d H:i:s', date('Y-m-d 00:00:00'));
         $hasta = Carbon::createFromFormat('Y-m-d H:i:s', date('Y-m-d 23:59:59'));
 
-        // force_refresh=1 skips the PHP-side cache (used by the front-end on initial page load
-        // right after appendUnidades so stale cached data never blocks the bolt from blinking).
-        $forceRefresh = $request->input('force_refresh', 0);
-
-        // First, try to fill from cache (unless caller asked for a forced refresh)
+        // First, try to fill from cache
         $toFetch = [];
         foreach ($ids as $uid) {
-            $cached = (!$forceRefresh) ? Cache::get('unidades_meta_' . $uid) : null;
+            $cached = Cache::get('unidades_meta_' . $uid);
             if ($cached) {
                 $result[$uid] = $cached;
             } else {

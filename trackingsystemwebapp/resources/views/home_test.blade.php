@@ -714,12 +714,20 @@ function applyMetaToLi(uid, meta, source) {
             var _tpMeta  = (meta.tiempo_power != null) ? parseFloat(meta.tiempo_power) : 0;
             var _tpuMeta = (meta.tiempo_power_update != null) ? meta.tiempo_power_update : null;
 
-            // Siempre actualizar: el servidor ya calculó bolt_activo con datos frescos
-            li.currentU.tiempo_power        = _tpMeta;
-            li.currentU.tiempo_power_update = _tpuMeta;
-            li._tiempo_power        = _tpMeta;
-            li._tiempo_power_update = _tpuMeta ? new Date(_tpuMeta) : null;
-            li._is_power_blink      = !!meta.bolt_activo;
+            // Aplicar si:
+            //  a) currentU no tiene tiempo_power aún (recarga de página / primera carga)
+            //  b) bolt_activo es false → el servidor dice que ya expiró, siempre limpiar
+            var _noTienePower = !li.currentU.tiempo_power || !li.currentU.tiempo_power_update;
+            var _debeApagar   = !meta.bolt_activo;
+            if (_noTienePower || _debeApagar) {
+                // Guardar en currentU exactamente igual que ruta_actual
+                li.currentU.tiempo_power        = _tpMeta;
+                li.currentU.tiempo_power_update = _tpuMeta;
+                // Mantener también en el LI para el timer periódico (60s)
+                li._tiempo_power        = _tpMeta;
+                li._tiempo_power_update = _tpuMeta ? new Date(_tpuMeta) : null;
+                li._is_power_blink      = !!meta.bolt_activo;
+            }
         }
 
         updateUnidadInList(li.currentU);
@@ -728,12 +736,10 @@ function applyMetaToLi(uid, meta, source) {
     }
 }
 
-function fetchUnidadesMeta(ids, forceRefresh) {
+function fetchUnidadesMeta(ids) {
     return new Promise((resolve) => {
         if (!ids || ids.length === 0) return resolve({});
-        var payload = { unidad_ids: ids };
-        if (forceRefresh) payload.force_refresh = 1;
-        $.post('/historico/unidades-meta', payload, function (data) {
+        $.post('/historico/unidades-meta', { unidad_ids: ids }, function (data) {
             resolve(data || {});
         }, 'json').fail(function () {
             resolve({});
@@ -741,7 +747,7 @@ function fetchUnidadesMeta(ids, forceRefresh) {
     });
 }
 
-function refreshVisibleUnidadesMeta(forceRefresh) {
+function refreshVisibleUnidadesMeta() {
     try {
         var lis = Array.from(document.querySelectorAll('#ul_unidades li'));
         var now = Date.now();
@@ -749,14 +755,14 @@ function refreshVisibleUnidadesMeta(forceRefresh) {
         lis.forEach(function (li) {
             var uid = li.id;
             var cache = unidadesMetaCache[uid];
-            if (forceRefresh || !cache || (now - cache.ts) > META_TTL_MS) {
+            if (!cache || (now - cache.ts) > META_TTL_MS) {
                 toFetch.push(uid);
             }
         });
 
         if (toFetch.length === 0) return;
 
-        fetchUnidadesMeta(toFetch, forceRefresh).then(function (resp) {
+        fetchUnidadesMeta(toFetch).then(function (resp) {
             Object.keys(resp).forEach(function (uid) {
                 var m = resp[uid];
                 if (!m) return;
@@ -874,19 +880,18 @@ function conectarSSE(coopId) {
                 if (anyMeta) {
                     unidadesMetaCache[data._id] = { data: meta, ts: Date.now() };
                     applyMetaToLi(data._id, meta, 'sse');
-                } else {
-                    // Sin meta de ruta: actualizar lista directamente preservando currentU
-                    updateUnidadInList(data);
                 }
+
+                updateUnidadInList(data);
 
                 if (!unidadesMetaFetchedOnce[data._id]) {
                     unidadesMetaFetchedOnce[data._id] = true;
-                    fetchUnidadesMeta([data._id], true).then(function(resp) {
+                    fetchUnidadesMeta([data._id]).then(function(resp) {
                         try {
                             var serverMeta = resp && resp[data._id] ? resp[data._id] : null;
                             if (serverMeta) {
                                 unidadesMetaCache[data._id] = { data: serverMeta, ts: Date.now() };
-                                applyMetaToLi(data._id, serverMeta, 'batch');
+                                applyMetaToLi(data._id, serverMeta, 'sse');
                             }
                         } catch (e) { console.warn('apply server meta after sse failed', e); }
                     }).catch(function(e){ /* ignore */ });
@@ -1769,8 +1774,42 @@ $("#velocimetro").myfunc({divFact:10});
                 
             }
 
-            // appendUnidades ya limpia su caché y llama refreshVisibleUnidadesMeta internamente.
-            // No se necesita fetch adicional post-append aquí.
+            // After building the UL list, fetch meta for visible units that are missing/expired in cache
+            function fetchMetaForVisibleUnitsPostAppend() {
+                try {
+                    var lis = Array.from(document.querySelectorAll('#ul_unidades li'));
+                    var now = Date.now();
+                    var toFetch = [];
+                    lis.forEach(function (li) {
+                        var uid = li.id;
+                        var cache = unidadesMetaCache[uid];
+                        if (!cache || (now - cache.ts) > META_TTL_MS) {
+                            toFetch.push(uid);
+                        }
+                    });
+                    if (toFetch.length === 0) return;
+                    fetchUnidadesMeta(toFetch).then(function (resp) {
+                        Object.keys(resp).forEach(function (uid) {
+                            var m = resp[uid];
+                            if (!m) return;
+                            unidadesMetaCache[uid] = { data: m, ts: Date.now() };
+                            // apply conservatively (batch source)
+                            applyMetaToLi(uid, m, 'batch');
+                        });
+                    });
+                } catch (e) {
+                    console.warn('fetchMetaForVisibleUnitsPostAppend failed', e);
+                }
+            }
+
+            // Hook into appendUnidades by running after the function completes whenever called
+            // (appendUnidades is called in multiple places; this keeps a single safe post-step)
+            // We call it with a small delay to ensure DOM is updated
+            var _orig_appendUnidades = appendUnidades;
+            appendUnidades = function (data) {
+                _orig_appendUnidades(data);
+                setTimeout(fetchMetaForVisibleUnitsPostAppend, 50);
+            };
             for(var i=currentIndex;i<recorrido.length;i++)
             {
                 posicion={ lat: parseFloat(recorrido[i].lat), lng : parseFloat(recorrido[i].lng) };
@@ -2557,7 +2596,7 @@ $("#velocimetro").myfunc({divFact:10});
         }
     }
 
-    setInterval(verifyGoogleMSG, 2000, null);
+    setInterval(verifyGoogleMSG,100,null);
 
     function setMarcadorUnidad(unidad, fecha_gps_, fecha_servidor_, _is) {
 
@@ -3570,10 +3609,8 @@ $("#velocimetro").myfunc({divFact:10});
             setTimeout(function () {
                 for (var _j = 0; _j < data.unidades.length; _j++) {
                     delete unidadesMetaCache[data.unidades[_j]._id];
-                    delete unidadesMetaFetchedOnce[data.unidades[_j]._id];
                 }
-                // force_refresh=true: omite el caché PHP del servidor para obtener datos frescos
-                refreshVisibleUnidadesMeta(true);
+                refreshVisibleUnidadesMeta();
             }, 0);
         }
 
