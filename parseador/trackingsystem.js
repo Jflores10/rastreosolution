@@ -1366,7 +1366,7 @@ function onClientConnected(socket) {
             const prevUpdate = document.tiempo_power_update ? new Date(document.tiempo_power_update) : now;
             const horasTranscurridas = (now.getTime() - prevUpdate.getTime()) / (1000 * 3600);
             const tiempoPowerRestante = Math.max(0, prevTiempoPower - horasTranscurridas);
-            const nuevoTiempoPower = tiempoPowerRestante + (5 / 60); // PRUEBAS: 5 min (producción: 24h)
+            const nuevoTiempoPower = tiempoPowerRestante + 24;
 
             dbTrackingSystem.collection('recorridos').insertOne({
               imei: data[imei],
@@ -1448,7 +1448,7 @@ function onClientConnected(socket) {
             const prevUpdate = document.tiempo_power_update ? new Date(document.tiempo_power_update) : now;
             const horasTranscurridas = (now.getTime() - prevUpdate.getTime()) / (1000 * 3600);
             const tiempoPowerRestante = Math.max(0, prevTiempoPower - horasTranscurridas);
-            const nuevoTiempoPower = tiempoPowerRestante + (5 / 60); // PRUEBAS: 5 min (producción: 24h)
+            const nuevoTiempoPower = tiempoPowerRestante + 24;
 
             dbTrackingSystem.collection('recorridos').insertOne({
               imei: data[imei],

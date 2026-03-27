@@ -757,8 +757,8 @@ function refreshVisibleUnidadesMeta() {
 // run periodic refresh to keep non-route meta up-to-date; route fields will not overwrite an existing route
 setInterval(refreshVisibleUnidadesMeta, 20000);
 
-// Timer periódico: cada 10 s verifica si algún bolt con tiempo_power activo ya expiró
-// y detiene el parpadeo automáticamente. (PRUEBAS: 10 s — producción: 60000)
+// Timer periódico: cada 60 s verifica si algún bolt con tiempo_power activo ya expiró
+// y detiene el parpadeo automáticamente.
 setInterval(function () {
     document.querySelectorAll('#ul_unidades li').forEach(function (li) {
         if (!li._is_power_blink) return;
@@ -773,7 +773,7 @@ setInterval(function () {
             if (_boltEl) _boltEl.classList.remove('bolt-power-blink');
         }
     });
-}, 10000); // PRUEBAS: 10 s (producción: 60000)
+}, 60000);
 
 /**
  * Activa o desactiva el parpadeo del fa-map-marker en el LI de una unidad.
