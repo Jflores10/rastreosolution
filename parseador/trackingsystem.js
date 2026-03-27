@@ -1360,13 +1360,9 @@ function onClientConnected(socket) {
             const lat = toFloat(data[latitude]);
             const lng = toFloat(data[longitude]);
 
-            // ── Calcular tiempo_power acumulado ──
-            // Restar horas transcurridas desde la última actualización, luego sumar 24h
-            const prevTiempoPower = (document.tiempo_power != null) ? parseFloat(document.tiempo_power) : 0;
-            const prevUpdate = document.tiempo_power_update ? new Date(document.tiempo_power_update) : now;
-            const horasTranscurridas = (now.getTime() - prevUpdate.getTime()) / (1000 * 3600);
-            const tiempoPowerRestante = Math.max(0, prevTiempoPower - horasTranscurridas);
-            const nuevoTiempoPower = tiempoPowerRestante + 24;
+            // ── Resetear tiempo_power a 24h fijas ──
+            // Cada GTMPF reinicia el contador a 24 horas (no acumula)
+            const nuevoTiempoPower = 24;
 
             dbTrackingSystem.collection('recorridos').insertOne({
               imei: data[imei],
@@ -1443,12 +1439,9 @@ function onClientConnected(socket) {
             const lat = toFloat(data[latitude]);
             const lng = toFloat(data[longitude]);
 
-            // ── Calcular tiempo_power acumulado ──
-            const prevTiempoPower = (document.tiempo_power != null) ? parseFloat(document.tiempo_power) : 0;
-            const prevUpdate = document.tiempo_power_update ? new Date(document.tiempo_power_update) : now;
-            const horasTranscurridas = (now.getTime() - prevUpdate.getTime()) / (1000 * 3600);
-            const tiempoPowerRestante = Math.max(0, prevTiempoPower - horasTranscurridas);
-            const nuevoTiempoPower = tiempoPowerRestante + 24;
+            // ── Resetear tiempo_power a 24h fijas ──
+            // Cada GTMPN reinicia el contador a 24 horas (no acumula)
+            const nuevoTiempoPower = 24;
 
             dbTrackingSystem.collection('recorridos').insertOne({
               imei: data[imei],
