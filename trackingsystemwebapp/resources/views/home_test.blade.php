@@ -2596,7 +2596,7 @@ $("#velocimetro").myfunc({divFact:10});
         }
     }
 
-    setInterval(verifyGoogleMSG,100,null);
+    setInterval(verifyGoogleMSG,2000,null);
 
     function setMarcadorUnidad(unidad, fecha_gps_, fecha_servidor_, _is) {
 
