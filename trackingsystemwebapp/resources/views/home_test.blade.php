@@ -3604,9 +3604,14 @@ $("#velocimetro").myfunc({divFact:10});
             $('#cantidad_e').text(unidad_e);
             $('#cantidad_stop').text(unidad_stop);
 
-            // Aplicar tiempo_power/bolt_activo desde getUnidadesMeta inmediatamente
-            // al cargar/recargar la página, sin esperar el setInterval de 20s.
-            setTimeout(function () { refreshVisibleUnidadesMeta(); }, 0);
+            // Forzar fetch inmediato de meta (tiempo_power, bolt_activo, ruta, etc.)
+            // limpiando la caché de las unidades recién pintadas para ignorar el TTL.
+            setTimeout(function () {
+                for (var _j = 0; _j < data.unidades.length; _j++) {
+                    delete unidadesMetaCache[data.unidades[_j]._id];
+                }
+                refreshVisibleUnidadesMeta();
+            }, 0);
         }
 
     }
