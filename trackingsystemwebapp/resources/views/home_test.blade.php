@@ -2562,7 +2562,7 @@ $("#velocimetro").myfunc({divFact:10});
         }
     }
 
-    setInterval(verifyGoogleMSG, 2000, null);
+    setInterval(verifyGoogleMSG, 100, null);
 
     function setMarcadorUnidad(unidad, fecha_gps_, fecha_servidor_, _is) {
 
@@ -3571,12 +3571,13 @@ $("#velocimetro").myfunc({divFact:10});
             $('#cantidad_stop').text(unidad_stop);
 
             // Forzar fetch inmediato de meta (tiempo_power, bolt_activo, ruta, etc.)
-            // Limpiar caché Y unidadesMetaFetchedOnce para que el fetch ocurra de inmediato.
-            for (var _j = 0; _j < data.unidades.length; _j++) {
-                delete unidadesMetaCache[data.unidades[_j]._id];
-                delete unidadesMetaFetchedOnce[data.unidades[_j]._id];
-            }
-            refreshVisibleUnidadesMeta();
+            // limpiando la caché de las unidades recién pintadas para ignorar el TTL.
+            setTimeout(function () {
+                for (var _j = 0; _j < data.unidades.length; _j++) {
+                    delete unidadesMetaCache[data.unidades[_j]._id];
+                }
+                refreshVisibleUnidadesMeta();
+            }, 0);
         }
 
     }
