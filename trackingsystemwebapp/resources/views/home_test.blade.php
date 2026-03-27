@@ -3571,13 +3571,12 @@ $("#velocimetro").myfunc({divFact:10});
             $('#cantidad_stop').text(unidad_stop);
 
             // Forzar fetch inmediato de meta (tiempo_power, bolt_activo, ruta, etc.)
-            // limpiando la caché de las unidades recién pintadas para ignorar el TTL.
-            setTimeout(function () {
-                for (var _j = 0; _j < data.unidades.length; _j++) {
-                    delete unidadesMetaCache[data.unidades[_j]._id];
-                }
-                refreshVisibleUnidadesMeta();
-            }, 0);
+            // Limpiar caché Y unidadesMetaFetchedOnce para que el fetch ocurra de inmediato.
+            for (var _j = 0; _j < data.unidades.length; _j++) {
+                delete unidadesMetaCache[data.unidades[_j]._id];
+                delete unidadesMetaFetchedOnce[data.unidades[_j]._id];
+            }
+            refreshVisibleUnidadesMeta();
         }
 
     }
