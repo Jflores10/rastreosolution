@@ -1774,42 +1774,6 @@ $("#velocimetro").myfunc({divFact:10});
                 
             }
 
-            // After building the UL list, fetch meta for visible units that are missing/expired in cache
-            function fetchMetaForVisibleUnitsPostAppend() {
-                try {
-                    var lis = Array.from(document.querySelectorAll('#ul_unidades li'));
-                    var now = Date.now();
-                    var toFetch = [];
-                    lis.forEach(function (li) {
-                        var uid = li.id;
-                        var cache = unidadesMetaCache[uid];
-                        if (!cache || (now - cache.ts) > META_TTL_MS) {
-                            toFetch.push(uid);
-                        }
-                    });
-                    if (toFetch.length === 0) return;
-                    fetchUnidadesMeta(toFetch).then(function (resp) {
-                        Object.keys(resp).forEach(function (uid) {
-                            var m = resp[uid];
-                            if (!m) return;
-                            unidadesMetaCache[uid] = { data: m, ts: Date.now() };
-                            // apply conservatively (batch source)
-                            applyMetaToLi(uid, m, 'batch');
-                        });
-                    });
-                } catch (e) {
-                    console.warn('fetchMetaForVisibleUnitsPostAppend failed', e);
-                }
-            }
-
-            // Hook into appendUnidades by running after the function completes whenever called
-            // (appendUnidades is called in multiple places; this keeps a single safe post-step)
-            // We call it with a small delay to ensure DOM is updated
-            var _orig_appendUnidades = appendUnidades;
-            appendUnidades = function (data) {
-                _orig_appendUnidades(data);
-                setTimeout(fetchMetaForVisibleUnitsPostAppend, 50);
-            };
             for(var i=currentIndex;i<recorrido.length;i++)
             {
                 posicion={ lat: parseFloat(recorrido[i].lat), lng : parseFloat(recorrido[i].lng) };
