@@ -874,18 +874,19 @@ function conectarSSE(coopId) {
                 if (anyMeta) {
                     unidadesMetaCache[data._id] = { data: meta, ts: Date.now() };
                     applyMetaToLi(data._id, meta, 'sse');
+                } else {
+                    // Sin meta de ruta: actualizar lista directamente preservando currentU
+                    updateUnidadInList(data);
                 }
-
-                updateUnidadInList(data);
 
                 if (!unidadesMetaFetchedOnce[data._id]) {
                     unidadesMetaFetchedOnce[data._id] = true;
-                    fetchUnidadesMeta([data._id]).then(function(resp) {
+                    fetchUnidadesMeta([data._id], true).then(function(resp) {
                         try {
                             var serverMeta = resp && resp[data._id] ? resp[data._id] : null;
                             if (serverMeta) {
                                 unidadesMetaCache[data._id] = { data: serverMeta, ts: Date.now() };
-                                applyMetaToLi(data._id, serverMeta, 'sse');
+                                applyMetaToLi(data._id, serverMeta, 'batch');
                             }
                         } catch (e) { console.warn('apply server meta after sse failed', e); }
                     }).catch(function(e){ /* ignore */ });
