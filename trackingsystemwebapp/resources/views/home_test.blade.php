@@ -612,6 +612,16 @@ Dashboard
 <script>
 let SSE_CONNECTED = false;
 
+// IDs de unidades devueltas por /historicos cuando hay ruta(s) seleccionada(s).
+// null = sin filtro (mostrar/actualizar todas). Objeto = solo esas unidades en lista y mapa vía SSE.
+var unidadesIdsRutaActual = null;
+
+function unidadPerteneceAFiltroRutaActual(uid) {
+    if (unidadesIdsRutaActual === null) return true;
+    if (uid === undefined || uid === null) return false;
+    return !!unidadesIdsRutaActual[String(uid)];
+}
+
 function iniciarSSEGlobal() {
     if (SSE_CONNECTED) return;
     SSE_CONNECTED = true;
@@ -839,6 +849,7 @@ function conectarSSE(coopId) {
         try {
             const data = JSON.parse(evt.data);
             if (!(data && data._id)) return;
+            if (!unidadPerteneceAFiltroRutaActual(data._id)) return;
 
             // Si es BUFF: solo parpadear, NO actualizar nada en el front
             if (data.is_buff) {
@@ -907,6 +918,7 @@ function conectarSSE(coopId) {
         try {
             const data = JSON.parse(evt.data);
             console.log(data)
+            if (!data.unidad_id || !unidadPerteneceAFiltroRutaActual(data.unidad_id)) return;
 
             // Si es BUFF: solo parpadear, NO actualizar sentido ni lista
             if (data.is_buff) {
@@ -927,6 +939,7 @@ function conectarSSE(coopId) {
         try {
             const msg = JSON.parse(evt.data);
             console.log(msg)
+            if (!msg.unidad_id || !unidadPerteneceAFiltroRutaActual(msg.unidad_id)) return;
 
             const li = document.getElementById(msg.unidad_id);
             if (!li || !li.currentU) return;
@@ -953,6 +966,9 @@ function conectarSSE(coopId) {
         try {
             const msg = JSON.parse(evt.data);
             console.log(msg)
+            const _uidLoc = msg._id || msg.unidad_id;
+            if (!_uidLoc || !unidadPerteneceAFiltroRutaActual(_uidLoc)) return;
+
             zoomUnidad=true;
             zoomUnidadID=msg._id || msg.unidad_id;
             map.setZoom(30);
@@ -1036,6 +1052,7 @@ function conectarSSE(coopId) {
             const msg = JSON.parse(evt.data);
             console.log(msg);
             if (!msg || !msg._id) return;
+            if (!unidadPerteneceAFiltroRutaActual(msg._id)) return;
 
             const uid = String(msg._id);
             const li = document.getElementById(uid);
@@ -1084,6 +1101,7 @@ function conectarSSE(coopId) {
             const msg = JSON.parse(evt.data);
             console.log('unidad.power', msg);
             if (!msg || !msg._id) return;
+            if (!unidadPerteneceAFiltroRutaActual(msg._id)) return;
 
             const uid = String(msg._id);
             const li = document.getElementById(uid);
@@ -1130,7 +1148,7 @@ function conectarSSE(coopId) {
     sse.onmessage = (evt) => {
         try {
             const data = JSON.parse(evt.data);
-            if (data && data._id) {
+            if (data && data._id && unidadPerteneceAFiltroRutaActual(data._id)) {
                 actualizarUnidadRealtime(data);
                 updateUnidadInList(data);
             }
@@ -1161,6 +1179,9 @@ function actualizarUnidadRealtime(unidad) {
     ) {
         return;
     }
+    if (!unidadPerteneceAFiltroRutaActual(unidad._id)) {
+        return;
+    }
 
     const fakeFecha = {
         fecha_gps: unidad.fecha_gps ?? null,
@@ -1174,6 +1195,7 @@ function actualizarUnidadRealtime(unidad) {
 // Buscar el <li> de la unidad en la lista lateral y actualizar sus campos.
 function updateUnidadInList(unidad) {
     if (!unidad || !unidad._id) return;
+    if (!unidadPerteneceAFiltroRutaActual(unidad._id)) return;
 
     // Preserve previously-fetched meta (from unidades-meta) so WS updates that lack
     // ruta_* or bitacora do not wipe the values. If there is an existing LI with
@@ -1618,6 +1640,35 @@ $("#velocimetro").myfunc({divFact:10});
     var icon;
 
     var rutas_ids=[];
+
+    function tieneFiltroRutaActivo() {
+        if (typeof rutas_ids !== 'undefined' && rutas_ids.length > 0) return true;
+        try {
+            var rv = $('#ruta').val();
+            if (rv == null || rv === '') return false;
+            if ($.isArray(rv) && rv.length === 0) return false;
+            if ($.isArray(rv) && rv.length > 0) return true;
+            return !!rv;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function syncUnidadesIdsRutaActualDesdeHistorico(data) {
+        if (tieneFiltroRutaActivo()) {
+            unidadesIdsRutaActual = {};
+            if (data && data.unidades && data.unidades.length > 0) {
+                for (var _ix = 0; _ix < data.unidades.length; _ix++) {
+                    var _idU = data.unidades[_ix]._id;
+                    if (_idU != null && _idU !== undefined) {
+                        unidadesIdsRutaActual[String(_idU)] = true;
+                    }
+                }
+            }
+        } else {
+            unidadesIdsRutaActual = null;
+        }
+    }
     var playing = true;
     var currentIndex = 0;
     var processes = [];
@@ -2912,7 +2963,6 @@ $("#velocimetro").myfunc({divFact:10});
 	}
     function setUnidadesOnMap(coop,load)
     {
-
         if(load)
             $('#progress').modal('show');
 
@@ -2944,6 +2994,7 @@ $("#velocimetro").myfunc({divFact:10});
             }; */
             
 			$.post(url, param, function( data ) {
+                syncUnidadesIdsRutaActualDesdeHistorico(data);
                 let consulta=$("#consulta").val();
                 if(consulta =='')
                     appendUnidades(data);
@@ -3118,6 +3169,7 @@ $("#velocimetro").myfunc({divFact:10});
 
     function appendUnidades(data)
     {
+        syncUnidadesIdsRutaActualDesdeHistorico(data);
         clearPuntosImaginarios();
         var div_unidad=  $('#div-unidad');
         var div_mensaje=  $('#div-mensaje');
