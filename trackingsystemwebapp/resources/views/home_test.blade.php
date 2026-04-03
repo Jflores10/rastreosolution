@@ -1426,7 +1426,7 @@ function updateUnidadInList(unidad) {
             }
         }
     } catch (e) {}
-    var boltTitleAttr = boltTitle ? ' title="Últ. actualización: ' + boltTitle + '"' : '';
+    var boltTitleAttr = boltTitle ? ' title="Últ. actualización: ' + boltTitle + '"' : 'title="Últ. actualización: ---';
 
     // Generar exactamente el HTML con el mismo look según estado
     switch (estado) {
