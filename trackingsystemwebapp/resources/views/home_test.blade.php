@@ -40,7 +40,7 @@
         content: attr(data-pw-tip);
         position: absolute;
         top: 50%;
-        right: calc(100% + 8px);
+        left: calc(100% + 8px);
         transform: translateY(-50%);
         background: #1c2133;
         color: #cfe0ff;
