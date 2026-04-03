@@ -20,12 +20,14 @@
         animation: blink-marker 0.65s ease-in-out infinite;
     }
 
-    /* Power ON blinking bolt animation (GTMPN) */
+    /* Power ON blinking bolt animation (GTMPN)
+       La animación va SOLO en ::before (glifo FA). Si animamos opacity del <i> entero,
+       el ::after del tooltip hereda el parpadeo visualmente. */
     @keyframes blink-bolt {
         0%, 100% { opacity: 1; }
         50%       { opacity: 0.15; }
     }
-    .bolt-power-blink {
+    .bolt-power-blink::before {
         animation: blink-bolt 0.65s ease-in-out infinite;
     }
 
@@ -57,18 +59,8 @@
         box-shadow: 0 4px 16px rgba(0,0,0,0.55);
         border: 1px solid rgba(100,150,255,0.2);
         line-height: 1.6;
-        /* Cancelar cualquier animación heredada del padre */
-        animation: none !important;
     }
     .bolt-tip:hover::after {
-        opacity: 1;
-    }
-    /* Cuando el bolt parpadea, el ::after NO debe parpadear */
-    .bolt-tip.bolt-power-blink::after {
-        animation: none !important;
-        opacity: 0;
-    }
-    .bolt-tip.bolt-power-blink:hover::after {
         opacity: 1;
     }
     /* ──────────────────────────────────────────────────────────────────────── */
