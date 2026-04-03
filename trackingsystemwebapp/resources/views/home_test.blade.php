@@ -31,36 +31,39 @@
         animation: blink-bolt 0.65s ease-in-out infinite;
     }
 
-    /* ── Tooltip profesional para el ícono bolt ──────────────────────────── */
-    /* Nota: FontAwesome usa ::before en <i>, por eso usamos solo ::after      */
+    /* ── Tooltip bolt: se pinta en #pw-bolt-tooltip-floater (body, fixed) porque
+       #div-unidad tiene overflow-y:auto y recorta cualquier ::after del <i>. ─ */
     .bolt-tip {
         position: relative;
         display: inline-block;
         cursor: help;
     }
-    .bolt-tip::after {
-        content: attr(data-pw-tip);
-        position: absolute;
-        top: 50%;
-        left: calc(100% + 8px);
+    #pw-bolt-tooltip-floater {
+        position: fixed;
+        z-index: 2147483646;
+        left: 0;
+        top: 0;
         transform: translateY(-50%);
+        max-width: 380px;
+        white-space: normal;
+        word-break: break-word;
         background: #1c2133;
         color: #cfe0ff;
-        padding: 5px 12px;
+        padding: 6px 12px;
         border-radius: 5px;
         font-size: 11px;
         font-family: 'Courier New', monospace;
         letter-spacing: 0.3px;
-        white-space: nowrap;
-        opacity: 0;
+        line-height: 1.5;
+        box-shadow: 0 6px 24px rgba(0,0,0,0.55);
+        border: 1px solid rgba(100,150,255,0.25);
         pointer-events: none;
-        transition: opacity 0.18s ease;
-        z-index: 10001;
-        box-shadow: 0 4px 16px rgba(0,0,0,0.55);
-        border: 1px solid rgba(100,150,255,0.2);
-        line-height: 1.6;
+        visibility: hidden;
+        opacity: 0;
+        transition: opacity 0.12s ease;
     }
-    .bolt-tip:hover::after {
+    #pw-bolt-tooltip-floater.pw-bolt-tooltip-floater--visible {
+        visibility: visible;
         opacity: 1;
     }
     /* ──────────────────────────────────────────────────────────────────────── */
@@ -1644,6 +1647,58 @@ function updateUnidadInList(unidad) {
         $('#ruta').select2({
             width: '100%',
         });
+
+        /* Tooltip bolt: capa en body (no lo recorta #div-unidad overflow) */
+        (function () {
+            var floater = null;
+            function getFloater() {
+                if (!floater) {
+                    floater = document.createElement('div');
+                    floater.id = 'pw-bolt-tooltip-floater';
+                    floater.setAttribute('role', 'tooltip');
+                    document.body.appendChild(floater);
+                }
+                return floater;
+            }
+            function hideBoltTooltipFloater() {
+                if (floater) floater.classList.remove('pw-bolt-tooltip-floater--visible');
+            }
+            function showBoltTooltipFloater(anchor) {
+                var txt = (anchor.getAttribute('data-pw-tip') || '').trim();
+                var el = getFloater();
+                if (!txt) { hideBoltTooltipFloater(); return; }
+                el.textContent = txt;
+                var r = anchor.getBoundingClientRect();
+                var gap = 8;
+                el.style.transform = 'translateY(-50%)';
+                el.style.top = Math.round(r.top + r.height / 2) + 'px';
+                el.style.left = Math.round(r.right + gap) + 'px';
+                el.classList.add('pw-bolt-tooltip-floater--visible');
+                /* Ajustar si se sale por la derecha o abajo */
+                requestAnimationFrame(function () {
+                    var fr = el.getBoundingClientRect();
+                    var vw = window.innerWidth || document.documentElement.clientWidth;
+                    var vh = window.innerHeight || document.documentElement.clientHeight;
+                    if (fr.right > vw - 6) {
+                        el.style.left = Math.max(6, Math.round(r.left - fr.width - gap)) + 'px';
+                    }
+                    if (fr.bottom > vh - 6) {
+                        el.style.top = Math.max(6, Math.round(vh - fr.height - 6)) + 'px';
+                        el.style.transform = 'translateY(0)';
+                    }
+                    if (fr.top < 6) {
+                        el.style.top = '6px';
+                        el.style.transform = 'translateY(0)';
+                    }
+                });
+            }
+            $(document).on('mouseenter', '#ul_unidades .bolt-tip', function () {
+                showBoltTooltipFloater(this);
+            });
+            $(document).on('mouseleave', '#ul_unidades .bolt-tip', function () {
+                hideBoltTooltipFloater();
+            });
+        })();
     });
 
     function seleccionarTodos(seleccionar) {
