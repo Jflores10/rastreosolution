@@ -9,11 +9,11 @@ Route::group(['middleware' => ['auth', 'usuario']], function () {
     Route::get('sesiones', 'SesionController@index');
     Route::get('/', 'HomeController@index');
     Route::post('/home', 'HomeController@search');
-    Route::post('/home-test', 'HomeController@search');
+    Route::post('/homev2', 'HomeController@search');
 
     Route::get('/home', 'HomeController@index');
 
-    Route::get('/home-test', 'HomeController@index2');
+    Route::get('/homev2', 'HomeController@index2');
 
 
     Route::get('/puntos', 'HomeController@cargarPuntosControl');
