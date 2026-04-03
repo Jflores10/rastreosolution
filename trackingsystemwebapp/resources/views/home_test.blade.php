@@ -30,7 +30,7 @@
     }
 
     /* ── Tooltip profesional para el ícono bolt ──────────────────────────── */
-    /* Nota: FontAwesome usa ::before en <i>, por eso la flecha va en ::after  */
+    /* Nota: FontAwesome usa ::before en <i>, por eso usamos solo ::after      */
     .bolt-tip {
         position: relative;
         display: inline-block;
@@ -39,13 +39,12 @@
     .bolt-tip::after {
         content: attr(data-pw-tip);
         position: absolute;
-        bottom: calc(100% + 10px);
-        left: 50%;
-        transform: translateX(-50%);
-        /* Tooltip con pequeña flecha abajo simulada con border-image */
+        top: 50%;
+        right: calc(100% + 8px);
+        transform: translateY(-50%);
         background: #1c2133;
         color: #cfe0ff;
-        padding: 5px 12px 7px;
+        padding: 5px 12px;
         border-radius: 5px;
         font-size: 11px;
         font-family: 'Courier New', monospace;
@@ -58,11 +57,18 @@
         box-shadow: 0 4px 16px rgba(0,0,0,0.55);
         border: 1px solid rgba(100,150,255,0.2);
         line-height: 1.6;
-        /* Flecha inferior con outline en box-shadow */
-        -webkit-filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
-        filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
+        /* Cancelar cualquier animación heredada del padre */
+        animation: none !important;
     }
     .bolt-tip:hover::after {
+        opacity: 1;
+    }
+    /* Cuando el bolt parpadea, el ::after NO debe parpadear */
+    .bolt-tip.bolt-power-blink::after {
+        animation: none !important;
+        opacity: 0;
+    }
+    .bolt-tip.bolt-power-blink:hover::after {
         opacity: 1;
     }
     /* ──────────────────────────────────────────────────────────────────────── */
@@ -1461,14 +1467,7 @@ function updateUnidadInList(unidad) {
                 var _p = function(n) { return n < 10 ? '0' + n : String(n); };
                 var _fechaFmt = _p(_tpuD.getDate()) + '-' + _p(_tpuD.getMonth() + 1) + '-' + _tpuD.getFullYear() +
                                 ' ' + _p(_tpuD.getHours()) + ':' + _p(_tpuD.getMinutes());
-                var _tp = (unidad.tiempo_power != null) ? parseFloat(unidad.tiempo_power) : (li._tiempo_power || 0);
-                var _horasRest = (_tp > 0) ? (_tp - ((Date.now() - _tpuD.getTime()) / 3600000)) : null;
                 boltTipText = 'Activado: ' + _fechaFmt;
-                if (_horasRest !== null) {
-                    boltTipText += (_horasRest > 0)
-                        ? ' | ~' + _horasRest.toFixed(1) + 'h rest.'
-                        : ' | Expirado';
-                }
             }
         }
     } catch (e) {}
