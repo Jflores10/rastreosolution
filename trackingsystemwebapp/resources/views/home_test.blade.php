@@ -749,7 +749,24 @@ function applyMetaToLi(uid, meta, source) {
 function fetchUnidadesMeta(ids) {
     return new Promise((resolve) => {
         if (!ids || ids.length === 0) return resolve({});
-        $.post('/historico/unidades-meta', { unidad_ids: ids }, function (data) {
+
+        var payload = { unidad_ids: ids };
+
+        // Adjuntar rutas seleccionadas solo si hay alguna elegida
+        try {
+            var rutasVal = $('#ruta').val();
+            if (rutasVal != null && rutasVal !== '' &&
+                    !($.isArray(rutasVal) && rutasVal.length === 0)) {
+                payload.rutas_ids = $.isArray(rutasVal) ? rutasVal : [rutasVal];
+                // cooperativa_id requerido por el backend para tipo 1 (admin)
+                var coopEl = document.getElementById('cooperativa');
+                if (coopEl && coopEl.value) {
+                    payload.cooperativa_id = coopEl.value;
+                }
+            }
+        } catch (e) {}
+
+        $.post('/historico/unidades-meta', payload, function (data) {
             resolve(data || {});
         }, 'json').fail(function () {
             resolve({});
@@ -773,12 +790,46 @@ function refreshVisibleUnidadesMeta() {
         if (toFetch.length === 0) return;
 
         fetchUnidadesMeta(toFetch).then(function (resp) {
+            // ── Filtrado por ruta usando unidades_activas_ruta ────────────────
+            // Si hay ruta(s) seleccionada(s) y el servidor devolvió el listado,
+            // actualizamos unidadesIdsRutaActual y eliminamos del DOM los LIs
+            // de unidades cuyo despacho ya no está activo en esa ruta.
+            var hayRuta = false;
+            try {
+                var rv = $('#ruta').val();
+                hayRuta = rv != null && rv !== '' &&
+                          !($.isArray(rv) && rv.length === 0);
+            } catch (e) {}
+
+            if (hayRuta && Array.isArray(resp.unidades_activas_ruta)) {
+                var nuevoFiltro = {};
+                resp.unidades_activas_ruta.forEach(function (uid) {
+                    nuevoFiltro[String(uid)] = true;
+                });
+
+                // Actualizar filtro SSE
+                unidadesIdsRutaActual = nuevoFiltro;
+
+                // Remover LIs (y marcadores) de unidades ya sin despacho activo
+                lis.forEach(function (li) {
+                    if (!li.id || nuevoFiltro[String(li.id)]) return;
+                    try {
+                        var marker = getMarcadorUnidad(li.id);
+                        if (marker) marker.setMap(null);
+                    } catch (e) {}
+                    if (li.parentNode) li.parentNode.removeChild(li);
+                });
+            } else if (!hayRuta) {
+                unidadesIdsRutaActual = null;
+            }
+            // ─────────────────────────────────────────────────────────────────
+
+            // Aplicar meta individual a cada LI
             Object.keys(resp).forEach(function (uid) {
+                if (uid === 'unidades_activas_ruta') return;
                 var m = resp[uid];
                 if (!m) return;
-                // cache it
                 unidadesMetaCache[uid] = { data: m, ts: Date.now() };
-                // apply: DO NOT overwrite existing ruta on the LI (unless empty) — only apply route if LI has none
                 applyMetaToLi(uid, m, 'batch');
             });
         });

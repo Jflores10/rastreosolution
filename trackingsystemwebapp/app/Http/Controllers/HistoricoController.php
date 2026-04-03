@@ -142,6 +142,97 @@ class HistoricoController extends Controller
         $desde = Carbon::createFromFormat('Y-m-d H:i:s', date('Y-m-d 00:00:00'));
         $hasta = Carbon::createFromFormat('Y-m-d H:i:s', date('Y-m-d 23:59:59'));
 
+        // ── Unidades activas por ruta (bloque aditivo) ────────────────────────
+        // Si se envían rutas_ids, devuelve el array de unidades con despachos
+        // pendientes hoy en esas rutas, usando la misma lógica de store/getUnidades.
+        $rutasIds = $request->input('rutas_ids', []);
+        if (!is_array($rutasIds)) $rutasIds = array_filter([$rutasIds]);
+        $rutasIds = array_values(array_filter($rutasIds));
+
+        if (!empty($rutasIds)) {
+            $unidades_en_ruta = [];
+            $array_rutas      = [];
+
+            foreach ($rutasIds as $rut) {
+                $r = Ruta::find($rut);
+                if (!$r) continue;
+                if ($r->tipo_ruta != 'P') {
+                    array_push($array_rutas, $rut);
+                } else {
+                    $ruta_hijas = Ruta::where('ruta_padre', $r->_id)->get();
+                    foreach ($ruta_hijas as $hija) {
+                        array_push($array_rutas, $hija->_id);
+                    }
+                }
+            }
+
+            $array_aux = [];
+
+            if (!empty($array_rutas)) {
+                $tipoValor = Auth::user()->tipo_usuario->valor;
+
+                if ($tipoValor == 4 || $tipoValor == 5) {
+                    $unidades_pertenecientes = Auth::user()->unidades_pertenecientes;
+                    if ($unidades_pertenecientes) {
+                        $despachos_pendientes = Despacho::orderBy('fecha', 'asc')
+                            ->where('estado', 'P')
+                            ->whereIn('unidad_id', $unidades_pertenecientes)
+                            ->whereIn('ruta_id', $array_rutas)
+                            ->where('fecha', '>=', $desde)
+                            ->where('fecha', '<=', $hasta)
+                            ->get();
+
+                        foreach ($unidades_pertenecientes as $unidad_id) {
+                            foreach ($despachos_pendientes as $despacho) {
+                                if ($unidad_id == $despacho->unidad_id) {
+                                    array_push($unidades_en_ruta, $unidad_id);
+                                    break;
+                                }
+                            }
+                        }
+                        $array_aux = $unidades_en_ruta;
+                    }
+                } else {
+                    $cooperativa_id = ($tipoValor == 1)
+                        ? $request->input('cooperativa_id')
+                        : Auth::user()->cooperativa_id;
+
+                    if ($cooperativa_id) {
+                        $unidades_id2 = [];
+                        $unidades2    = Unidad::orderBy('placa', 'asc')
+                            ->where('cooperativa_id', $cooperativa_id)
+                            ->where('estado', 'A')
+                            ->get();
+
+                        foreach ($unidades2 as $unidad) {
+                            array_push($unidades_id2, (string) $unidad->_id);
+                        }
+
+                        $despachos_pendientes = Despacho::orderBy('fecha', 'asc')
+                            ->where('estado', 'P')
+                            ->whereIn('unidad_id', $unidades_id2)
+                            ->whereIn('ruta_id', $array_rutas)
+                            ->where('fecha', '>=', $desde)
+                            ->where('fecha', '<=', $hasta)
+                            ->get();
+
+                        foreach ($despachos_pendientes as $despacho) {
+                            for ($i = 0; $i < sizeof($unidades2); $i++) {
+                                if ((string)$unidades2[$i]->_id == (string)$despacho->unidad_id
+                                    && !in_array((string)$despacho->unidad_id, $array_aux)) {
+                                    array_push($array_aux, (string)$despacho->unidad_id);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            $result['unidades_activas_ruta'] = $array_aux;
+        }
+        // ─────────────────────────────────────────────────────────────────────
+
         // First, try to fill from cache
         $toFetch = [];
         foreach ($ids as $uid) {
