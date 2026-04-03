@@ -29,6 +29,44 @@
         animation: blink-bolt 0.65s ease-in-out infinite;
     }
 
+    /* ── Tooltip profesional para el ícono bolt ──────────────────────────── */
+    /* Nota: FontAwesome usa ::before en <i>, por eso la flecha va en ::after  */
+    .bolt-tip {
+        position: relative;
+        display: inline-block;
+        cursor: help;
+    }
+    .bolt-tip::after {
+        content: attr(data-pw-tip);
+        position: absolute;
+        bottom: calc(100% + 10px);
+        left: 50%;
+        transform: translateX(-50%);
+        /* Tooltip con pequeña flecha abajo simulada con border-image */
+        background: #1c2133;
+        color: #cfe0ff;
+        padding: 5px 12px 7px;
+        border-radius: 5px;
+        font-size: 11px;
+        font-family: 'Courier New', monospace;
+        letter-spacing: 0.3px;
+        white-space: nowrap;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.18s ease;
+        z-index: 10001;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.55);
+        border: 1px solid rgba(100,150,255,0.2);
+        line-height: 1.6;
+        /* Flecha inferior con outline en box-shadow */
+        -webkit-filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
+        filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
+    }
+    .bolt-tip:hover::after {
+        opacity: 1;
+    }
+    /* ──────────────────────────────────────────────────────────────────────── */
+
     /* Ajuste botones */
     .comandos-v .btn{
         margin-bottom:5px;
@@ -1412,8 +1450,8 @@ function updateUnidadInList(unidad) {
             : '<i id="' + ignIconId + '" class="fa fa-dot-circle-o" title="IG OFF" style="color:red;   pointer-events:none; cursor:default;"></i>&nbsp;&nbsp;';
     }
 
-    // Tooltip del bolt: tiempo_power_update formateado (viene de getUnidadesMeta)
-    var boltTitle = '';
+    // Tooltip profesional del bolt (siempre presente en todos los LI)
+    var boltTipText = 'Sin datos';
     try {
         var _tpuRaw = unidad.tiempo_power_update ||
                       (li._tiempo_power_update ? li._tiempo_power_update.toISOString() : null);
@@ -1421,12 +1459,20 @@ function updateUnidadInList(unidad) {
             var _tpuD = new Date(_tpuRaw);
             if (!isNaN(_tpuD.getTime())) {
                 var _p = function(n) { return n < 10 ? '0' + n : String(n); };
-                boltTitle = _p(_tpuD.getDate()) + '-' + _p(_tpuD.getMonth() + 1) + '-' + _tpuD.getFullYear() +
-                            ' ' + _p(_tpuD.getHours()) + ':' + _p(_tpuD.getMinutes()) + ':' + _p(_tpuD.getSeconds());
+                var _fechaFmt = _p(_tpuD.getDate()) + '-' + _p(_tpuD.getMonth() + 1) + '-' + _tpuD.getFullYear() +
+                                ' ' + _p(_tpuD.getHours()) + ':' + _p(_tpuD.getMinutes());
+                var _tp = (unidad.tiempo_power != null) ? parseFloat(unidad.tiempo_power) : (li._tiempo_power || 0);
+                var _horasRest = (_tp > 0) ? (_tp - ((Date.now() - _tpuD.getTime()) / 3600000)) : null;
+                boltTipText = 'Activado: ' + _fechaFmt;
+                if (_horasRest !== null) {
+                    boltTipText += (_horasRest > 0)
+                        ? ' | ~' + _horasRest.toFixed(1) + 'h rest.'
+                        : ' | Expirado';
+                }
             }
         }
     } catch (e) {}
-    var boltTitleAttr = boltTitle ? ' title="Últ. actualización: ' + boltTitle + '"' : 'title="Últ. actualización: ---';
+    var boltTitleAttr = ' class="fa fa-bolt bolt-tip" data-pw-tip="' + boltTipText + '"';
 
     // Generar exactamente el HTML con el mismo look según estado
     switch (estado) {
@@ -1436,7 +1482,7 @@ function updateUnidadInList(unidad) {
                 ((unidad.rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                 sentido + ignicionHtml + '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#F44336"></i>&nbsp' +
                 (unidad.descripcion || '') + '&nbsp&nbsp <i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ (unidad.latitud||'') +'\',\''+ (unidad.longitud||'') +'\');" class="fa fa-map-marker" style="color:#F44336"></i>&nbsp' + (fecha_gps_marker || '-') + '  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(velocidad_num) + '' +
-                '&nbsp&nbsp&nbsp<i id="bolt_' + unidad._id + '" class="fa fa-bolt" style="color:#F44336"' + boltTitleAttr + '></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#F44336"></i>&nbsp' + (unidad.contador_total||'') + " | " + (unidad.contador_diario||'') +
+                '&nbsp&nbsp&nbsp<i id="bolt_' + unidad._id + '"' + boltTitleAttr + ' style="color:#F44336"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#F44336"></i>&nbsp' + (unidad.contador_total||'') + " | " + (unidad.contador_diario||'') +
                 '&nbsp&nbsp&nbsp' + ((unidad.is_atm !== undefined && unidad.is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'') +
                 '&nbsp&nbsp&nbsp|&nbsp&nbsp';
 
@@ -1460,7 +1506,7 @@ function updateUnidadInList(unidad) {
                 ((unidad.rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                 ignicionHtml + '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#f49a16"></i>&nbsp' + (unidad.descripcion||'') +
                 '&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ (unidad.latitud||'') +'\',\''+ (unidad.longitud||'') +'\');" class="fa fa-map-marker" style="color:#f49a16"></i>&nbsp' + (fecha_gps_marker || '-') + '  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(velocidad_num) + '' +
-                '&nbsp&nbsp&nbsp<i id="bolt_' + unidad._id + '" class="fa fa-bolt" style="color:#f49a16"' + boltTitleAttr + '></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#f49a16"></i>&nbsp' + (unidad.contador_total||'') + " | " + (unidad.contador_diario||'') +
+                '&nbsp&nbsp&nbsp<i id="bolt_' + unidad._id + '"' + boltTitleAttr + ' style="color:#f49a16"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#f49a16"></i>&nbsp' + (unidad.contador_total||'') + " | " + (unidad.contador_diario||'') +
                 '&nbsp&nbsp&nbsp|&nbsp&nbsp';
 
             html += (unidad.puerta ? ((unidad.puerta==='PUERTA ABIERTA (DELANTERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta:
@@ -1483,7 +1529,7 @@ function updateUnidadInList(unidad) {
                 ((unidad.rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                 sentido + ignicionHtml + '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#00AA88"></i>&nbsp' + (unidad.descripcion||'') +
                 '&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ (unidad.latitud||'') +'\',\''+ (unidad.longitud||'') +'\');" class="fa fa-map-marker" style="color:#00AA88"></i>&nbsp' + (fecha_gps_marker || '-') + '  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(velocidad_num) + '' +
-                '&nbsp&nbsp&nbsp<i id="bolt_' + unidad._id + '" class="fa fa-bolt" style="color:#00AA88"' + boltTitleAttr + '></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#00AA88"></i>&nbsp' + (unidad.contador_total||'') + " | " + (unidad.contador_diario||'') +
+                '&nbsp&nbsp&nbsp<i id="bolt_' + unidad._id + '"' + boltTitleAttr + ' style="color:#00AA88"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#00AA88"></i>&nbsp' + (unidad.contador_total||'') + " | " + (unidad.contador_diario||'') +
                 '&nbsp&nbsp&nbsp|&nbsp&nbsp';
 
             html += (unidad.puerta ? ((unidad.puerta==='PUERTA ABIERTA (DELANTERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta:
@@ -1506,7 +1552,7 @@ function updateUnidadInList(unidad) {
                 ((unidad.rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                 ignicionHtml + '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#990073"></i>&nbsp' + (unidad.descripcion||'') +
                 '&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ (unidad.latitud||'') +'\',\''+ (unidad.longitud||'') +'\');" class="fa fa-map-marker" style="color:#990073"></i>&nbsp' + (fecha_gps_marker || '-') + '  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(velocidad_num) + '' +
-                '&nbsp&nbsp&nbsp<i id="bolt_' + unidad._id + '" class="fa fa-bolt" style="color:#990073"' + boltTitleAttr + '></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#990073"></i>&nbsp' + (unidad.contador_total||'') + " | " + (unidad.contador_diario||'') +
+                '&nbsp&nbsp&nbsp<i id="bolt_' + unidad._id + '"' + boltTitleAttr + ' style="color:#990073"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#990073"></i>&nbsp' + (unidad.contador_total||'') + " | " + (unidad.contador_diario||'') +
                 '&nbsp&nbsp&nbsp|&nbsp&nbsp';
 
             html += (unidad.puerta ? ((unidad.puerta==='PUERTA ABIERTA (DELANTERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta:
