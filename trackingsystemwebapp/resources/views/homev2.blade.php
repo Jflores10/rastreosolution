@@ -930,6 +930,65 @@ function refreshVisibleUnidadesMeta() {
 // run periodic refresh to keep non-route meta up-to-date; route fields will not overwrite an existing route
 setInterval(refreshVisibleUnidadesMeta, 20000);
 
+/**
+ * En móviles / pestaña en segundo plano el navegador suspende timers y SSE.
+ * Al volver al frente: reconectar EventSource, invalidar meta y forzar refresh.
+ */
+var __homeV2PageWasHidden = false;
+var __homeV2ResyncTimer = null;
+
+function sincronizarUnidadesAlVolverAlFrente() {
+    try {
+        if (document.visibilityState !== 'visible') return;
+
+        document.querySelectorAll('#ul_unidades li').forEach(function (li) {
+            if (li.id) delete unidadesMetaCache[li.id];
+        });
+
+        try {
+            if (typeof sse !== 'undefined' && sse) {
+                sse.close();
+                sse = null;
+            }
+            SSE_CONNECTED = false;
+            if (typeof iniciarSSEGlobal === 'function') {
+                iniciarSSEGlobal();
+            }
+        } catch (e) {
+            console.warn('resync SSE', e);
+        }
+
+        setTimeout(function () {
+            try {
+                refreshVisibleUnidadesMeta();
+            } catch (e2) {}
+        }, 350);
+    } catch (e) {
+        console.warn('sincronizarUnidadesAlVolverAlFrente', e);
+    }
+}
+
+function programarResyncTrasSegundoPlano() {
+    clearTimeout(__homeV2ResyncTimer);
+    __homeV2ResyncTimer = setTimeout(sincronizarUnidadesAlVolverAlFrente, 250);
+}
+
+document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'hidden') {
+        __homeV2PageWasHidden = true;
+        return;
+    }
+    if (document.visibilityState === 'visible' && __homeV2PageWasHidden) {
+        programarResyncTrasSegundoPlano();
+    }
+});
+
+window.addEventListener('pageshow', function (ev) {
+    if (ev.persisted && __homeV2PageWasHidden) {
+        programarResyncTrasSegundoPlano();
+    }
+});
+
 // Timer periódico: cada 60 s verifica si algún bolt con tiempo_power activo ya expiró
 // y detiene el parpadeo automáticamente.
 setInterval(function () {
