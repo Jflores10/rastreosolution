@@ -233,7 +233,7 @@ class HomeController extends Controller
                 $unidad["fecha_gps"]=$f_gps->format('d-m-Y H:i');
             }
         }
-        return view('home_test', ['cooperativas' => $cooperativas, 'unidades' => $unidades, 'rutas'=>$rutas,'rutas_atm'=>$rutas_atm, 'atm'=>$despachos_atm]);
+        return view('homev2', ['cooperativas' => $cooperativas, 'unidades' => $unidades, 'rutas'=>$rutas,'rutas_atm'=>$rutas_atm, 'atm'=>$despachos_atm]);
     }
 
     
@@ -537,7 +537,7 @@ class HomeController extends Controller
         $rutas = Ruta::where('cooperativa_id', $cood_id)->whereIn('tipo_ruta',['P', 'I','C'])->where('estado','A')->get();
         $rutas_atm = RutaAtmOficial::where('cooperativa_id', $cood_id)->where('estado','A')->get();
         $cooperativa = Cooperativa::findOrFail($cood_id);
-        return view('home_test',['unidades'=>null,'id_coop'=>$cood_id,'cooperativas'=>$cooperativas,
+        return view('homev2',['unidades'=>null,'id_coop'=>$cood_id,'cooperativas'=>$cooperativas,
         		'rutas' => $rutas,'rutas_atm'=>$rutas_atm, 'atm'=>$cooperativa->despachos_atm
         ]);
     }
