@@ -932,7 +932,8 @@ setInterval(refreshVisibleUnidadesMeta, 20000);
 
 /**
  * En móviles / pestaña en segundo plano el navegador suspende timers y SSE.
- * Al volver al frente: reconectar EventSource, invalidar meta y forzar refresh.
+ * Al volver al frente: invalidar meta y lanzar el POST al instante (sin esperas artificiales),
+ * luego reconectar SSE en el mismo tick para no añadir ~1s de retraso percibido.
  */
 var __homeV2PageWasHidden = false;
 var __homeV2ResyncTimer = null;
@@ -945,6 +946,12 @@ function sincronizarUnidadesAlVolverAlFrente() {
             if (li.id) delete unidadesMetaCache[li.id];
         });
 
+        /* 1) Pedir meta al servidor de inmediato (lo más visible para el usuario) */
+        try {
+            refreshVisibleUnidadesMeta();
+        } catch (e2) {}
+
+        /* 2) Reconectar SSE sin bloquear la petición anterior */
         try {
             if (typeof sse !== 'undefined' && sse) {
                 sse.close();
@@ -957,12 +964,6 @@ function sincronizarUnidadesAlVolverAlFrente() {
         } catch (e) {
             console.warn('resync SSE', e);
         }
-
-        setTimeout(function () {
-            try {
-                refreshVisibleUnidadesMeta();
-            } catch (e2) {}
-        }, 350);
     } catch (e) {
         console.warn('sincronizarUnidadesAlVolverAlFrente', e);
     }
@@ -970,7 +971,8 @@ function sincronizarUnidadesAlVolverAlFrente() {
 
 function programarResyncTrasSegundoPlano() {
     clearTimeout(__homeV2ResyncTimer);
-    __homeV2ResyncTimer = setTimeout(sincronizarUnidadesAlVolverAlFrente, 250);
+    /* setTimeout(0): mismo ciclo de eventos tras visibilitychange, sin debounce de cientos de ms */
+    __homeV2ResyncTimer = setTimeout(sincronizarUnidadesAlVolverAlFrente, 0);
 }
 
 document.addEventListener('visibilitychange', function () {
