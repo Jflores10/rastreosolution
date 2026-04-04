@@ -1057,7 +1057,6 @@ function conectarSSE(coopId) {
     sse.addEventListener('unidad.sentido.changed', (evt) => {
         try {
             const data = JSON.parse(evt.data);
-            console.log(data)
             if (!data.unidad_id || !unidadPerteneceAFiltroRutaActual(data.unidad_id)) return;
 
             // Si es BUFF: solo parpadear, NO actualizar sentido ni lista
@@ -1078,7 +1077,6 @@ function conectarSSE(coopId) {
     sse.addEventListener('unidad.alerta.puerta', (evt) => {
         try {
             const msg = JSON.parse(evt.data);
-            console.log(msg)
             if (!msg.unidad_id || !unidadPerteneceAFiltroRutaActual(msg.unidad_id)) return;
 
             const li = document.getElementById(msg.unidad_id);
@@ -1105,7 +1103,6 @@ function conectarSSE(coopId) {
     sse.addEventListener('unidad.location', (evt) => {
         try {
             const msg = JSON.parse(evt.data);
-            console.log(msg)
             const _uidLoc = msg._id || msg.unidad_id;
             if (!_uidLoc || !unidadPerteneceAFiltroRutaActual(_uidLoc)) return;
 
@@ -1190,7 +1187,6 @@ function conectarSSE(coopId) {
     sse.addEventListener('unidad.ignicion', (evt) => {
         try {
             const msg = JSON.parse(evt.data);
-            console.log(msg);
             if (!msg || !msg._id) return;
             if (!unidadPerteneceAFiltroRutaActual(msg._id)) return;
 
@@ -1239,7 +1235,6 @@ function conectarSSE(coopId) {
     sse.addEventListener('unidad.power', (evt) => {
         try {
             const msg = JSON.parse(evt.data);
-            console.log('unidad.power', msg);
             if (!msg || !msg._id) return;
             if (!unidadPerteneceAFiltroRutaActual(msg._id)) return;
 
@@ -4224,7 +4219,6 @@ $("#velocimetro").myfunc({divFact:10});
 
         $('#ruta_atm').chosen({ witdh : '100%'}).change(function () {
             $.get('{{ url("/puntos-atm") }}', { rutas : $('#ruta_atm').val() }, function (data) {
-                console.log(data);
                 var puntos = data.puntos;
 
                 // Limpiar rutas y marcadores previos
