@@ -721,8 +721,7 @@ function iniciarSSEGlobal() {
         || Auth::user()->tipo_usuario->valor==3 
         || Auth::user()->tipo_usuario->valor==4 
         || Auth::user()->tipo_usuario->valor==5)
-        console.log('{{ Auth::user()->cooperativa->_id }}');
-        conectarSSE('{{ $cooperativa->_id }}');
+        conectarSSE('{{ Auth::user()->cooperativa->_id }}');
     @endif
 }
 
