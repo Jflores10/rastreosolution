@@ -49,6 +49,52 @@
 
     }
 
+    /* Barra superior del panel: enlace de versión (dentro del contenedor LI+mapa, no fixed) */
+    .home-version-toolbar {
+        width: 100%;
+        padding: 0px 8px 4px;
+        margin: 0;
+        line-height: 1;
+    }
+    .home-version-toolbar:after {
+        content: "";
+        display: table;
+        clear: both;
+    }
+    .home-version-switch {
+        font-size: 11px;
+        padding: 3px 10px;
+        line-height: 1.35;
+        border-radius: 4px;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+        border-color: #ccc;
+    }
+    .dashboard-home-wrap .x_panel {
+        padding: 4px 8px !important;
+    }
+    .dashboard-home-wrap .x_content {
+        margin-top: 0 !important;
+        padding: 0 2px 4px !important;
+    }
+    .dashboard-home-wrap .home-version-toolbar + .row {
+        margin-top: 0 !important;
+    }
+    .dashboard-home-wrap .home-version-toolbar + .row > [class*="col-"] {
+        padding-top: 0px !important;
+    }
+    .dashboard-home-wrap #div-cooperativa.form-group,
+    .dashboard-home-wrap .col-lg-3 .form-group:first-child {
+        margin-top: 0 !important;
+    }
+    @media (max-width: 768px) {
+        .home-version-toolbar {
+            padding: 0px 8px 4px;
+        }
+        .home-version-switch {
+            float: right !important;
+        }
+    }
+
 </style>
 
 
@@ -235,10 +281,13 @@ Dashboard
 <link href="css/speedometer.css" rel="stylesheet" type="text/css" />
 <div class="clearfix"></div>
 <!-- -->
-<div class="row" style="margin:0;">
-  <div class="col-md-12">
-    <div class="x_panel" style="padding:5px;">
-      <div class="x_content" style="padding:0;">
+<div class="row dashboard-home-wrap" style="margin:0;">
+  <div class="col-md-12" style="padding-left:8px;padding-right:8px;">
+    <div class="x_panel" style="padding:4px 8px;">
+      <div class="x_content" style="padding:0;margin-top:0;">
+        <div class="home-version-toolbar">
+          <a href="{{ url('/homev2') }}" class="btn btn-default btn-xs home-version-switch pull-right" title="Ir a la nueva versión del dashboard">Ver. nueva</a>
+        </div>
         <div class="row" style="margin:0;">
           
           <!-- Panel lateral (buscador y lista de unidades) -->

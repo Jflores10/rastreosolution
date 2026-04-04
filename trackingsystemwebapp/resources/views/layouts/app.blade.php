@@ -79,7 +79,7 @@
 
                 <h3>General</h3>
                 <ul class="nav side-menu">
-                  <li><a href="{{ url('/home') }}"><i class="fa fa-home"></i> Inicio</a>
+                  <li><a href="{{ url('/homev2') }}"><i class="fa fa-home"></i> Inicio</a>
                   </li>
                   <li><a href="{{ url('/dashboard') }}"><i class="fa fa-bar-chart"></i> Dashboard</a>
                   </li>
