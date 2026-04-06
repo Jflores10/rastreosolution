@@ -41,6 +41,8 @@ Route::group(['prefix' => 'v2'], function () {
 		Route::post('cooperativas/getcoordenadas', 'CooperativaApiController@getCoordenadas_v2');
 		Route::post('despachos/socios', 'DespachoApiController@getDespachosSocios_v2');
 		Route::post('despachos/punto', 'DespachoApiController@getPuntoControl_v2');
+		Route::post('historico/unidades-meta', 'HistoricoApiController@getUnidadesMeta');
+
 	});
 
 	Route::post('/recorrido-notify', 'RecorridoController@notify_v2');
