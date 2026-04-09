@@ -723,9 +723,37 @@ var UNIDADES_PERMITIDAS_SSE = {!! json_encode($__hv2Permitidas) !!};
 // null = sin filtro de ruta (pero sigue aplicando UNIDADES_PERMITIDAS_SSE si aplica). Objeto = intersección con ruta.
 var unidadesIdsRutaActual = null;
 
+function normalizarUnidadId(uid) {
+    if (uid === undefined || uid === null) return null;
+    if (typeof uid === 'string' || typeof uid === 'number') {
+        var s0 = String(uid).trim();
+        return s0 !== '' ? s0 : null;
+    }
+    if (typeof uid === 'object') {
+        if (uid.$oid != null) return String(uid.$oid);
+        if (uid._id != null) return normalizarUnidadId(uid._id);
+        if (uid.id != null) {
+            if (typeof uid.id === 'string' || typeof uid.id === 'number') {
+                var s1 = String(uid.id).trim();
+                if (s1 !== '') return s1;
+            }
+            // BSON ObjectId serializado: { id: { type: 'Buffer', data: [...] } }
+            if (uid.id && uid.id.data && Array.isArray(uid.id.data)) {
+                var hex = uid.id.data.map(function (b) {
+                    return ('0' + (b & 0xff).toString(16)).slice(-2);
+                }).join('');
+                if (hex) return hex;
+            }
+        }
+    }
+    var s = String(uid).trim();
+    if (s === '' || s === '[object Object]') return null;
+    return s;
+}
+
 function unidadPerteneceAFiltroRutaActual(uid) {
-    if (uid === undefined || uid === null) return false;
-    var s = String(uid);
+    var s = normalizarUnidadId(uid);
+    if (!s) return false;
     if (UNIDADES_PERMITIDAS_SSE !== null && !UNIDADES_PERMITIDAS_SSE[s]) {
         return false;
     }
@@ -1077,11 +1105,12 @@ setInterval(function () {
  */
 function setBuffBlink(uid, isBuff) {
     try {
-        if (!uid) return;
-        const li = document.getElementById(uid);
+        const sid = normalizarUnidadId(uid);
+        if (!sid) return;
+        const li = document.getElementById(sid);
         if (!li) return;
         li._is_buff = !!isBuff;
-        const markerEl = document.getElementById('g' + uid);
+        const markerEl = document.getElementById('g' + sid);
         if (!markerEl) return;
         if (isBuff) {
             markerEl.classList.add('marker-buff-blink');
@@ -1110,23 +1139,24 @@ function conectarSSE(coopId) {
     sse.addEventListener('unidad.updated', (evt) => {
         try {
             const data = JSON.parse(evt.data);
-            if (!(data && data._id)) return;
-            if (!unidadPerteneceAFiltroRutaActual(data._id)) return;
+            const uid = normalizarUnidadId(data && data._id ? data._id : (data ? data.unidad_id : null));
+            if (!uid) return;
+            data._id = uid;
+            if (!unidadPerteneceAFiltroRutaActual(uid)) return;
 
             // Si es BUFF: solo parpadear, NO actualizar nada en el front
             if (data.is_buff) {
-                setBuffBlink(data._id, true);
+                setBuffBlink(uid, true);
                 return;
             }
 
             // RESP: detener parpadeo (si estaba activo) y procesar normalmente
-            setBuffBlink(data._id, false);
+            setBuffBlink(uid, false);
 
             // Always update marker on map
             actualizarUnidadRealtime(data);
 
             // If the LI has an active temp lock (set by unidad.location), defer the list update
-            const uid = data._id;
             const li = document.getElementById(uid);
             const now = Date.now();
 
@@ -1150,20 +1180,20 @@ function conectarSSE(coopId) {
                 };
 
                 if (metaTieneCamposVisibles(meta)) {
-                    unidadesMetaCache[data._id] = { data: meta, ts: Date.now() };
-                    applyMetaToLi(data._id, meta, 'sse');
+                    unidadesMetaCache[uid] = { data: meta, ts: Date.now() };
+                    applyMetaToLi(uid, meta, 'sse');
                 }
 
                 updateUnidadInList(data);
 
-                if (!unidadesMetaFetchedOnce[data._id]) {
-                    unidadesMetaFetchedOnce[data._id] = true;
-                    fetchUnidadesMeta([data._id]).then(function(resp) {
+                if (!unidadesMetaFetchedOnce[uid]) {
+                    unidadesMetaFetchedOnce[uid] = true;
+                    fetchUnidadesMeta([uid]).then(function(resp) {
                         try {
-                            var serverMeta = resp && resp[data._id] ? resp[data._id] : null;
+                            var serverMeta = resp && resp[uid] ? resp[uid] : null;
                             if (serverMeta) {
-                                unidadesMetaCache[data._id] = { data: serverMeta, ts: Date.now() };
-                                applyMetaToLi(data._id, serverMeta, 'sse');
+                                unidadesMetaCache[uid] = { data: serverMeta, ts: Date.now() };
+                                applyMetaToLi(uid, serverMeta, 'sse');
                             }
                         } catch (e) { console.warn('apply server meta after sse failed', e); }
                     }).catch(function(e){ /* ignore */ });
@@ -1178,7 +1208,9 @@ function conectarSSE(coopId) {
     sse.addEventListener('unidad.sentido.changed', (evt) => {
         try {
             const data = JSON.parse(evt.data);
-            if (!data.unidad_id || !unidadPerteneceAFiltroRutaActual(data.unidad_id)) return;
+            const uidSentido = normalizarUnidadId(data && data.unidad_id ? data.unidad_id : data._id);
+            if (!uidSentido || !unidadPerteneceAFiltroRutaActual(uidSentido)) return;
+            data.unidad_id = uidSentido;
 
             // Si es BUFF: solo parpadear, NO actualizar sentido ni lista
             if (data.is_buff) {
@@ -1198,7 +1230,9 @@ function conectarSSE(coopId) {
     sse.addEventListener('unidad.alerta.puerta', (evt) => {
         try {
             const msg = JSON.parse(evt.data);
-            if (!msg.unidad_id || !unidadPerteneceAFiltroRutaActual(msg.unidad_id)) return;
+            const uidPuerta = normalizarUnidadId(msg && msg.unidad_id ? msg.unidad_id : msg._id);
+            if (!uidPuerta || !unidadPerteneceAFiltroRutaActual(uidPuerta)) return;
+            msg.unidad_id = uidPuerta;
 
             const li = document.getElementById(msg.unidad_id);
             if (!li || !li.currentU) return;
@@ -1224,8 +1258,10 @@ function conectarSSE(coopId) {
     sse.addEventListener('unidad.location', (evt) => {
         try {
             const msg = JSON.parse(evt.data);
-            const _uidLoc = msg._id || msg.unidad_id;
+            const _uidLoc = normalizarUnidadId(msg._id || msg.unidad_id);
             if (!_uidLoc || !unidadPerteneceAFiltroRutaActual(_uidLoc)) return;
+            msg._id = _uidLoc;
+            msg.unidad_id = _uidLoc;
 
             zoomUnidad=true;
             zoomUnidadID=msg._id || msg.unidad_id;
@@ -1307,10 +1343,10 @@ function conectarSSE(coopId) {
     sse.addEventListener('unidad.ignicion', (evt) => {
         try {
             const msg = JSON.parse(evt.data);
-            if (!msg || !msg._id) return;
-            if (!unidadPerteneceAFiltroRutaActual(msg._id)) return;
-
-            const uid = String(msg._id);
+            const uid = normalizarUnidadId(msg && (msg._id || msg.unidad_id));
+            if (!uid) return;
+            if (!unidadPerteneceAFiltroRutaActual(uid)) return;
+            msg._id = uid;
             const li = document.getElementById(uid);
             if (!li) return;
 
@@ -1355,10 +1391,10 @@ function conectarSSE(coopId) {
     sse.addEventListener('unidad.power', (evt) => {
         try {
             const msg = JSON.parse(evt.data);
-            if (!msg || !msg._id) return;
-            if (!unidadPerteneceAFiltroRutaActual(msg._id)) return;
-
-            const uid = String(msg._id);
+            const uid = normalizarUnidadId(msg && (msg._id || msg.unidad_id));
+            if (!uid) return;
+            if (!unidadPerteneceAFiltroRutaActual(uid)) return;
+            msg._id = uid;
             const li = document.getElementById(uid);
             if (!li) return;
 
@@ -1403,7 +1439,9 @@ function conectarSSE(coopId) {
     sse.onmessage = (evt) => {
         try {
             const data = JSON.parse(evt.data);
-            if (data && data._id && unidadPerteneceAFiltroRutaActual(data._id)) {
+            const uidFallback = normalizarUnidadId(data && (data._id || data.unidad_id));
+            if (data && uidFallback && unidadPerteneceAFiltroRutaActual(uidFallback)) {
+                data._id = uidFallback;
                 actualizarUnidadRealtime(data);
                 updateUnidadInList(data);
             }
@@ -1434,9 +1472,11 @@ function actualizarUnidadRealtime(unidad) {
     ) {
         return;
     }
-    if (!unidadPerteneceAFiltroRutaActual(unidad._id)) {
+    var uidRt = normalizarUnidadId(unidad._id || unidad.unidad_id);
+    if (!uidRt || !unidadPerteneceAFiltroRutaActual(uidRt)) {
         return;
     }
+    unidad._id = uidRt;
 
     const fakeFecha = {
         fecha_gps: unidad.fecha_gps ?? null,
@@ -1449,14 +1489,17 @@ function actualizarUnidadRealtime(unidad) {
 }
 // Buscar el <li> de la unidad en la lista lateral y actualizar sus campos.
 function updateUnidadInList(unidad) {
-    if (!unidad || !unidad._id) return;
-    if (!unidadPerteneceAFiltroRutaActual(unidad._id)) return;
+    if (!unidad) return;
+    var uidList = normalizarUnidadId(unidad._id || unidad.unidad_id);
+    if (!uidList) return;
+    unidad._id = uidList;
+    if (!unidadPerteneceAFiltroRutaActual(uidList)) return;
 
     // Preserve previously-fetched meta (from unidades-meta) so WS updates that lack
     // ruta_* or bitacora do not wipe the values. If there is an existing LI with
     // saved meta, copy those values into the incoming unidad when missing.
     try {
-        var existingLiForMerge = document.getElementById(unidad._id);
+        var existingLiForMerge = document.getElementById(uidList);
         if (existingLiForMerge && existingLiForMerge.currentU) {
             var prev = existingLiForMerge.currentU;
             if ((!unidad.ruta_actual || unidad.ruta_actual === '') && prev.ruta_actual) unidad.ruta_actual = prev.ruta_actual;
