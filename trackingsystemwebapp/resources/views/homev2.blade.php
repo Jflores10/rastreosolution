@@ -771,10 +771,18 @@ var unidadesMetaFetchedOnce = {};
 function getRutaSelectSnapshot() {
     try {
         var rv = $('#ruta').val();
-        var hay = rv != null && rv !== '' && !($.isArray(rv) && rv.length === 0);
+        var ids = [];
+        if ($.isArray(rv)) {
+            ids = rv.filter(function (v) {
+                return v != null && String(v).trim() !== '';
+            });
+        } else if (rv != null && rv !== '' && String(rv).trim() !== '') {
+            ids = [rv];
+        }
+        var hay = ids.length > 0;
         return {
             hay: hay,
-            rutas_ids: hay ? ($.isArray(rv) ? rv : [rv]) : null
+            rutas_ids: hay ? ids : null
         };
     } catch (e) {
         return { hay: false, rutas_ids: null };
@@ -1958,13 +1966,20 @@ $("#velocimetro").myfunc({divFact:10});
     var rutas_ids=[];
 
     function tieneFiltroRutaActivo() {
-        if (typeof rutas_ids !== 'undefined' && rutas_ids.length > 0) return true;
+        if (typeof rutas_ids !== 'undefined' && $.isArray(rutas_ids)) {
+            var rutasIdsLimpias = rutas_ids.filter(function (v) {
+                return v != null && String(v).trim() !== '';
+            });
+            if (rutasIdsLimpias.length > 0) return true;
+        }
         try {
             var rv = $('#ruta').val();
-            if (rv == null || rv === '') return false;
-            if ($.isArray(rv) && rv.length === 0) return false;
-            if ($.isArray(rv) && rv.length > 0) return true;
-            return !!rv;
+            if ($.isArray(rv)) {
+                return rv.some(function (v) {
+                    return v != null && String(v).trim() !== '';
+                });
+            }
+            return rv != null && rv !== '' && String(rv).trim() !== '';
         } catch (e) {
             return false;
         }
@@ -2954,35 +2969,48 @@ $("#velocimetro").myfunc({divFact:10});
         let fecha_gps = '-';
 
         try {
+            function toValidDateFromAny(raw) {
+                if (raw == null) return null;
+                var candidate = raw;
+                // Soportar {date: "..."} y {$date: "..."} que llegan desde Mongo serializado.
+                if (typeof candidate === 'object') {
+                    if (candidate.date != null) candidate = candidate.date;
+                    else if (candidate.$date != null) candidate = candidate.$date;
+                }
+                var d = new Date(candidate);
+                return isNaN(d.getTime()) ? null : d;
+            }
+
             if (_is === 0 && fecha_gps_?.fecha_gps) {
-                const dGps = new Date(fecha_gps_.fecha_gps);
-                dGps.setHours(dGps.getHours() + GPS_HOUR_OFFSET);
-                fecha_gps = dGps.toLocaleString('es-EC', {
-                    timeZone: 'America/Guayaquil',
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                    hour12: false
-
-                });
-
+                    const dGps = toValidDateFromAny(fecha_gps_.fecha_gps);
+                if (dGps) {
+                    dGps.setHours(dGps.getHours() + GPS_HOUR_OFFSET);
+                    fecha_gps = dGps.toLocaleString('es-EC', {
+                        timeZone: 'America/Guayaquil',
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit',
+                        hour12: false
+                    });
+                }
             }
             if (_is === 0 && fecha_servidor_?.fecha_servidor) {
-                const dSrv = new Date(fecha_servidor_.fecha_servidor);
-                fecha = dSrv.toLocaleString('es-EC', {
-                    timeZone: 'America/Guayaquil',
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                    hour12: false
-
-                });
+                const dSrv = toValidDateFromAny(fecha_servidor_.fecha_servidor);
+                if (dSrv) {
+                    fecha = dSrv.toLocaleString('es-EC', {
+                        timeZone: 'America/Guayaquil',
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit',
+                        hour12: false
+                    });
+                }
             }
             if (_is === 1) {
                 fecha = fecha_servidor_;
