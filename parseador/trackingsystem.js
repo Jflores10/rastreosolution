@@ -5,7 +5,7 @@
  * trackingsystem.js (OPTIMIZADO para SSE rápido y fluido)
  *
  * ✅ Cambios clave:
- * 1) SSE/Redis publish se hace INMEDIATO tras actualizar unidad (GTFRI)
+ * 1) Redis PUB/SUB (gps-channel) inmediato tras actualizar unidad (GTFRI) — sin XADD/stream (evita RDB gigante)
  * 2) Trabajo pesado (emails/consultas extra/inserts secundarios) se manda a setImmediate()
  * 3) Throttle inteligente por unidad: solo limita si NO hay movimiento (lat/lng iguales)
  * 4) Inserts livianos (writeConcern w:0) para recorridos/tramas (reduce bloqueo)
@@ -164,15 +164,6 @@ function enviarALaravelPorWS(data, opts = {}) {
       redisPub.publish('gps-channel', JSON.stringify(eventPayload), err => {
         if (err) console.error('❌ Redis event publish error:', err);
       });
-
-      // opcional durable stream
-      try {
-        redisPub.send_command('XADD', ['gps-stream', '*', 'data', JSON.stringify(eventPayload)], (sxErr) => {
-          if (sxErr) console.error('❌ Error XADD gps-stream (event):', sxErr);
-        });
-      } catch (e) {
-        console.error('❌ Excepción XADD event:', e);
-      }
       return;
     }
 
@@ -212,15 +203,6 @@ function enviarALaravelPorWS(data, opts = {}) {
       redisPub.publish('gps-channel', JSON.stringify(trackingPayload), err => {
         if (err) console.error('❌ Redis tracking publish error:', err);
       });
-
-      // opcional durable stream
-      try {
-        redisPub.send_command('XADD', ['gps-stream', '*', 'data', JSON.stringify(trackingPayload)], (sxErr) => {
-          if (sxErr) console.error('❌ Error XADD gps-stream (tracking):', sxErr);
-        });
-      } catch (e) {
-        console.error('❌ Excepción XADD tracking:', e);
-      }
     }
 
   } catch (err) {
