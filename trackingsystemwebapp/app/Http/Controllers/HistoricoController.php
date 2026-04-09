@@ -183,6 +183,7 @@ class HistoricoController extends Controller
             }
 
             $array_aux = [];
+            $despachos_pendientes = null;
 
             if (!empty($array_rutas)) {
                 $tipoValor = Auth::user()->tipo_usuario->valor;
@@ -241,6 +242,39 @@ class HistoricoController extends Controller
                                 }
                             }
                         }
+                    }
+                }
+
+                // Mapa primer despacho/unidad (orderBy fecha asc), filtro por hora fin y orden por fecha fin de recorrido (store getUnidades).
+                if ($despachos_pendientes !== null) {
+                    $despachoFirstByUnidad = [];
+                    foreach ($despachos_pendientes as $d) {
+                        $uKey = (string) $d->unidad_id;
+                        if (!isset($despachoFirstByUnidad[$uKey])) {
+                            $despachoFirstByUnidad[$uKey] = $d;
+                        }
+                    }
+                    if (count($array_aux) > 0) {
+                        $array_aux = array_values(array_filter($array_aux, function ($uid) use ($despachoFirstByUnidad) {
+                            $u = (string) $uid;
+                            if (!isset($despachoFirstByUnidad[$u])) {
+                                return true;
+                            }
+                            return !$this->despachoRutaSuperoHoraFin($despachoFirstByUnidad[$u]);
+                        }));
+                    }
+                    if (count($array_aux) > 0) {
+                        usort($array_aux, function ($a, $b) use ($despachoFirstByUnidad) {
+                            $fa = $this->despachoFinRecorridoCarbon($despachoFirstByUnidad[(string) $a] ?? null);
+                            $fb = $this->despachoFinRecorridoCarbon($despachoFirstByUnidad[(string) $b] ?? null);
+                            $ta = $fa ? $fa->getTimestamp() : PHP_INT_MAX;
+                            $tb = $fb ? $fb->getTimestamp() : PHP_INT_MAX;
+                            if ($ta !== $tb) {
+                                return $ta <=> $tb;
+                            }
+                            return strcmp((string) $a, (string) $b);
+                        });
+                        $array_aux = array_values($array_aux);
                     }
                 }
             }
@@ -1337,6 +1371,50 @@ class HistoricoController extends Controller
             }
 
         }
+    }
+
+    /**
+     * Instante de fin de recorrido como en store getUnidades: fecha despacho + 5h + suma tiempo_llegada (puntos de control).
+     *
+     * @param  \App\Despacho|null  $despacho
+     * @return \Carbon\Carbon|null
+     */
+    private function despachoFinRecorridoCarbon($despacho)
+    {
+        if (!$despacho || !isset($despacho->fecha) || $despacho->fecha === null) {
+            return null;
+        }
+        $tiempo_final = 0;
+        if (isset($despacho->ruta) && isset($despacho->ruta->puntos_control) && is_array($despacho->ruta->puntos_control)) {
+            foreach ($despacho->ruta->puntos_control as $punto) {
+                if (isset($punto['tiempo_llegada'])) {
+                    $tiempo_final += (int) $punto['tiempo_llegada'];
+                }
+            }
+        }
+        try {
+            $fin = Carbon::parse($despacho->fecha);
+            $fin->addHours(5);
+            $fin->addMinutes($tiempo_final);
+            return $fin;
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Si la hora actual es posterior al fin de recorrido, la unidad no debe figurar como activa en ruta.
+     *
+     * @param  \App\Despacho|null  $despacho
+     * @return bool
+     */
+    private function despachoRutaSuperoHoraFin($despacho)
+    {
+        $fin = $this->despachoFinRecorridoCarbon($despacho);
+        if ($fin === null) {
+            return false;
+        }
+        return Carbon::now()->greaterThan($fin);
     }
 
 
