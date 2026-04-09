@@ -138,22 +138,6 @@ class HistoricoController extends Controller
 
         $ids = $request->input('unidad_ids');
         if (!is_array($ids)) $ids = [$ids];
-
-        // Tipos 4 y 5: solo meta permitida para unidades_pertenecientes (alineado con store/getUnidades).
-        $tipoUsuarioMeta = Auth::user()->tipo_usuario->valor;
-        if ($tipoUsuarioMeta == 4 || $tipoUsuarioMeta == 5) {
-            $pertenecientes = Auth::user()->unidades_pertenecientes;
-            $permitidas = [];
-            if (!empty($pertenecientes)) {
-                foreach ((array) $pertenecientes as $pid) {
-                    $permitidas[(string) $pid] = true;
-                }
-            }
-            $ids = array_values(array_filter($ids, function ($id) use ($permitidas) {
-                return isset($permitidas[(string) $id]);
-            }));
-        }
-
         $result = [];
         $desde = Carbon::createFromFormat('Y-m-d H:i:s', date('Y-m-d 00:00:00'));
         $hasta = Carbon::createFromFormat('Y-m-d H:i:s', date('Y-m-d 23:59:59'));

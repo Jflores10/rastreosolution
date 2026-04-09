@@ -701,64 +701,14 @@ Dashboard
 <script>
 let SSE_CONNECTED = false;
 
-@php
-    $__hv2Tipo = Auth::user()->tipo_usuario->valor;
-    $__hv2Permitidas = null;
-    if ($__hv2Tipo == 4 || $__hv2Tipo == 5) {
-        $__hv2Permitidas = [];
-        $__up = Auth::user()->unidades_pertenecientes;
-        if (!empty($__up)) {
-            foreach ((array) $__up as $__oid) {
-                $__hv2Permitidas[(string) $__oid] = true;
-            }
-        }
-    }
-@endphp
-// Tipos 4 y 5: igual que getUnidades en store — solo unidades_pertenecientes (SSE va por toda la coop).
-// null = sin restricción por usuario (tipos 1–3). Objeto = debe estar en la lista para procesar SSE.
-// json_encode: Laravel 5.3 no incluye la directiva Blade @json (5.5+).
-var UNIDADES_PERMITIDAS_SSE = {!! json_encode($__hv2Permitidas) !!};
-
 // IDs de unidades devueltas por /historicos cuando hay ruta(s) seleccionada(s).
-// null = sin filtro de ruta (pero sigue aplicando UNIDADES_PERMITIDAS_SSE si aplica). Objeto = intersección con ruta.
+// null = sin filtro (mostrar/actualizar todas). Objeto = solo esas unidades en lista y mapa vía SSE.
 var unidadesIdsRutaActual = null;
 
-function normalizarUnidadId(uid) {
-    if (uid === undefined || uid === null) return null;
-    if (typeof uid === 'string' || typeof uid === 'number') {
-        var s0 = String(uid).trim();
-        return s0 !== '' ? s0 : null;
-    }
-    if (typeof uid === 'object') {
-        if (uid.$oid != null) return String(uid.$oid);
-        if (uid._id != null) return normalizarUnidadId(uid._id);
-        if (uid.id != null) {
-            if (typeof uid.id === 'string' || typeof uid.id === 'number') {
-                var s1 = String(uid.id).trim();
-                if (s1 !== '') return s1;
-            }
-            // BSON ObjectId serializado: { id: { type: 'Buffer', data: [...] } }
-            if (uid.id && uid.id.data && Array.isArray(uid.id.data)) {
-                var hex = uid.id.data.map(function (b) {
-                    return ('0' + (b & 0xff).toString(16)).slice(-2);
-                }).join('');
-                if (hex) return hex;
-            }
-        }
-    }
-    var s = String(uid).trim();
-    if (s === '' || s === '[object Object]') return null;
-    return s;
-}
-
 function unidadPerteneceAFiltroRutaActual(uid) {
-    var s = normalizarUnidadId(uid);
-    if (!s) return false;
-    if (UNIDADES_PERMITIDAS_SSE !== null && !UNIDADES_PERMITIDAS_SSE[s]) {
-        return false;
-    }
     if (unidadesIdsRutaActual === null) return true;
-    return !!unidadesIdsRutaActual[s];
+    if (uid === undefined || uid === null) return false;
+    return !!unidadesIdsRutaActual[String(uid)];
 }
 
 function iniciarSSEGlobal() {
@@ -794,40 +744,6 @@ var unidadesMetaCache = {};
 const META_TTL_MS = 30000; // 30s cache TTL for batch refresh
 // ensure we only fetch server meta once per unidad when SSE first arrives
 var unidadesMetaFetchedOnce = {};
-
-/** Una lectura de #ruta; misma lógica que antes en fetch y en refresh (evita duplicar try/catch). */
-function getRutaSelectSnapshot() {
-    try {
-        var rv = $('#ruta').val();
-        var ids = [];
-        if ($.isArray(rv)) {
-            ids = rv.filter(function (v) {
-                return v != null && String(v).trim() !== '';
-            });
-        } else if (rv != null && rv !== '' && String(rv).trim() !== '') {
-            ids = [rv];
-        }
-        var hay = ids.length > 0;
-        return {
-            hay: hay,
-            rutas_ids: hay ? ids : null
-        };
-    } catch (e) {
-        return { hay: false, rutas_ids: null };
-    }
-}
-
-/** Equivalente a Object.keys(meta).some(...) para el objeto meta fijo de SSE (sin alloc de keys). */
-function metaTieneCamposVisibles(meta) {
-    return !!(meta && (
-        (meta.ruta_actual && meta.ruta_actual !== '') ||
-        (meta.ruta_fecha && meta.ruta_fecha !== '') ||
-        (meta.ruta_conductor && meta.ruta_conductor !== '') ||
-        (meta.ruta_hora_fin && meta.ruta_hora_fin !== '') ||
-        (meta.tipo_bitacora && meta.tipo_bitacora !== '') ||
-        (meta.bitacora && meta.bitacora !== '')
-    ));
-}
 
 function applyMetaToLi(uid, meta, source) {
     try {
@@ -926,14 +842,18 @@ function fetchUnidadesMeta(ids) {
         var payload = { unidad_ids: ids };
 
         // Adjuntar rutas seleccionadas solo si hay alguna elegida
-        var snap = getRutaSelectSnapshot();
-        if (snap.hay && snap.rutas_ids) {
-            payload.rutas_ids = snap.rutas_ids;
-            var coopEl = document.getElementById('cooperativa');
-            if (coopEl && coopEl.value) {
-                payload.cooperativa_id = coopEl.value;
+        try {
+            var rutasVal = $('#ruta').val();
+            if (rutasVal != null && rutasVal !== '' &&
+                    !($.isArray(rutasVal) && rutasVal.length === 0)) {
+                payload.rutas_ids = $.isArray(rutasVal) ? rutasVal : [rutasVal];
+                // cooperativa_id requerido por el backend para tipo 1 (admin)
+                var coopEl = document.getElementById('cooperativa');
+                if (coopEl && coopEl.value) {
+                    payload.cooperativa_id = coopEl.value;
+                }
             }
-        }
+        } catch (e) {}
 
         $.post('/historico/unidades-meta', payload, function (data) {
             resolve(data || {});
@@ -945,19 +865,16 @@ function fetchUnidadesMeta(ids) {
 
 function refreshVisibleUnidadesMeta() {
     try {
-        var lis = document.querySelectorAll('#ul_unidades li');
-        var len = lis.length;
+        var lis = Array.from(document.querySelectorAll('#ul_unidades li'));
         var now = Date.now();
         var toFetch = [];
-        var i, li, uid, cache;
-        for (i = 0; i < len; i++) {
-            li = lis[i];
-            uid = li.id;
-            cache = unidadesMetaCache[uid];
+        lis.forEach(function (li) {
+            var uid = li.id;
+            var cache = unidadesMetaCache[uid];
             if (!cache || (now - cache.ts) > META_TTL_MS) {
                 toFetch.push(uid);
             }
-        }
+        });
 
         if (toFetch.length === 0) return;
 
@@ -966,45 +883,44 @@ function refreshVisibleUnidadesMeta() {
             // Si hay ruta(s) seleccionada(s) y el servidor devolvió el listado,
             // actualizamos unidadesIdsRutaActual y eliminamos del DOM los LIs
             // de unidades cuyo despacho ya no está activo en esa ruta.
-            var hayRuta = getRutaSelectSnapshot().hay;
+            var hayRuta = false;
+            try {
+                var rv = $('#ruta').val();
+                hayRuta = rv != null && rv !== '' &&
+                          !($.isArray(rv) && rv.length === 0);
+            } catch (e) {}
 
             if (hayRuta && Array.isArray(resp.unidades_activas_ruta)) {
                 var nuevoFiltro = {};
-                var uar = resp.unidades_activas_ruta;
-                var u, ulen = uar.length;
-                for (u = 0; u < ulen; u++) {
-                    nuevoFiltro[String(uar[u])] = true;
-                }
+                resp.unidades_activas_ruta.forEach(function (uid) {
+                    nuevoFiltro[String(uid)] = true;
+                });
 
                 // Actualizar filtro SSE
                 unidadesIdsRutaActual = nuevoFiltro;
 
                 // Remover LIs (y marcadores) de unidades ya sin despacho activo
-                for (i = 0; i < len; i++) {
-                    li = lis[i];
-                    if (!li.id || nuevoFiltro[String(li.id)]) continue;
+                lis.forEach(function (li) {
+                    if (!li.id || nuevoFiltro[String(li.id)]) return;
                     try {
                         var marker = getMarcadorUnidad(li.id);
                         if (marker) marker.setMap(null);
                     } catch (e) {}
                     if (li.parentNode) li.parentNode.removeChild(li);
-                }
+                });
             } else if (!hayRuta) {
                 unidadesIdsRutaActual = null;
             }
             // ─────────────────────────────────────────────────────────────────
 
             // Aplicar meta individual a cada LI
-            var keys = Object.keys(resp);
-            var ki, m;
-            for (ki = 0; ki < keys.length; ki++) {
-                uid = keys[ki];
-                if (uid === 'unidades_activas_ruta') continue;
-                m = resp[uid];
-                if (!m) continue;
+            Object.keys(resp).forEach(function (uid) {
+                if (uid === 'unidades_activas_ruta') return;
+                var m = resp[uid];
+                if (!m) return;
                 unidadesMetaCache[uid] = { data: m, ts: Date.now() };
                 applyMetaToLi(uid, m, 'batch');
-            }
+            });
         });
     } catch (e) {
         console.warn('refreshVisibleUnidadesMeta failed', e);
@@ -1026,11 +942,9 @@ function sincronizarUnidadesAlVolverAlFrente() {
     try {
         if (document.visibilityState !== 'visible') return;
 
-        var _lisSync = document.querySelectorAll('#ul_unidades li');
-        var _si, _slen = _lisSync.length;
-        for (_si = 0; _si < _slen; _si++) {
-            if (_lisSync[_si].id) delete unidadesMetaCache[_lisSync[_si].id];
-        }
+        document.querySelectorAll('#ul_unidades li').forEach(function (li) {
+            if (li.id) delete unidadesMetaCache[li.id];
+        });
 
         /* 1) Pedir meta al servidor de inmediato (lo más visible para el usuario) */
         try {
@@ -1080,22 +994,19 @@ window.addEventListener('pageshow', function (ev) {
 // Timer periódico: cada 60 s verifica si algún bolt con tiempo_power activo ya expiró
 // y detiene el parpadeo automáticamente.
 setInterval(function () {
-    var _lisBolt = document.querySelectorAll('#ul_unidades li');
-    var _bi, _blen = _lisBolt.length;
-    for (_bi = 0; _bi < _blen; _bi++) {
-        var _li = _lisBolt[_bi];
-        if (!_li._is_power_blink) continue;
-        if (!_li._tiempo_power_update || !_li._tiempo_power) {
-            _li._is_power_blink = false;
-            continue;
+    document.querySelectorAll('#ul_unidades li').forEach(function (li) {
+        if (!li._is_power_blink) return;
+        if (!li._tiempo_power_update || !li._tiempo_power) {
+            li._is_power_blink = false;
+            return;
         }
-        var _horasRest = _li._tiempo_power - ((Date.now() - new Date(_li._tiempo_power_update).getTime()) / 3600000);
+        var _horasRest = li._tiempo_power - ((Date.now() - new Date(li._tiempo_power_update).getTime()) / 3600000);
         if (_horasRest <= 0) {
-            _li._is_power_blink = false;
-            var _boltEl = _li.querySelector('.fa-bolt');
+            li._is_power_blink = false;
+            var _boltEl = li.querySelector('.fa-bolt');
             if (_boltEl) _boltEl.classList.remove('bolt-power-blink');
         }
-    }
+    });
 }, 60000);
 
 /**
@@ -1105,12 +1016,11 @@ setInterval(function () {
  */
 function setBuffBlink(uid, isBuff) {
     try {
-        const sid = normalizarUnidadId(uid);
-        if (!sid) return;
-        const li = document.getElementById(sid);
+        if (!uid) return;
+        const li = document.getElementById(uid);
         if (!li) return;
         li._is_buff = !!isBuff;
-        const markerEl = document.getElementById('g' + sid);
+        const markerEl = document.getElementById('g' + uid);
         if (!markerEl) return;
         if (isBuff) {
             markerEl.classList.add('marker-buff-blink');
@@ -1139,24 +1049,23 @@ function conectarSSE(coopId) {
     sse.addEventListener('unidad.updated', (evt) => {
         try {
             const data = JSON.parse(evt.data);
-            const uid = normalizarUnidadId(data && data._id ? data._id : (data ? data.unidad_id : null));
-            if (!uid) return;
-            data._id = uid;
-            if (!unidadPerteneceAFiltroRutaActual(uid)) return;
+            if (!(data && data._id)) return;
+            if (!unidadPerteneceAFiltroRutaActual(data._id)) return;
 
             // Si es BUFF: solo parpadear, NO actualizar nada en el front
             if (data.is_buff) {
-                setBuffBlink(uid, true);
+                setBuffBlink(data._id, true);
                 return;
             }
 
             // RESP: detener parpadeo (si estaba activo) y procesar normalmente
-            setBuffBlink(uid, false);
+            setBuffBlink(data._id, false);
 
             // Always update marker on map
             actualizarUnidadRealtime(data);
 
             // If the LI has an active temp lock (set by unidad.location), defer the list update
+            const uid = data._id;
             const li = document.getElementById(uid);
             const now = Date.now();
 
@@ -1179,21 +1088,22 @@ function conectarSSE(coopId) {
                     bitacora: data.bitacora || ''
                 };
 
-                if (metaTieneCamposVisibles(meta)) {
-                    unidadesMetaCache[uid] = { data: meta, ts: Date.now() };
-                    applyMetaToLi(uid, meta, 'sse');
+                const anyMeta = Object.keys(meta).some(k => meta[k] && meta[k] !== '');
+                if (anyMeta) {
+                    unidadesMetaCache[data._id] = { data: meta, ts: Date.now() };
+                    applyMetaToLi(data._id, meta, 'sse');
                 }
 
                 updateUnidadInList(data);
 
-                if (!unidadesMetaFetchedOnce[uid]) {
-                    unidadesMetaFetchedOnce[uid] = true;
-                    fetchUnidadesMeta([uid]).then(function(resp) {
+                if (!unidadesMetaFetchedOnce[data._id]) {
+                    unidadesMetaFetchedOnce[data._id] = true;
+                    fetchUnidadesMeta([data._id]).then(function(resp) {
                         try {
-                            var serverMeta = resp && resp[uid] ? resp[uid] : null;
+                            var serverMeta = resp && resp[data._id] ? resp[data._id] : null;
                             if (serverMeta) {
-                                unidadesMetaCache[uid] = { data: serverMeta, ts: Date.now() };
-                                applyMetaToLi(uid, serverMeta, 'sse');
+                                unidadesMetaCache[data._id] = { data: serverMeta, ts: Date.now() };
+                                applyMetaToLi(data._id, serverMeta, 'sse');
                             }
                         } catch (e) { console.warn('apply server meta after sse failed', e); }
                     }).catch(function(e){ /* ignore */ });
@@ -1208,9 +1118,7 @@ function conectarSSE(coopId) {
     sse.addEventListener('unidad.sentido.changed', (evt) => {
         try {
             const data = JSON.parse(evt.data);
-            const uidSentido = normalizarUnidadId(data && data.unidad_id ? data.unidad_id : data._id);
-            if (!uidSentido || !unidadPerteneceAFiltroRutaActual(uidSentido)) return;
-            data.unidad_id = uidSentido;
+            if (!data.unidad_id || !unidadPerteneceAFiltroRutaActual(data.unidad_id)) return;
 
             // Si es BUFF: solo parpadear, NO actualizar sentido ni lista
             if (data.is_buff) {
@@ -1230,9 +1138,7 @@ function conectarSSE(coopId) {
     sse.addEventListener('unidad.alerta.puerta', (evt) => {
         try {
             const msg = JSON.parse(evt.data);
-            const uidPuerta = normalizarUnidadId(msg && msg.unidad_id ? msg.unidad_id : msg._id);
-            if (!uidPuerta || !unidadPerteneceAFiltroRutaActual(uidPuerta)) return;
-            msg.unidad_id = uidPuerta;
+            if (!msg.unidad_id || !unidadPerteneceAFiltroRutaActual(msg.unidad_id)) return;
 
             const li = document.getElementById(msg.unidad_id);
             if (!li || !li.currentU) return;
@@ -1258,10 +1164,8 @@ function conectarSSE(coopId) {
     sse.addEventListener('unidad.location', (evt) => {
         try {
             const msg = JSON.parse(evt.data);
-            const _uidLoc = normalizarUnidadId(msg._id || msg.unidad_id);
+            const _uidLoc = msg._id || msg.unidad_id;
             if (!_uidLoc || !unidadPerteneceAFiltroRutaActual(_uidLoc)) return;
-            msg._id = _uidLoc;
-            msg.unidad_id = _uidLoc;
 
             zoomUnidad=true;
             zoomUnidadID=msg._id || msg.unidad_id;
@@ -1320,7 +1224,8 @@ function conectarSSE(coopId) {
                                                 tipo_bitacora: pending.tipo_bitacora || '',
                                                 bitacora: pending.bitacora || ''
                                             };
-                                            if (metaTieneCamposVisibles(meta)) {
+                                            const anyMeta = Object.keys(meta).some(k => meta[k] && meta[k] !== '');
+                                            if (anyMeta) {
                                                 unidadesMetaCache[pending._id] = { data: meta, ts: Date.now() };
                                                 applyMetaToLi(pending._id, meta, 'sse');
                                             }
@@ -1343,10 +1248,10 @@ function conectarSSE(coopId) {
     sse.addEventListener('unidad.ignicion', (evt) => {
         try {
             const msg = JSON.parse(evt.data);
-            const uid = normalizarUnidadId(msg && (msg._id || msg.unidad_id));
-            if (!uid) return;
-            if (!unidadPerteneceAFiltroRutaActual(uid)) return;
-            msg._id = uid;
+            if (!msg || !msg._id) return;
+            if (!unidadPerteneceAFiltroRutaActual(msg._id)) return;
+
+            const uid = String(msg._id);
             const li = document.getElementById(uid);
             if (!li) return;
 
@@ -1391,10 +1296,10 @@ function conectarSSE(coopId) {
     sse.addEventListener('unidad.power', (evt) => {
         try {
             const msg = JSON.parse(evt.data);
-            const uid = normalizarUnidadId(msg && (msg._id || msg.unidad_id));
-            if (!uid) return;
-            if (!unidadPerteneceAFiltroRutaActual(uid)) return;
-            msg._id = uid;
+            if (!msg || !msg._id) return;
+            if (!unidadPerteneceAFiltroRutaActual(msg._id)) return;
+
+            const uid = String(msg._id);
             const li = document.getElementById(uid);
             if (!li) return;
 
@@ -1439,9 +1344,7 @@ function conectarSSE(coopId) {
     sse.onmessage = (evt) => {
         try {
             const data = JSON.parse(evt.data);
-            const uidFallback = normalizarUnidadId(data && (data._id || data.unidad_id));
-            if (data && uidFallback && unidadPerteneceAFiltroRutaActual(uidFallback)) {
-                data._id = uidFallback;
+            if (data && data._id && unidadPerteneceAFiltroRutaActual(data._id)) {
                 actualizarUnidadRealtime(data);
                 updateUnidadInList(data);
             }
@@ -1472,11 +1375,9 @@ function actualizarUnidadRealtime(unidad) {
     ) {
         return;
     }
-    var uidRt = normalizarUnidadId(unidad._id || unidad.unidad_id);
-    if (!uidRt || !unidadPerteneceAFiltroRutaActual(uidRt)) {
+    if (!unidadPerteneceAFiltroRutaActual(unidad._id)) {
         return;
     }
-    unidad._id = uidRt;
 
     const fakeFecha = {
         fecha_gps: unidad.fecha_gps ?? null,
@@ -1489,17 +1390,14 @@ function actualizarUnidadRealtime(unidad) {
 }
 // Buscar el <li> de la unidad en la lista lateral y actualizar sus campos.
 function updateUnidadInList(unidad) {
-    if (!unidad) return;
-    var uidList = normalizarUnidadId(unidad._id || unidad.unidad_id);
-    if (!uidList) return;
-    unidad._id = uidList;
-    if (!unidadPerteneceAFiltroRutaActual(uidList)) return;
+    if (!unidad || !unidad._id) return;
+    if (!unidadPerteneceAFiltroRutaActual(unidad._id)) return;
 
     // Preserve previously-fetched meta (from unidades-meta) so WS updates that lack
     // ruta_* or bitacora do not wipe the values. If there is an existing LI with
     // saved meta, copy those values into the incoming unidad when missing.
     try {
-        var existingLiForMerge = document.getElementById(uidList);
+        var existingLiForMerge = document.getElementById(unidad._id);
         if (existingLiForMerge && existingLiForMerge.currentU) {
             var prev = existingLiForMerge.currentU;
             if ((!unidad.ruta_actual || unidad.ruta_actual === '') && prev.ruta_actual) unidad.ruta_actual = prev.ruta_actual;
@@ -2009,20 +1907,13 @@ $("#velocimetro").myfunc({divFact:10});
     var rutas_ids=[];
 
     function tieneFiltroRutaActivo() {
-        if (typeof rutas_ids !== 'undefined' && $.isArray(rutas_ids)) {
-            var rutasIdsLimpias = rutas_ids.filter(function (v) {
-                return v != null && String(v).trim() !== '';
-            });
-            if (rutasIdsLimpias.length > 0) return true;
-        }
+        if (typeof rutas_ids !== 'undefined' && rutas_ids.length > 0) return true;
         try {
             var rv = $('#ruta').val();
-            if ($.isArray(rv)) {
-                return rv.some(function (v) {
-                    return v != null && String(v).trim() !== '';
-                });
-            }
-            return rv != null && rv !== '' && String(rv).trim() !== '';
+            if (rv == null || rv === '') return false;
+            if ($.isArray(rv) && rv.length === 0) return false;
+            if ($.isArray(rv) && rv.length > 0) return true;
+            return !!rv;
         } catch (e) {
             return false;
         }
@@ -3012,48 +2903,35 @@ $("#velocimetro").myfunc({divFact:10});
         let fecha_gps = '-';
 
         try {
-            function toValidDateFromAny(raw) {
-                if (raw == null) return null;
-                var candidate = raw;
-                // Soportar {date: "..."} y {$date: "..."} que llegan desde Mongo serializado.
-                if (typeof candidate === 'object') {
-                    if (candidate.date != null) candidate = candidate.date;
-                    else if (candidate.$date != null) candidate = candidate.$date;
-                }
-                var d = new Date(candidate);
-                return isNaN(d.getTime()) ? null : d;
-            }
-
             if (_is === 0 && fecha_gps_?.fecha_gps) {
-                    const dGps = toValidDateFromAny(fecha_gps_.fecha_gps);
-                if (dGps) {
-                    dGps.setHours(dGps.getHours() + GPS_HOUR_OFFSET);
-                    fecha_gps = dGps.toLocaleString('es-EC', {
-                        timeZone: 'America/Guayaquil',
-                        day: '2-digit',
-                        month: '2-digit',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        second: '2-digit',
-                        hour12: false
-                    });
-                }
+                const dGps = new Date(fecha_gps_.fecha_gps);
+                dGps.setHours(dGps.getHours() + GPS_HOUR_OFFSET);
+                fecha_gps = dGps.toLocaleString('es-EC', {
+                    timeZone: 'America/Guayaquil',
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false
+
+                });
+
             }
             if (_is === 0 && fecha_servidor_?.fecha_servidor) {
-                const dSrv = toValidDateFromAny(fecha_servidor_.fecha_servidor);
-                if (dSrv) {
-                    fecha = dSrv.toLocaleString('es-EC', {
-                        timeZone: 'America/Guayaquil',
-                        day: '2-digit',
-                        month: '2-digit',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        second: '2-digit',
-                        hour12: false
-                    });
-                }
+                const dSrv = new Date(fecha_servidor_.fecha_servidor);
+                fecha = dSrv.toLocaleString('es-EC', {
+                    timeZone: 'America/Guayaquil',
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false
+
+                });
             }
             if (_is === 1) {
                 fecha = fecha_servidor_;
