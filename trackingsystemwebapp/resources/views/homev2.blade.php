@@ -1487,6 +1487,46 @@ function actualizarUnidadRealtime(unidad) {
     };
     setMarcadorUnidad(unidad, fakeFecha, fakeFecha, 0);
 }
+
+/** Misma regla que updateUnidadInList para el ícono (M / D / E / default = no envía). */
+function computeEstadoMovilParaContador(unidad) {
+    if (!unidad) return 'no_envia_trama';
+    var velocidad_num = Number(unidad.velocidad_actual) || 0;
+    var estado = unidad.estado_movil || ((velocidad_num === 0) ? 'D' : 'M');
+    if (unidad.diferencia != null && unidad.diferencia > 30) estado = 'no_envia_trama';
+    var fecha_gps = unidad.fecha_gps || null;
+    if (!fecha_gps) estado = 'no_envia_trama';
+    return estado;
+}
+
+/** Actualiza #cantidad y desglose (verde / rojo / naranja / violeta) según currentU de cada fila — usado tras SSE. */
+function refreshContadoresEstadoUnidades() {
+    var ul = document.getElementById('ul_unidades');
+    if (!ul) return;
+    var nM = 0, nD = 0, nE = 0, nNo = 0;
+    var children = ul.children;
+    for (var i = 0; i < children.length; i++) {
+        var row = children[i];
+        if (!row || !row.currentU) continue;
+        var est = computeEstadoMovilParaContador(row.currentU);
+        if (est === 'M') nM++;
+        else if (est === 'D') nD++;
+        else if (est === 'E') nE++;
+        else nNo++;
+    }
+    var total = nM + nD + nE + nNo;
+    var elTot = document.getElementById('cantidad');
+    if (elTot) elTot.textContent = String(total);
+    var em = document.getElementById('cantidad_movimiento');
+    if (em) em.textContent = String(nM);
+    var es = document.getElementById('cantidad_stop');
+    if (es) es.textContent = String(nD);
+    var ee = document.getElementById('cantidad_e');
+    if (ee) ee.textContent = String(nE);
+    var en = document.getElementById('cantidad_no');
+    if (en) en.textContent = String(nNo);
+}
+
 // Buscar el <li> de la unidad en la lista lateral y actualizar sus campos.
 function updateUnidadInList(unidad) {
     if (!unidad) return;
@@ -1839,7 +1879,7 @@ function updateUnidadInList(unidad) {
         selectUnidad(this.currentU,this.currentFechagpsC,this.currentFecha,1); 
     };
 
-  
+    try { refreshContadoresEstadoUnidades(); } catch (e) {}
 }
 
 </script>
