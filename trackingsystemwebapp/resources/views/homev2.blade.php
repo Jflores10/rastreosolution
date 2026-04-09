@@ -715,8 +715,9 @@ let SSE_CONNECTED = false;
     }
 @endphp
 // Tipos 4 y 5: igual que getUnidades en store — solo unidades_pertenecientes (SSE va por toda la coop).
-// null = sin restricción por usuario (tipos 1–3). Objeto/array = debe estar en la lista para procesar SSE.
-var UNIDADES_PERMITIDAS_SSE = @json($__hv2Permitidas);
+// null = sin restricción por usuario (tipos 1–3). Objeto = debe estar en la lista para procesar SSE.
+// json_encode: Laravel 5.3 no incluye la directiva Blade @json (5.5+).
+var UNIDADES_PERMITIDAS_SSE = {!! json_encode($__hv2Permitidas) !!};
 
 // IDs de unidades devueltas por /historicos cuando hay ruta(s) seleccionada(s).
 // null = sin filtro de ruta (pero sigue aplicando UNIDADES_PERMITIDAS_SSE si aplica). Objeto = intersección con ruta.
