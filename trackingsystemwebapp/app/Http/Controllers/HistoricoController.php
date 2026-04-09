@@ -265,10 +265,11 @@ class HistoricoController extends Controller
                     }
                     if (count($array_aux) > 0) {
                         usort($array_aux, function ($a, $b) use ($despachoFirstByUnidad) {
-                            $fa = $this->despachoFinRecorridoCarbon($despachoFirstByUnidad[(string) $a] ?? null);
-                            $fb = $this->despachoFinRecorridoCarbon($despachoFirstByUnidad[(string) $b] ?? null);
+                            $fa = $this->despachoFechaFinalizacionDespachoCarbon($despachoFirstByUnidad[(string) $a] ?? null);
+                            $fb = $this->despachoFechaFinalizacionDespachoCarbon($despachoFirstByUnidad[(string) $b] ?? null);
                             $ta = $fa ? $fa->getTimestamp() : PHP_INT_MAX;
                             $tb = $fb ? $fb->getTimestamp() : PHP_INT_MAX;
+                            // Ascendente: la que termina antes va primero
                             if ($ta !== $tb) {
                                 return $ta <=> $tb;
                             }
@@ -631,21 +632,27 @@ class HistoricoController extends Controller
                     }
                 }
 
-                if (isset($unidades) && isset($array_aux))
-                {
-                	$orden = 1;
-                	foreach ($array_aux as $aux){
-                		foreach ($unidades as $unidad)
-                		{
-                			if ($aux == (string) $unidad->_id)
-                			{
-                				$unidad->orden = $orden++;
-                				break;
-                			}
-                		}
-                	}
-                	if (count($array_aux) > 0)
-                		$unidades = $unidades->sortBy('orden')->values()->all();
+                // Orden ascendente por fecha de finalización del recorrido (incl. tipo 4/5, sin depender solo de array_aux)
+                if (isset($unidades) && isset($despachos_pendientes) && $despachos_pendientes instanceof \Illuminate\Support\Collection
+                    && $despachos_pendientes->count() > 0 && count($unidades) > 0) {
+                    $despachoFirstByUnidadStore = [];
+                    foreach ($despachos_pendientes as $d) {
+                        $k = (string) $d->unidad_id;
+                        if (!isset($despachoFirstByUnidadStore[$k])) {
+                            $despachoFirstByUnidadStore[$k] = $d;
+                        }
+                    }
+                    $coll = $unidades instanceof \Illuminate\Support\Collection ? $unidades : collect($unidades);
+                    $coll = $coll->sortBy(function ($unidad) use ($despachoFirstByUnidadStore) {
+                        $d = $despachoFirstByUnidadStore[(string) $unidad->_id] ?? null;
+                        $fin = $this->despachoFechaFinalizacionDespachoCarbon($d);
+                        return $fin ? $fin->getTimestamp() : PHP_INT_MAX;
+                    })->values();
+                    $orden = 1;
+                    foreach ($coll as $unidad) {
+                        $unidad->orden = $orden++;
+                    }
+                    $unidades = $coll->all();
                 }
             }
             else
@@ -1374,7 +1381,32 @@ class HistoricoController extends Controller
     }
 
     /**
-     * Instante de fin de recorrido como en store getUnidades: fecha despacho + 5h + suma tiempo_llegada (puntos de control).
+     * Fecha de finalización del despacho: último tiempo_esperado en puntos_control; si no hay, fallback fecha+5h+tiempos ruta.
+     *
+     * @param  \App\Despacho|null  $despacho
+     * @return \Carbon\Carbon|null
+     */
+    private function despachoFechaFinalizacionDespachoCarbon($despacho)
+    {
+        if (!$despacho) {
+            return null;
+        }
+        $pcs = $despacho->puntos_control;
+        if (is_array($pcs) && count($pcs) > 0) {
+            $last = $pcs[count($pcs) - 1];
+            if (isset($last['tiempo_esperado']) && $last['tiempo_esperado'] !== null) {
+                try {
+                    return Carbon::parse($last['tiempo_esperado']);
+                } catch (\Exception $e) {
+                    //
+                }
+            }
+        }
+        return $this->despachoFinRecorridoCarbon($despacho);
+    }
+
+    /**
+     * Instante de fin de recorrido como en store getUnidades: fecha despacho + 5h + suma tiempo_llegada (puntos de control de la ruta).
      *
      * @param  \App\Despacho|null  $despacho
      * @return \Carbon\Carbon|null
@@ -1410,7 +1442,7 @@ class HistoricoController extends Controller
      */
     private function despachoRutaSuperoHoraFin($despacho)
     {
-        $fin = $this->despachoFinRecorridoCarbon($despacho);
+        $fin = $this->despachoFechaFinalizacionDespachoCarbon($despacho);
         if ($fin === null) {
             return false;
         }
