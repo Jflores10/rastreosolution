@@ -701,14 +701,35 @@ Dashboard
 <script>
 let SSE_CONNECTED = false;
 
+@php
+    $__hv2Tipo = Auth::user()->tipo_usuario->valor;
+    $__hv2Permitidas = null;
+    if ($__hv2Tipo == 4 || $__hv2Tipo == 5) {
+        $__hv2Permitidas = [];
+        $__up = Auth::user()->unidades_pertenecientes;
+        if (!empty($__up)) {
+            foreach ((array) $__up as $__oid) {
+                $__hv2Permitidas[(string) $__oid] = true;
+            }
+        }
+    }
+@endphp
+// Tipos 4 y 5: igual que getUnidades en store — solo unidades_pertenecientes (SSE va por toda la coop).
+// null = sin restricción por usuario (tipos 1–3). Objeto/array = debe estar en la lista para procesar SSE.
+var UNIDADES_PERMITIDAS_SSE = @json($__hv2Permitidas);
+
 // IDs de unidades devueltas por /historicos cuando hay ruta(s) seleccionada(s).
-// null = sin filtro (mostrar/actualizar todas). Objeto = solo esas unidades en lista y mapa vía SSE.
+// null = sin filtro de ruta (pero sigue aplicando UNIDADES_PERMITIDAS_SSE si aplica). Objeto = intersección con ruta.
 var unidadesIdsRutaActual = null;
 
 function unidadPerteneceAFiltroRutaActual(uid) {
-    if (unidadesIdsRutaActual === null) return true;
     if (uid === undefined || uid === null) return false;
-    return !!unidadesIdsRutaActual[String(uid)];
+    var s = String(uid);
+    if (UNIDADES_PERMITIDAS_SSE !== null && !UNIDADES_PERMITIDAS_SSE[s]) {
+        return false;
+    }
+    if (unidadesIdsRutaActual === null) return true;
+    return !!unidadesIdsRutaActual[s];
 }
 
 function iniciarSSEGlobal() {
@@ -744,6 +765,32 @@ var unidadesMetaCache = {};
 const META_TTL_MS = 30000; // 30s cache TTL for batch refresh
 // ensure we only fetch server meta once per unidad when SSE first arrives
 var unidadesMetaFetchedOnce = {};
+
+/** Una lectura de #ruta; misma lógica que antes en fetch y en refresh (evita duplicar try/catch). */
+function getRutaSelectSnapshot() {
+    try {
+        var rv = $('#ruta').val();
+        var hay = rv != null && rv !== '' && !($.isArray(rv) && rv.length === 0);
+        return {
+            hay: hay,
+            rutas_ids: hay ? ($.isArray(rv) ? rv : [rv]) : null
+        };
+    } catch (e) {
+        return { hay: false, rutas_ids: null };
+    }
+}
+
+/** Equivalente a Object.keys(meta).some(...) para el objeto meta fijo de SSE (sin alloc de keys). */
+function metaTieneCamposVisibles(meta) {
+    return !!(meta && (
+        (meta.ruta_actual && meta.ruta_actual !== '') ||
+        (meta.ruta_fecha && meta.ruta_fecha !== '') ||
+        (meta.ruta_conductor && meta.ruta_conductor !== '') ||
+        (meta.ruta_hora_fin && meta.ruta_hora_fin !== '') ||
+        (meta.tipo_bitacora && meta.tipo_bitacora !== '') ||
+        (meta.bitacora && meta.bitacora !== '')
+    ));
+}
 
 function applyMetaToLi(uid, meta, source) {
     try {
@@ -842,18 +889,14 @@ function fetchUnidadesMeta(ids) {
         var payload = { unidad_ids: ids };
 
         // Adjuntar rutas seleccionadas solo si hay alguna elegida
-        try {
-            var rutasVal = $('#ruta').val();
-            if (rutasVal != null && rutasVal !== '' &&
-                    !($.isArray(rutasVal) && rutasVal.length === 0)) {
-                payload.rutas_ids = $.isArray(rutasVal) ? rutasVal : [rutasVal];
-                // cooperativa_id requerido por el backend para tipo 1 (admin)
-                var coopEl = document.getElementById('cooperativa');
-                if (coopEl && coopEl.value) {
-                    payload.cooperativa_id = coopEl.value;
-                }
+        var snap = getRutaSelectSnapshot();
+        if (snap.hay && snap.rutas_ids) {
+            payload.rutas_ids = snap.rutas_ids;
+            var coopEl = document.getElementById('cooperativa');
+            if (coopEl && coopEl.value) {
+                payload.cooperativa_id = coopEl.value;
             }
-        } catch (e) {}
+        }
 
         $.post('/historico/unidades-meta', payload, function (data) {
             resolve(data || {});
@@ -865,16 +908,19 @@ function fetchUnidadesMeta(ids) {
 
 function refreshVisibleUnidadesMeta() {
     try {
-        var lis = Array.from(document.querySelectorAll('#ul_unidades li'));
+        var lis = document.querySelectorAll('#ul_unidades li');
+        var len = lis.length;
         var now = Date.now();
         var toFetch = [];
-        lis.forEach(function (li) {
-            var uid = li.id;
-            var cache = unidadesMetaCache[uid];
+        var i, li, uid, cache;
+        for (i = 0; i < len; i++) {
+            li = lis[i];
+            uid = li.id;
+            cache = unidadesMetaCache[uid];
             if (!cache || (now - cache.ts) > META_TTL_MS) {
                 toFetch.push(uid);
             }
-        });
+        }
 
         if (toFetch.length === 0) return;
 
@@ -883,44 +929,45 @@ function refreshVisibleUnidadesMeta() {
             // Si hay ruta(s) seleccionada(s) y el servidor devolvió el listado,
             // actualizamos unidadesIdsRutaActual y eliminamos del DOM los LIs
             // de unidades cuyo despacho ya no está activo en esa ruta.
-            var hayRuta = false;
-            try {
-                var rv = $('#ruta').val();
-                hayRuta = rv != null && rv !== '' &&
-                          !($.isArray(rv) && rv.length === 0);
-            } catch (e) {}
+            var hayRuta = getRutaSelectSnapshot().hay;
 
             if (hayRuta && Array.isArray(resp.unidades_activas_ruta)) {
                 var nuevoFiltro = {};
-                resp.unidades_activas_ruta.forEach(function (uid) {
-                    nuevoFiltro[String(uid)] = true;
-                });
+                var uar = resp.unidades_activas_ruta;
+                var u, ulen = uar.length;
+                for (u = 0; u < ulen; u++) {
+                    nuevoFiltro[String(uar[u])] = true;
+                }
 
                 // Actualizar filtro SSE
                 unidadesIdsRutaActual = nuevoFiltro;
 
                 // Remover LIs (y marcadores) de unidades ya sin despacho activo
-                lis.forEach(function (li) {
-                    if (!li.id || nuevoFiltro[String(li.id)]) return;
+                for (i = 0; i < len; i++) {
+                    li = lis[i];
+                    if (!li.id || nuevoFiltro[String(li.id)]) continue;
                     try {
                         var marker = getMarcadorUnidad(li.id);
                         if (marker) marker.setMap(null);
                     } catch (e) {}
                     if (li.parentNode) li.parentNode.removeChild(li);
-                });
+                }
             } else if (!hayRuta) {
                 unidadesIdsRutaActual = null;
             }
             // ─────────────────────────────────────────────────────────────────
 
             // Aplicar meta individual a cada LI
-            Object.keys(resp).forEach(function (uid) {
-                if (uid === 'unidades_activas_ruta') return;
-                var m = resp[uid];
-                if (!m) return;
+            var keys = Object.keys(resp);
+            var ki, m;
+            for (ki = 0; ki < keys.length; ki++) {
+                uid = keys[ki];
+                if (uid === 'unidades_activas_ruta') continue;
+                m = resp[uid];
+                if (!m) continue;
                 unidadesMetaCache[uid] = { data: m, ts: Date.now() };
                 applyMetaToLi(uid, m, 'batch');
-            });
+            }
         });
     } catch (e) {
         console.warn('refreshVisibleUnidadesMeta failed', e);
@@ -942,9 +989,11 @@ function sincronizarUnidadesAlVolverAlFrente() {
     try {
         if (document.visibilityState !== 'visible') return;
 
-        document.querySelectorAll('#ul_unidades li').forEach(function (li) {
-            if (li.id) delete unidadesMetaCache[li.id];
-        });
+        var _lisSync = document.querySelectorAll('#ul_unidades li');
+        var _si, _slen = _lisSync.length;
+        for (_si = 0; _si < _slen; _si++) {
+            if (_lisSync[_si].id) delete unidadesMetaCache[_lisSync[_si].id];
+        }
 
         /* 1) Pedir meta al servidor de inmediato (lo más visible para el usuario) */
         try {
@@ -994,19 +1043,22 @@ window.addEventListener('pageshow', function (ev) {
 // Timer periódico: cada 60 s verifica si algún bolt con tiempo_power activo ya expiró
 // y detiene el parpadeo automáticamente.
 setInterval(function () {
-    document.querySelectorAll('#ul_unidades li').forEach(function (li) {
-        if (!li._is_power_blink) return;
-        if (!li._tiempo_power_update || !li._tiempo_power) {
-            li._is_power_blink = false;
-            return;
+    var _lisBolt = document.querySelectorAll('#ul_unidades li');
+    var _bi, _blen = _lisBolt.length;
+    for (_bi = 0; _bi < _blen; _bi++) {
+        var _li = _lisBolt[_bi];
+        if (!_li._is_power_blink) continue;
+        if (!_li._tiempo_power_update || !_li._tiempo_power) {
+            _li._is_power_blink = false;
+            continue;
         }
-        var _horasRest = li._tiempo_power - ((Date.now() - new Date(li._tiempo_power_update).getTime()) / 3600000);
+        var _horasRest = _li._tiempo_power - ((Date.now() - new Date(_li._tiempo_power_update).getTime()) / 3600000);
         if (_horasRest <= 0) {
-            li._is_power_blink = false;
-            var _boltEl = li.querySelector('.fa-bolt');
+            _li._is_power_blink = false;
+            var _boltEl = _li.querySelector('.fa-bolt');
             if (_boltEl) _boltEl.classList.remove('bolt-power-blink');
         }
-    });
+    }
 }, 60000);
 
 /**
@@ -1088,8 +1140,7 @@ function conectarSSE(coopId) {
                     bitacora: data.bitacora || ''
                 };
 
-                const anyMeta = Object.keys(meta).some(k => meta[k] && meta[k] !== '');
-                if (anyMeta) {
+                if (metaTieneCamposVisibles(meta)) {
                     unidadesMetaCache[data._id] = { data: meta, ts: Date.now() };
                     applyMetaToLi(data._id, meta, 'sse');
                 }
@@ -1224,8 +1275,7 @@ function conectarSSE(coopId) {
                                                 tipo_bitacora: pending.tipo_bitacora || '',
                                                 bitacora: pending.bitacora || ''
                                             };
-                                            const anyMeta = Object.keys(meta).some(k => meta[k] && meta[k] !== '');
-                                            if (anyMeta) {
+                                            if (metaTieneCamposVisibles(meta)) {
                                                 unidadesMetaCache[pending._id] = { data: meta, ts: Date.now() };
                                                 applyMetaToLi(pending._id, meta, 'sse');
                                             }
