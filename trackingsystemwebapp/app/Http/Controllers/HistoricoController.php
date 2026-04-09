@@ -245,7 +245,7 @@ class HistoricoController extends Controller
                     }
                 }
 
-                // Mapa primer despacho/unidad (orderBy fecha asc), filtro por hora fin y orden por fecha fin de recorrido (store getUnidades).
+                // Mapa primer despacho/unidad (orderBy fecha asc), filtro por fin estimado; orden por última marca en puntos_control (igual display_fecha_salida).
                 if ($despachos_pendientes !== null) {
                     $despachoFirstByUnidad = [];
                     foreach ($despachos_pendientes as $d) {
@@ -632,7 +632,7 @@ class HistoricoController extends Controller
                     }
                 }
 
-                // Orden ascendente por fecha de finalización del recorrido (incl. tipo 4/5, sin depender solo de array_aux)
+                // Orden ascendente por hora real de última marca en PC (igual criterio display_fecha_salida / store)
                 if (isset($unidades) && isset($despachos_pendientes) && $despachos_pendientes instanceof \Illuminate\Support\Collection
                     && $despachos_pendientes->count() > 0 && count($unidades) > 0) {
                     $despachoFirstByUnidadStore = [];
@@ -1381,7 +1381,8 @@ class HistoricoController extends Controller
     }
 
     /**
-     * Fecha de finalización del despacho: último tiempo_esperado en puntos_control; si no hay, fallback fecha+5h+tiempos ruta.
+     * Instante para ordenar por avance del recorrido: última marca en puntos_control (desde el final hacia el inicio).
+     * No usa tiempo_esperado ni salida; sin marcas, estimación fecha+5h+tiempos ruta.
      *
      * @param  \App\Despacho|null  $despacho
      * @return \Carbon\Carbon|null
@@ -1391,14 +1392,15 @@ class HistoricoController extends Controller
         if (!$despacho) {
             return null;
         }
-        $pcs = $despacho->puntos_control;
-        if (is_array($pcs) && count($pcs) > 0) {
-            $last = $pcs[count($pcs) - 1];
-            if (isset($last['tiempo_esperado']) && $last['tiempo_esperado'] !== null) {
-                try {
-                    return Carbon::parse($last['tiempo_esperado']);
-                } catch (\Exception $e) {
-                    //
+        $puntosControl = $despacho->puntos_control;
+        if (isset($puntosControl) && is_array($puntosControl) && count($puntosControl) > 0) {
+            foreach (array_reverse($puntosControl) as $punto) {
+                if (isset($punto['marca']) && $punto['marca']) {
+                    try {
+                        return Carbon::parse($punto['marca']);
+                    } catch (\Exception $e) {
+                        break;
+                    }
                 }
             }
         }
@@ -1442,7 +1444,7 @@ class HistoricoController extends Controller
      */
     private function despachoRutaSuperoHoraFin($despacho)
     {
-        $fin = $this->despachoFechaFinalizacionDespachoCarbon($despacho);
+        $fin = $this->despachoFinRecorridoCarbon($despacho);
         if ($fin === null) {
             return false;
         }
