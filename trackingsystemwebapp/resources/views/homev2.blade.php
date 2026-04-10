@@ -3618,10 +3618,6 @@ $("#velocimetro").myfunc({divFact:10});
         clearPuntosImaginarios();
         var div_unidad=  $('#div-unidad');
         var div_mensaje=  $('#div-mensaje');
-        var unidad_movimiento=0;
-        var unidad_stop=0;
-        var unidad_no=0;
-        var unidad_e=0;
         var ul=$('#ul_unidades');
         let bloques = $('#cooperativa').find("option:selected").data("bloques");
         let trafico = $('#cooperativa').find("option:selected").data("trafico");
@@ -3838,14 +3834,13 @@ $("#velocimetro").myfunc({divFact:10});
 
                     voltaje=voltaje.toString().substring(0,2);
 
-                estado = resolveEstadoMovilParaLista({
-                    estado_movil: data.unidades[i].estado_movil,
-                    velocidad_actual: data.unidades[i].velocidad_actual,
-                    diferencia: data.array_fechas[i].diferencia,
-                    fecha_gps: data.array_fechas[i].fecha_gps != null
-                        ? (data.unidades[i].fecha_gps || data.array_fechas[i].fecha_gps)
-                        : null
-                });
+                var mergedU = Object.assign({}, data.unidades[i]);
+                mergedU.diferencia = data.array_fechas[i].diferencia;
+                mergedU.fecha_gps = (data.array_fechas[i].fecha_gps != null)
+                    ? (data.unidades[i].fecha_gps || data.array_fechas[i].fecha_gps)
+                    : (data.unidades[i].fecha_gps != null && data.unidades[i].fecha_gps !== '' ? data.unidades[i].fecha_gps : null);
+
+                estado = resolveEstadoMovilParaLista(mergedU);
                     
                 var iId = 'i' + data.unidades[i]._id; 
                 var gId = 'g' + data.unidades[i]._id; 
@@ -3876,7 +3871,6 @@ $("#velocimetro").myfunc({divFact:10});
                 switch(estado)
                 {
                     case 'D':
-                        unidad_stop++;
                         ul.append(
                                 '<li class="list-group-item" id=\''+ data.unidades[i]._id + '\'>'+
                                     ((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
@@ -3907,7 +3901,6 @@ $("#velocimetro").myfunc({divFact:10});
 
                             
                     case 'E':
-                        unidad_e++;
                         ul.append(
                                 '<li class="list-group-item" id=\''+ data.unidades[i]._id + '\'>'+
                                     ((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
@@ -3938,7 +3931,6 @@ $("#velocimetro").myfunc({divFact:10});
                         break;
 
                     case 'M':
-                        unidad_movimiento++;
                         ul.append(
                                 '<li class="list-group-item" id=\''+ data.unidades[i]._id + '\'>'+
                                     ((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
@@ -3971,10 +3963,6 @@ $("#velocimetro").myfunc({divFact:10});
 
 
                     default:
-                        
-                        unidad_no++;
-                      
-                        
                         ul.append(
                                 '<li class="list-group-item" id=\'' + data.unidades[i]._id + '\'>' +
                                 ((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
@@ -4005,21 +3993,23 @@ $("#velocimetro").myfunc({divFact:10});
                         break;
                 }
 
-                var currentLi = document.getElementById(iId);
-                var currentU = data.unidades[i];
+                // El <li> usa id = unidad._id (no iId, que es el icono fa-bus). Antes currentU quedaba en el icono
+                // y el LI nunca tenía currentU; applyMetaToLi reemplazaba por {} y los contadores fallaban al cargar.
+                var _uidFila = normalizarUnidadId(data.unidades[i]._id);
+                var currentLi = _uidFila ? document.getElementById(_uidFila) : null;
                 var currentFechagps = fecha_gps_marker;
                 var currentFecha = fecha_servidor;
                 if (currentLi != null && currentLi != undefined)
                 {
-                    currentLi.currentU = currentU;
+                    currentLi.currentU = mergedU;
                     currentLi.currentFechagps = currentFechagps;
                     currentLi.currentFecha = currentFecha;
                     currentLi.onclick = function () {
                         selectUnidad(this.currentU,this.currentFechagps,this.currentFecha,1);
                     };
                     // Establecer estado inicial del bolt blink según tiempo_power guardado en BD
-                    var _tp  = (currentU.tiempo_power != null) ? parseFloat(currentU.tiempo_power) : 0;
-                    var _tpuRaw = currentU.tiempo_power_update;
+                    var _tp  = (mergedU.tiempo_power != null) ? parseFloat(mergedU.tiempo_power) : 0;
+                    var _tpuRaw = mergedU.tiempo_power_update;
                     // tiempo_power_update puede llegar como string ISO, objeto {$date:...} de MongoDB, o null
                     var _tpu = null;
                     if (_tpuRaw) {
@@ -4046,10 +4036,7 @@ $("#velocimetro").myfunc({divFact:10});
                 }
             }
     
-            $('#cantidad_no').text(unidad_no);
-            $('#cantidad_movimiento').text(unidad_movimiento);
-            $('#cantidad_e').text(unidad_e);
-            $('#cantidad_stop').text(unidad_stop);
+            try { refreshContadoresEstadoUnidades(); } catch (e) {}
 
             // Forzar fetch inmediato de meta (tiempo_power, bolt_activo, ruta, etc.)
             // limpiando la caché de las unidades recién pintadas para ignorar el TTL.
