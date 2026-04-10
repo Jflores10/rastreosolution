@@ -1488,15 +1488,32 @@ function actualizarUnidadRealtime(unidad) {
     setMarcadorUnidad(unidad, fakeFecha, fakeFecha, 0);
 }
 
-/** Misma regla que updateUnidadInList para el ícono (M / D / E / default = no envía). */
-function computeEstadoMovilParaContador(unidad) {
+/**
+ * Estado para color del bus (M verde, D rojo, E naranja, default violeta sin trama).
+ * 1) Sin GPS útil (sin fecha_gps o diferencia > 30) → no_envia_trama.
+ * 2) Si estado_movil es D, M o E explícito → se respeta (no se pisa por velocidad).
+ * 3) Si es "-" o vacío → se infiere por velocidad (0=D, >0=M).
+ */
+function resolveEstadoMovilParaLista(unidad) {
     if (!unidad) return 'no_envia_trama';
-    var velocidad_num = Number(unidad.velocidad_actual) || 0;
-    var estado = unidad.estado_movil || ((velocidad_num === 0) ? 'D' : 'M');
-    if (unidad.diferencia != null && unidad.diferencia > 30) estado = 'no_envia_trama';
-    var fecha_gps = unidad.fecha_gps || null;
-    if (!fecha_gps) estado = 'no_envia_trama';
-    return estado;
+    var diff = unidad.diferencia;
+    if (diff != null && Number(diff) > 30) return 'no_envia_trama';
+    var fg = unidad.fecha_gps;
+    if (fg == null || fg === '') return 'no_envia_trama';
+
+    var vel = parseFloat(unidad.velocidad_actual);
+    if (isNaN(vel)) vel = 0;
+
+    var raw = unidad.estado_movil;
+    if (raw != null && raw !== '') {
+        var s = String(raw).trim();
+        if (s === '-') {
+            return vel <= 0 ? 'D' : 'M';
+        }
+        var c = s.charAt(0).toUpperCase();
+        if (c === 'D' || c === 'M' || c === 'E') return c;
+    }
+    return vel <= 0 ? 'D' : 'M';
 }
 
 /** Actualiza #cantidad y desglose (verde / rojo / naranja / violeta) según currentU de cada fila — usado tras SSE. */
@@ -1508,7 +1525,7 @@ function refreshContadoresEstadoUnidades() {
     for (var i = 0; i < children.length; i++) {
         var row = children[i];
         if (!row || !row.currentU) continue;
-        var est = computeEstadoMovilParaContador(row.currentU);
+        var est = resolveEstadoMovilParaLista(row.currentU);
         if (est === 'M') nM++;
         else if (est === 'D') nD++;
         else if (est === 'E') nE++;
@@ -1552,7 +1569,10 @@ function updateUnidadInList(unidad) {
             // Preserve tiempo_power: igual que ruta_actual, se mantiene en currentU entre updates
             if ((unidad.tiempo_power == null || unidad.tiempo_power === 0) && prev.tiempo_power) unidad.tiempo_power = prev.tiempo_power;
             if (!unidad.tiempo_power_update && prev.tiempo_power_update) unidad.tiempo_power_update = prev.tiempo_power_update;
-            
+            if ((unidad.estado_movil == null || unidad.estado_movil === '') && (prev.estado_movil != null && prev.estado_movil !== '')) {
+                unidad.estado_movil = prev.estado_movil;
+            }
+
             // Preserve sentido (direction) if incoming payload lacks it
             //if ((!unidad.sentido || unidad.sentido === '') && prev.sentido) unidad.sentido = prev.sentido;
         }
@@ -1635,9 +1655,7 @@ function updateUnidadInList(unidad) {
     var voltaje = (unidad.voltaje != null) ? String(unidad.voltaje).substring(0,2) : '--';
     var velocidad_num = Number(unidad.velocidad_actual) || 0;
 
-    var estado = unidad.estado_movil || ((velocidad_num==0)?'D':'M');
-    if (unidad.diferencia != null && unidad.diferencia > 30) estado = 'no_envia_trama';
-    if (!fecha_gps) estado = 'no_envia_trama';
+    var estado = resolveEstadoMovilParaLista(unidad);
 
     var iId = 'i' + unidad._id;
     var gId = 'g' + unidad._id;
@@ -3820,28 +3838,14 @@ $("#velocimetro").myfunc({divFact:10});
 
                     voltaje=voltaje.toString().substring(0,2);
 
-                if(estado=='-')
-                {
-                    if(parseFloat(data.unidades[i].velocidad_actual)==0)
-                        estado="D";
-                    else
-                        estado="M";
-                }
-                
-                if(parseFloat(data.unidades[i].velocidad_actual)==0)
-                    estado="D";
-                else
-                    estado="M";
-
-                if(data.array_fechas[i].diferencia!=null) {
-                    if (data.array_fechas[i].diferencia > 30)
-                    {
-                        estado = 'no_envia_trama';
-                    }
-                }
-
-                if(data.array_fechas[i].fecha_gps==null)
-                    estado = 'no_envia_trama';
+                estado = resolveEstadoMovilParaLista({
+                    estado_movil: data.unidades[i].estado_movil,
+                    velocidad_actual: data.unidades[i].velocidad_actual,
+                    diferencia: data.array_fechas[i].diferencia,
+                    fecha_gps: data.array_fechas[i].fecha_gps != null
+                        ? (data.unidades[i].fecha_gps || data.array_fechas[i].fecha_gps)
+                        : null
+                });
                     
                 var iId = 'i' + data.unidades[i]._id; 
                 var gId = 'g' + data.unidades[i]._id; 
