@@ -1553,9 +1553,6 @@ function updateUnidadInList(unidad) {
             // Preserve tiempo_power: igual que ruta_actual, se mantiene en currentU entre updates
             if ((unidad.tiempo_power == null || unidad.tiempo_power === 0) && prev.tiempo_power) unidad.tiempo_power = prev.tiempo_power;
             if (!unidad.tiempo_power_update && prev.tiempo_power_update) unidad.tiempo_power_update = prev.tiempo_power_update;
-            // No pisar la hora/diferencia del LI si el payload no trae GPS (misma referencia que la carga inicial)
-            if ((unidad.fecha_gps == null || unidad.fecha_gps === '') && prev.fecha_gps) unidad.fecha_gps = prev.fecha_gps;
-            if (unidad.diferencia == null && prev.diferencia != null) unidad.diferencia = prev.diferencia;
             
             // Preserve sentido (direction) if incoming payload lacks it
             //if ((!unidad.sentido || unidad.sentido === '') && prev.sentido) unidad.sentido = prev.sentido;
@@ -3609,6 +3606,10 @@ $("#velocimetro").myfunc({divFact:10});
         clearPuntosImaginarios();
         var div_unidad=  $('#div-unidad');
         var div_mensaje=  $('#div-mensaje');
+        var unidad_movimiento=0;
+        var unidad_stop=0;
+        var unidad_no=0;
+        var unidad_e=0;
         var ul=$('#ul_unidades');
         let bloques = $('#cooperativa').find("option:selected").data("bloques");
         let trafico = $('#cooperativa').find("option:selected").data("trafico");
@@ -3877,6 +3878,7 @@ $("#velocimetro").myfunc({divFact:10});
                 switch(estado)
                 {
                     case 'D':
+                        unidad_stop++;
                         ul.append(
                                 '<li class="list-group-item" id=\''+ data.unidades[i]._id + '\'>'+
                                     ((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
@@ -3907,6 +3909,7 @@ $("#velocimetro").myfunc({divFact:10});
 
                             
                     case 'E':
+                        unidad_e++;
                         ul.append(
                                 '<li class="list-group-item" id=\''+ data.unidades[i]._id + '\'>'+
                                     ((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
@@ -3937,6 +3940,7 @@ $("#velocimetro").myfunc({divFact:10});
                         break;
 
                     case 'M':
+                        unidad_movimiento++;
                         ul.append(
                                 '<li class="list-group-item" id=\''+ data.unidades[i]._id + '\'>'+
                                     ((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
@@ -3969,6 +3973,10 @@ $("#velocimetro").myfunc({divFact:10});
 
 
                     default:
+                        
+                        unidad_no++;
+                      
+                        
                         ul.append(
                                 '<li class="list-group-item" id=\'' + data.unidades[i]._id + '\'>' +
                                 ((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
@@ -3999,41 +4007,26 @@ $("#velocimetro").myfunc({divFact:10});
                         break;
                 }
 
-                var rowLi = document.getElementById(String(data.unidades[i]._id));
-                var afRow = data.array_fechas[i];
-                var velRow = Number(data.unidades[i].velocidad_actual) || 0;
-                var mergedU = Object.assign({}, data.unidades[i]);
-                if (afRow) {
-                    mergedU.diferencia = afRow.diferencia;
-                    if (afRow.fecha_gps != null) {
-                        mergedU.fecha_gps = (typeof afRow.fecha_gps === 'object' && afRow.fecha_gps.date !== undefined && afRow.fecha_gps.date !== null)
-                            ? afRow.fecha_gps.date : afRow.fecha_gps;
-                    } else {
-                        mergedU.fecha_gps = null;
-                    }
-                } else {
-                    mergedU.diferencia = data.unidades[i].diferencia;
-                    mergedU.fecha_gps = data.unidades[i].fecha_gps || null;
-                }
-                // Misma regla que el switch de este bucle: la velocidad define D/M antes de no_envía
-                mergedU.estado_movil = (velRow === 0) ? 'D' : 'M';
-
+                var currentLi = document.getElementById(iId);
+                var currentU = data.unidades[i];
                 var currentFechagps = fecha_gps_marker;
                 var currentFecha = fecha_servidor;
-                if (rowLi != null && rowLi !== undefined)
+                if (currentLi != null && currentLi != undefined)
                 {
-                    rowLi.currentU = mergedU;
-                    rowLi.currentFechagps = currentFechagps;
-                    rowLi.currentFecha = currentFecha;
-                    rowLi.onclick = function () {
-                        selectUnidad(this.currentU, this.currentFechagps, this.currentFecha, 1);
+                    currentLi.currentU = currentU;
+                    currentLi.currentFechagps = currentFechagps;
+                    currentLi.currentFecha = currentFecha;
+                    currentLi.onclick = function () {
+                        selectUnidad(this.currentU,this.currentFechagps,this.currentFecha,1);
                     };
                     // Establecer estado inicial del bolt blink según tiempo_power guardado en BD
-                    var _tp  = (mergedU.tiempo_power != null) ? parseFloat(mergedU.tiempo_power) : 0;
-                    var _tpuRaw = mergedU.tiempo_power_update;
+                    var _tp  = (currentU.tiempo_power != null) ? parseFloat(currentU.tiempo_power) : 0;
+                    var _tpuRaw = currentU.tiempo_power_update;
+                    // tiempo_power_update puede llegar como string ISO, objeto {$date:...} de MongoDB, o null
                     var _tpu = null;
                     if (_tpuRaw) {
                         try {
+                            // MongoDB extended JSON: {"$date": "..."} o {"$date": <ms>}
                             if (typeof _tpuRaw === 'object' && _tpuRaw.$date) {
                                 _tpu = new Date(_tpuRaw.$date);
                             } else {
@@ -4045,17 +4038,20 @@ $("#velocimetro").myfunc({divFact:10});
                     if (_tp > 0 && _tpu) {
                         var _horasRestI = _tp - ((Date.now() - _tpu.getTime()) / 3600000);
                         if (_horasRestI > 0) {
-                            rowLi._is_power_blink        = true;
-                            rowLi._tiempo_power          = _tp;
-                            rowLi._tiempo_power_update   = _tpu;
-                            var _boltElI = rowLi.querySelector('.fa-bolt');
+                            currentLi._is_power_blink        = true;
+                            currentLi._tiempo_power          = _tp;
+                            currentLi._tiempo_power_update   = _tpu;
+                            var _boltElI = currentLi.querySelector('.fa-bolt');
                             if (_boltElI) _boltElI.classList.add('bolt-power-blink');
                         }
                     }
                 }
             }
-
-            try { refreshContadoresEstadoUnidades(); } catch (e) {}
+    
+            $('#cantidad_no').text(unidad_no);
+            $('#cantidad_movimiento').text(unidad_movimiento);
+            $('#cantidad_e').text(unidad_e);
+            $('#cantidad_stop').text(unidad_stop);
 
             // Forzar fetch inmediato de meta (tiempo_power, bolt_activo, ruta, etc.)
             // limpiando la caché de las unidades recién pintadas para ignorar el TTL.
