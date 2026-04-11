@@ -1488,18 +1488,45 @@ function actualizarUnidadRealtime(unidad) {
     setMarcadorUnidad(unidad, fakeFecha, fakeFecha, 0);
 }
 
+/** Convierte fecha_gps (ISO, Mongo {$date}, PHP date object con .date, Date) a Date o null. */
+function parseFechaGpsFlexible(fg) {
+    if (fg == null || fg === '') return null;
+    if (typeof fg === 'object' && fg.$date != null) {
+        var x = fg.$date;
+        if (typeof x === 'number') {
+            var dNum = new Date(x);
+            return isNaN(dNum.getTime()) ? null : dNum;
+        }
+        var dStr = new Date(String(x));
+        return isNaN(dStr.getTime()) ? null : dStr;
+    }
+    if (typeof fg === 'object' && fg.date != null && typeof fg.date === 'string') {
+        var dPhp = new Date(fg.date);
+        return isNaN(dPhp.getTime()) ? null : dPhp;
+    }
+    var d = new Date(fg);
+    return isNaN(d.getTime()) ? null : d;
+}
+
 /**
  * Estado para color del bus (M verde, D rojo, E naranja, default violeta sin trama).
  * 1) Sin GPS útil (sin fecha_gps o diferencia > 30) → no_envia_trama.
  * 2) Si estado_movil es D, M o E explícito → se respeta (no se pisa por velocidad).
  * 3) Si es "-" o vacío → se infiere por velocidad (0=D, >0=M).
+ *
+ * Si `diferencia` no viene (p. ej. payload SSE), se calcula en minutos desde fecha_gps.
  */
 function resolveEstadoMovilParaLista(unidad) {
     if (!unidad) return 'no_envia_trama';
     var diff = unidad.diferencia;
+    if (diff == null || diff === '') {
+        var fgDate = parseFechaGpsFlexible(unidad.fecha_gps);
+        if (fgDate) {
+            diff = Math.abs(Math.round((Date.now() - fgDate.getTime()) / 60000));
+        }
+    }
     if (diff != null && Number(diff) > 30) return 'no_envia_trama';
-    var fg = unidad.fecha_gps;
-    if (fg == null || fg === '') return 'no_envia_trama';
+    if (parseFechaGpsFlexible(unidad.fecha_gps) == null) return 'no_envia_trama';
 
     var vel = parseFloat(unidad.velocidad_actual);
     if (isNaN(vel)) vel = 0;
@@ -1571,6 +1598,10 @@ function updateUnidadInList(unidad) {
             if (!unidad.tiempo_power_update && prev.tiempo_power_update) unidad.tiempo_power_update = prev.tiempo_power_update;
             if ((unidad.estado_movil == null || unidad.estado_movil === '') && (prev.estado_movil != null && prev.estado_movil !== '')) {
                 unidad.estado_movil = prev.estado_movil;
+            }
+            // SSE suele no traer fecha_gps/diferencia; sin fecha el contador cae en violeta. Mantener último GPS conocido.
+            if ((unidad.fecha_gps == null || unidad.fecha_gps === '') && prev.fecha_gps != null && prev.fecha_gps !== '') {
+                unidad.fecha_gps = prev.fecha_gps;
             }
 
             // Preserve sentido (direction) if incoming payload lacks it
@@ -1720,8 +1751,9 @@ function updateUnidadInList(unidad) {
     // Tooltip profesional del bolt (siempre presente en todos los LI)
     var boltTipText = 'Sin datos';
     try {
+        var _liTip = document.getElementById(uidList);
         var _tpuRaw = unidad.tiempo_power_update ||
-                      (li._tiempo_power_update ? li._tiempo_power_update.toISOString() : null);
+                      (_liTip && _liTip._tiempo_power_update ? _liTip._tiempo_power_update.toISOString() : null);
         if (_tpuRaw) {
             var _tpuD = new Date(_tpuRaw);
             if (!isNaN(_tpuD.getTime())) {
