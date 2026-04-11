@@ -1500,7 +1500,7 @@ function computeEstadoMovilParaContador(unidad) {
     return estado;
 }
 
-/** Actualiza #cantidad y desglose (verde / rojo / naranja / violeta) según currentU de cada fila — usado tras SSE. */
+/** Actualiza #cantidad y desglose (verde / rojo / naranja / violeta) según currentU de cada fila — usado tras SSE (no reemplaza el conteo inicial de appendUnidades). */
 function refreshContadoresEstadoUnidades() {
     var ul = document.getElementById('ul_unidades');
     if (!ul) return;
@@ -1514,7 +1514,6 @@ function refreshContadoresEstadoUnidades() {
                 break;
             }
         }
-        // Tras appendUnidades, currentU puede estar solo en el ícono interno; los contadores ya se fijaron ahí.
         if (!algunaConCurrentU) return;
     }
     var nM = 0, nD = 0, nE = 0, nNo = 0;
@@ -1565,6 +1564,8 @@ function updateUnidadInList(unidad) {
             // Preserve tiempo_power: igual que ruta_actual, se mantiene en currentU entre updates
             if ((unidad.tiempo_power == null || unidad.tiempo_power === 0) && prev.tiempo_power) unidad.tiempo_power = prev.tiempo_power;
             if (!unidad.tiempo_power_update && prev.tiempo_power_update) unidad.tiempo_power_update = prev.tiempo_power_update;
+            if ((unidad.fecha_gps == null || unidad.fecha_gps === '') && prev.fecha_gps) unidad.fecha_gps = prev.fecha_gps;
+            if (unidad.diferencia == null && prev.diferencia != null) unidad.diferencia = prev.diferencia;
             
             // Preserve sentido (direction) if incoming payload lacks it
             //if ((!unidad.sentido || unidad.sentido === '') && prev.sentido) unidad.sentido = prev.sentido;
@@ -3618,10 +3619,10 @@ $("#velocimetro").myfunc({divFact:10});
         clearPuntosImaginarios();
         var div_unidad=  $('#div-unidad');
         var div_mensaje=  $('#div-mensaje');
-        var unidad_movimiento=0;
-        var unidad_stop=0;
-        var unidad_no=0;
-        var unidad_e=0;
+        var unidad_movimiento = 0;
+        var unidad_stop = 0;
+        var unidad_no = 0;
+        var unidad_e = 0;
         var ul=$('#ul_unidades');
         let bloques = $('#cooperativa').find("option:selected").data("bloques");
         let trafico = $('#cooperativa').find("option:selected").data("trafico");
@@ -3985,10 +3986,7 @@ $("#velocimetro").myfunc({divFact:10});
 
 
                     default:
-                        
                         unidad_no++;
-                      
-                        
                         ul.append(
                                 '<li class="list-group-item" id=\'' + data.unidades[i]._id + '\'>' +
                                 ((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
@@ -4059,7 +4057,7 @@ $("#velocimetro").myfunc({divFact:10});
                     }
                 }
             }
-    
+
             $('#cantidad_no').text(unidad_no);
             $('#cantidad_movimiento').text(unidad_movimiento);
             $('#cantidad_e').text(unidad_e);
