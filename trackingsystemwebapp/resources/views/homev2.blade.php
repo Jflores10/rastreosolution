@@ -1509,15 +1509,20 @@ function parseFechaGpsFlexible(fg) {
 }
 
 /**
- * Estado para color del bus (M verde, D rojo, E naranja, default violeta sin trama).
- * 1) Sin GPS útil (sin fecha_gps o diferencia > 30) → no_envia_trama.
- * 2) Si estado_movil es D, M o E explícito → se respeta (no se pisa por velocidad).
- * 3) Si es "-" o vacío → se infiere por velocidad (0=D, >0=M).
- *
- * Si `diferencia` no viene (p. ej. payload SSE), se calcula en minutos desde fecha_gps.
+ * Misma regla que home.blade.php → appendUnidades (líneas ~2472–2493):
+ * 1) estado = D si velocidad 0, si no M (se pisa con velocidad; no se usa D/M/E fijo del backend salvo el flujo legacy en la vista antigua).
+ * 2) Si diferencia > 30 min → no_envia_trama (morado).
+ * 3) Si no hay fecha_gps → no_envia_trama.
+ * `diferencia` puede calcularse desde fecha_gps si no viene en el payload (SSE).
  */
 function resolveEstadoMovilParaLista(unidad) {
     if (!unidad) return 'no_envia_trama';
+
+    var vel = parseFloat(unidad.velocidad_actual);
+    if (isNaN(vel)) vel = 0;
+
+    var estado = vel <= 0 ? 'D' : 'M';
+
     var diff = unidad.diferencia;
     if (diff == null || diff === '') {
         var fgDate = parseFechaGpsFlexible(unidad.fecha_gps);
@@ -1525,22 +1530,16 @@ function resolveEstadoMovilParaLista(unidad) {
             diff = Math.abs(Math.round((Date.now() - fgDate.getTime()) / 60000));
         }
     }
-    if (diff != null && Number(diff) > 30) return 'no_envia_trama';
-    if (parseFechaGpsFlexible(unidad.fecha_gps) == null) return 'no_envia_trama';
-
-    var vel = parseFloat(unidad.velocidad_actual);
-    if (isNaN(vel)) vel = 0;
-
-    var raw = unidad.estado_movil;
-    if (raw != null && raw !== '') {
-        var s = String(raw).trim();
-        if (s === '-') {
-            return vel <= 0 ? 'D' : 'M';
-        }
-        var c = s.charAt(0).toUpperCase();
-        if (c === 'D' || c === 'M' || c === 'E') return c;
+    if (diff != null && Number(diff) > 30) {
+        return 'no_envia_trama';
     }
-    return vel <= 0 ? 'D' : 'M';
+
+    var fg = unidad.fecha_gps;
+    if (fg == null || fg === '') {
+        return 'no_envia_trama';
+    }
+
+    return estado;
 }
 
 /** Actualiza #cantidad y desglose (verde / rojo / naranja / violeta) según currentU de cada fila — usado tras SSE. */
