@@ -1493,6 +1493,7 @@ function computeEstadoMovilParaContador(unidad) {
     if (!unidad) return 'no_envia_trama';
     var velocidad_num = Number(unidad.velocidad_actual) || 0;
     var estado = unidad.estado_movil || ((velocidad_num === 0) ? 'D' : 'M');
+    if (velocidad_num === 0 && estado === 'M') estado = 'D';
     if (unidad.diferencia != null && unidad.diferencia > 30) estado = 'no_envia_trama';
     var fecha_gps = unidad.fecha_gps || null;
     if (!fecha_gps) estado = 'no_envia_trama';
@@ -1636,6 +1637,7 @@ function updateUnidadInList(unidad) {
     var velocidad_num = Number(unidad.velocidad_actual) || 0;
 
     var estado = unidad.estado_movil || ((velocidad_num==0)?'D':'M');
+    if (velocidad_num === 0 && estado === 'M') estado = 'D';
     if (unidad.diferencia != null && unidad.diferencia > 30) estado = 'no_envia_trama';
     if (!fecha_gps) estado = 'no_envia_trama';
 
@@ -3043,6 +3045,10 @@ $("#velocimetro").myfunc({divFact:10});
             estado = (parseFloat(unidad.velocidad_actual) === 0)
                 ? 'Detenido'
                 : 'En movimiento';
+        }
+
+        if (estado === 'En movimiento' && (Number(unidad.velocidad_actual) || 0) === 0) {
+            estado = 'Detenido';
         }
 
         // =========================
