@@ -835,8 +835,22 @@ function applyMetaToLi(uid, meta, source) {
         if (!li) return;
         if (!li.currentU) li.currentU = {};
 
-        // Ruta fields: only overwrite from SSE (source === 'sse') or when the LI has no route yet
-        if (meta.ruta_actual && meta.ruta_actual !== '') {
+        // Ruta de despacho: meta batch (/unidades-meta) siempre trae ruta_* (vacíos si el despacho ya no está P)
+        if (source !== 'sse' && Object.prototype.hasOwnProperty.call(meta, 'ruta_actual')) {
+            li.currentU.ruta_actual = meta.ruta_actual != null ? String(meta.ruta_actual) : '';
+            li.currentU.ruta_fecha = meta.ruta_fecha != null ? String(meta.ruta_fecha) : '';
+            li.currentU.ruta_conductor = meta.ruta_conductor != null ? String(meta.ruta_conductor) : '';
+            li.currentU.ruta_hora_fin = meta.ruta_hora_fin != null ? String(meta.ruta_hora_fin) : '';
+            try {
+                var _icR = document.getElementById('i' + uid);
+                if (_icR && _icR.currentU) {
+                    _icR.currentU.ruta_actual = li.currentU.ruta_actual;
+                    _icR.currentU.ruta_fecha = li.currentU.ruta_fecha;
+                    _icR.currentU.ruta_conductor = li.currentU.ruta_conductor;
+                    _icR.currentU.ruta_hora_fin = li.currentU.ruta_hora_fin;
+                }
+            } catch (eR) {}
+        } else if (meta.ruta_actual && meta.ruta_actual !== '') {
             if (!li.currentU.ruta_actual || li.currentU.ruta_actual === '' || source === 'sse') {
                 li.currentU.ruta_actual = meta.ruta_actual;
                 li.currentU.ruta_fecha = meta.ruta_fecha || li.currentU.ruta_fecha;
@@ -1011,7 +1025,7 @@ function refreshVisibleUnidadesMeta() {
     }
 }
 
-// run periodic refresh to keep non-route meta up-to-date; route fields will not overwrite an existing route
+// Refresco periódico del meta (ruta, bolt, etc.); el batch aplica ruta_* explícitas (vacías = sin despacho P)
 setInterval(refreshVisibleUnidadesMeta, 20000);
 
 /**

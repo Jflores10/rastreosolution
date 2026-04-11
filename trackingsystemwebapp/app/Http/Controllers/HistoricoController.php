@@ -168,6 +168,7 @@ class HistoricoController extends Controller
         if (!empty($rutasIds)) {
             $unidades_en_ruta = [];
             $array_rutas      = [];
+            $despachos_pendientes = null;
 
             foreach ($rutasIds as $rut) {
                 $r = Ruta::find($rut);
@@ -190,6 +191,7 @@ class HistoricoController extends Controller
                 if ($tipoValor == 4 || $tipoValor == 5) {
                     $unidades_pertenecientes = Auth::user()->unidades_pertenecientes;
                     if ($unidades_pertenecientes) {
+                        // Misma query que store/getUnidades (hay_rutas)
                         $despachos_pendientes = Despacho::orderBy('fecha', 'asc')
                             ->where('estado', 'P')
                             ->whereIn('unidad_id', $unidades_pertenecientes)
@@ -224,6 +226,7 @@ class HistoricoController extends Controller
                             array_push($unidades_id2, (string) $unidad->_id);
                         }
 
+                        // Misma query que store/getUnidades (hay_rutas)
                         $despachos_pendientes = Despacho::orderBy('fecha', 'asc')
                             ->where('estado', 'P')
                             ->whereIn('unidad_id', $unidades_id2)
@@ -241,6 +244,24 @@ class HistoricoController extends Controller
                                 }
                             }
                         }
+                    }
+                }
+
+                // Orden asc por fecha de despacho: recorrer el mismo cursor orderBy('fecha','asc') que usa store.
+                if ($despachos_pendientes !== null && count($array_aux) > 0) {
+                    $allow = [];
+                    foreach ($array_aux as $uid) {
+                        $allow[(string) $uid] = true;
+                    }
+                    $array_aux = [];
+                    $seen = [];
+                    foreach ($despachos_pendientes as $d) {
+                        $uid = (string) $d->unidad_id;
+                        if (isset($seen[$uid]) || !isset($allow[$uid])) {
+                            continue;
+                        }
+                        $seen[$uid] = true;
+                        $array_aux[] = $uid;
                     }
                 }
             }
@@ -358,13 +379,12 @@ class HistoricoController extends Controller
                     $tipo_bitacora = $bitByUnidad[$uid]->tipo_bitacora ?? '';
                 }
 
-                // Build meta only with useful (non-empty) keys so client doesn't receive empty strings
+                // Siempre enviar ruta_* (vacíos si no hay despacho estado P) para que el front borre la ruta al finalizar
                 $meta = [];
-                if ($ruta_descr !== null && $ruta_descr !== '') $meta['ruta_actual'] = $ruta_descr;
-                if ($ruta_fecha !== null && $ruta_fecha !== '') $meta['ruta_fecha'] = $ruta_fecha;
-                if ($ruta_conductor !== null && $ruta_conductor !== '') $meta['ruta_conductor'] = $ruta_conductor;
-                // client uses 'ruta_hora_fin'
-                if ($ruta_hora_final !== null && $ruta_hora_final !== '') $meta['ruta_hora_fin'] = $ruta_hora_final;
+                $meta['ruta_actual'] = ($ruta_descr !== null && $ruta_descr !== '') ? $ruta_descr : '';
+                $meta['ruta_fecha'] = ($ruta_fecha !== null && $ruta_fecha !== '') ? $ruta_fecha : '';
+                $meta['ruta_conductor'] = ($ruta_conductor !== null && $ruta_conductor !== '') ? $ruta_conductor : '';
+                $meta['ruta_hora_fin'] = ($ruta_hora_final !== null && $ruta_hora_final !== '') ? $ruta_hora_final : '';
                 if ($tipo_bitacora !== null && $tipo_bitacora !== '') $meta['tipo_bitacora'] = $tipo_bitacora;
                 // ignicionf: always include when present (on/off) so the front-end can show the icon on initial load
                 $ignf = $ignicionByUnidad[$uid] ?? null;

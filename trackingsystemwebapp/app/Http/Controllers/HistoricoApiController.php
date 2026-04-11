@@ -151,13 +151,12 @@ class HistoricoApiController extends Controller
                     $tipo_bitacora = $bitByUnidad[$uid]->tipo_bitacora ?? '';
                 }
 
-                // Build meta only with useful (non-empty) keys so client doesn't receive empty strings
+                // Siempre enviar ruta_* (vacíos si no hay despacho) para que el front borre la ruta al finalizar
                 $meta = [];
-                if ($ruta_descr !== null && $ruta_descr !== '') $meta['ruta_actual'] = $ruta_descr;
-                if ($ruta_fecha !== null && $ruta_fecha !== '') $meta['ruta_fecha'] = $ruta_fecha;
-                if ($ruta_conductor !== null && $ruta_conductor !== '') $meta['ruta_conductor'] = $ruta_conductor;
-                // client uses 'ruta_hora_fin'
-                if ($ruta_hora_final !== null && $ruta_hora_final !== '') $meta['ruta_hora_fin'] = $ruta_hora_final;
+                $meta['ruta_actual'] = ($ruta_descr !== null && $ruta_descr !== '') ? $ruta_descr : '';
+                $meta['ruta_fecha'] = ($ruta_fecha !== null && $ruta_fecha !== '') ? $ruta_fecha : '';
+                $meta['ruta_conductor'] = ($ruta_conductor !== null && $ruta_conductor !== '') ? $ruta_conductor : '';
+                $meta['ruta_hora_fin'] = ($ruta_hora_final !== null && $ruta_hora_final !== '') ? $ruta_hora_final : '';
                 if ($tipo_bitacora !== null && $tipo_bitacora !== '') $meta['tipo_bitacora'] = $tipo_bitacora;
                 // ignicionf: always include when present (on/off) so the front-end can show the icon on initial load
                 $ignf = $ignicionByUnidad[$uid] ?? null;
