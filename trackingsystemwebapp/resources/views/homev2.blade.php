@@ -1549,6 +1549,8 @@ function refreshContadoresEstadoUnidades() {
     var nM = 0, nD = 0, nE = 0, nNo = 0;
     for (var i = 0; i < children.length; i++) {
         var row = children[i];
+        // Con búsqueda en #consulta, updateUnidadInList oculta filas que no coinciden (display:none); no contarlas
+        if (row.style && row.style.display === 'none') continue;
         var uRow = obtenerCurrentUContador(row);
         if (!uRow) continue;
         var est = computeEstadoMovilParaContador(uRow);
