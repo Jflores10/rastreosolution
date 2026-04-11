@@ -1488,17 +1488,26 @@ function actualizarUnidadRealtime(unidad) {
     setMarcadorUnidad(unidad, fakeFecha, fakeFecha, 0);
 }
 
-/** Misma regla que updateUnidadInList para el ícono (M / D / E / default = no envía). */
-function computeEstadoMovilParaContador(unidad) {
-    if (!unidad) return 'no_envia_trama';
-    var velocidad_num = Number(unidad.velocidad_actual) || 0;
-    var estado = unidad.estado_movil || ((velocidad_num === 0) ? 'D' : 'M');
-    if (velocidad_num === 0 && estado === 'M') estado = 'D';
-    if (unidad.diferencia != null && unidad.diferencia > 30) estado = 'no_envia_trama';
-    var fecha_gps = unidad.fecha_gps || null;
-    // El SSE suele no enviar fecha_gps; no marcar todo como morado si el retraso no es crítico
-    if (!fecha_gps && unidad.diferencia != null && unidad.diferencia > 30) estado = 'no_envia_trama';
+/**
+ * Misma secuencia que el bucle de appendUnidades (estado → velocidad → diferencia → fecha_gps en array_fechas).
+ * Así los contadores tras SSE y el color del LI coinciden con lo pintado en carga inicial.
+ */
+function estadoVistaListaUnidad(u) {
+    if (!u) return 'no_envia_trama';
+    var estado = u.estado_movil;
+    if (estado == '-') {
+        estado = (parseFloat(u.velocidad_actual) == 0) ? 'D' : 'M';
+    }
+    if (parseFloat(u.velocidad_actual) == 0) estado = 'D';
+    else estado = 'M';
+    if (u.diferencia != null && u.diferencia > 30) return 'no_envia_trama';
+    var fg = u.fecha_gps;
+    if (fg == null || fg === '') return 'no_envia_trama';
     return estado;
+}
+
+function computeEstadoMovilParaContador(unidad) {
+    return estadoVistaListaUnidad(unidad);
 }
 
 /** Actualiza #cantidad y desglose (verde / rojo / naranja / violeta) según currentU de cada fila — usado tras SSE (no reemplaza el conteo inicial de appendUnidades). */
@@ -1656,11 +1665,7 @@ function updateUnidadInList(unidad) {
     var voltaje = (unidad.voltaje != null) ? String(unidad.voltaje).substring(0,2) : '--';
     var velocidad_num = Number(unidad.velocidad_actual) || 0;
 
-    var estado = unidad.estado_movil || ((velocidad_num==0)?'D':'M');
-    if (velocidad_num === 0 && estado === 'M') estado = 'D';
-    if (unidad.diferencia != null && unidad.diferencia > 30) estado = 'no_envia_trama';
-    // Misma lógica que computeEstadoMovilParaContador: falta de fecha_gps en SSE no implica morado salvo retraso fuerte
-    if (!fecha_gps && unidad.diferencia != null && unidad.diferencia > 30) estado = 'no_envia_trama';
+    var estado = estadoVistaListaUnidad(unidad);
 
     var iId = 'i' + unidad._id;
     var gId = 'g' + unidad._id;
@@ -4027,6 +4032,18 @@ $("#velocimetro").myfunc({divFact:10});
 
                 var currentLi = document.getElementById(iId);
                 var currentU = data.unidades[i];
+                try {
+                    var _afU = data.array_fechas[i];
+                    if (_afU) {
+                        currentU.diferencia = _afU.diferencia;
+                        if (_afU.fecha_gps != null) {
+                            currentU.fecha_gps = (typeof _afU.fecha_gps === 'object' && _afU.fecha_gps.date !== undefined && _afU.fecha_gps.date !== null)
+                                ? _afU.fecha_gps.date : _afU.fecha_gps;
+                        } else {
+                            currentU.fecha_gps = null;
+                        }
+                    }
+                } catch (eUaf) {}
                 var currentFechagps = fecha_gps_marker;
                 var currentFecha = fecha_servidor;
                 if (currentLi != null && currentLi != undefined)
