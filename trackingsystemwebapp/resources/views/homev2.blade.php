@@ -1496,7 +1496,8 @@ function computeEstadoMovilParaContador(unidad) {
     if (velocidad_num === 0 && estado === 'M') estado = 'D';
     if (unidad.diferencia != null && unidad.diferencia > 30) estado = 'no_envia_trama';
     var fecha_gps = unidad.fecha_gps || null;
-    if (!fecha_gps) estado = 'no_envia_trama';
+    // El SSE suele no enviar fecha_gps; no marcar todo como morado si el retraso no es crítico
+    if (!fecha_gps && unidad.diferencia != null && unidad.diferencia > 30) estado = 'no_envia_trama';
     return estado;
 }
 
@@ -1569,6 +1570,12 @@ function updateUnidadInList(unidad) {
             
             // Preserve sentido (direction) if incoming payload lacks it
             //if ((!unidad.sentido || unidad.sentido === '') && prev.sentido) unidad.sentido = prev.sentido;
+        }
+        var iconForMerge = document.getElementById('i' + uidList);
+        if (iconForMerge && iconForMerge.currentU) {
+            var pIcon = iconForMerge.currentU;
+            if ((unidad.fecha_gps == null || unidad.fecha_gps === '') && pIcon.fecha_gps) unidad.fecha_gps = pIcon.fecha_gps;
+            if (unidad.diferencia == null && pIcon.diferencia != null) unidad.diferencia = pIcon.diferencia;
         }
     } catch (e) {
         console.warn('Merge existing meta failed', e);
@@ -1652,7 +1659,8 @@ function updateUnidadInList(unidad) {
     var estado = unidad.estado_movil || ((velocidad_num==0)?'D':'M');
     if (velocidad_num === 0 && estado === 'M') estado = 'D';
     if (unidad.diferencia != null && unidad.diferencia > 30) estado = 'no_envia_trama';
-    if (!fecha_gps) estado = 'no_envia_trama';
+    // Misma lógica que computeEstadoMovilParaContador: falta de fecha_gps en SSE no implica morado salvo retraso fuerte
+    if (!fecha_gps && unidad.diferencia != null && unidad.diferencia > 30) estado = 'no_envia_trama';
 
     var iId = 'i' + unidad._id;
     var gId = 'g' + unidad._id;
