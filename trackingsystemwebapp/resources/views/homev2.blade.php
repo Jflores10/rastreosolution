@@ -1488,9 +1488,19 @@ function actualizarUnidadRealtime(unidad) {
     setMarcadorUnidad(unidad, fakeFecha, fakeFecha, 0);
 }
 
+/** True si hay fecha GPS utilizable (misma idea que array_fechas[i].fecha_gps != null en append). */
+function fechaGpsTramaPresente(fg) {
+    if (fg == null || fg === '') return false;
+    if (typeof fg === 'object') {
+        if (fg.$date != null) return true;
+        if (fg.date != null) return true;
+        return Object.keys(fg).length > 0;
+    }
+    return true;
+}
+
 /**
  * Misma secuencia que el bucle de appendUnidades (estado → velocidad → diferencia → fecha_gps en array_fechas).
- * Así los contadores tras SSE y el color del LI coinciden con lo pintado en carga inicial.
  */
 function estadoVistaListaUnidad(u) {
     if (!u) return 'no_envia_trama';
@@ -1501,9 +1511,16 @@ function estadoVistaListaUnidad(u) {
     if (parseFloat(u.velocidad_actual) == 0) estado = 'D';
     else estado = 'M';
     if (u.diferencia != null && u.diferencia > 30) return 'no_envia_trama';
-    var fg = u.fecha_gps;
-    if (fg == null || fg === '') return 'no_envia_trama';
+    if (!fechaGpsTramaPresente(u.fecha_gps)) return 'no_envia_trama';
     return estado;
+}
+
+/** currentU del bus: en carga vive en #i{id}; el <li> puede no tenerlo o tener un modelo sin fecha tras SSE. */
+function obtenerCurrentUContador(row) {
+    if (!row || !row.id) return null;
+    var ic = document.getElementById('i' + row.id);
+    if (ic && ic.currentU) return ic.currentU;
+    return row.currentU || null;
 }
 
 function computeEstadoMovilParaContador(unidad) {
@@ -1515,22 +1532,12 @@ function refreshContadoresEstadoUnidades() {
     var ul = document.getElementById('ul_unidades');
     if (!ul) return;
     var children = ul.children;
-    var nLis = children.length;
-    if (nLis > 0) {
-        var algunaConCurrentU = false;
-        for (var j = 0; j < nLis; j++) {
-            if (children[j] && children[j].currentU) {
-                algunaConCurrentU = true;
-                break;
-            }
-        }
-        if (!algunaConCurrentU) return;
-    }
     var nM = 0, nD = 0, nE = 0, nNo = 0;
     for (var i = 0; i < children.length; i++) {
         var row = children[i];
-        if (!row || !row.currentU) continue;
-        var est = computeEstadoMovilParaContador(row.currentU);
+        var uRow = obtenerCurrentUContador(row);
+        if (!uRow) continue;
+        var est = computeEstadoMovilParaContador(uRow);
         if (est === 'M') nM++;
         else if (est === 'D') nD++;
         else if (est === 'E') nE++;
