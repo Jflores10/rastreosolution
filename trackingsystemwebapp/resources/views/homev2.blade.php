@@ -1504,8 +1504,20 @@ function computeEstadoMovilParaContador(unidad) {
 function refreshContadoresEstadoUnidades() {
     var ul = document.getElementById('ul_unidades');
     if (!ul) return;
-    var nM = 0, nD = 0, nE = 0, nNo = 0;
     var children = ul.children;
+    var nLis = children.length;
+    if (nLis > 0) {
+        var algunaConCurrentU = false;
+        for (var j = 0; j < nLis; j++) {
+            if (children[j] && children[j].currentU) {
+                algunaConCurrentU = true;
+                break;
+            }
+        }
+        // Tras appendUnidades, currentU puede estar solo en el ícono interno; los contadores ya se fijaron ahí.
+        if (!algunaConCurrentU) return;
+    }
+    var nM = 0, nD = 0, nE = 0, nNo = 0;
     for (var i = 0; i < children.length; i++) {
         var row = children[i];
         if (!row || !row.currentU) continue;
