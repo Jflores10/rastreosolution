@@ -74,6 +74,21 @@ const GPRMC_DATE_FORMAT = 'DDMMYYHHmmss';
 const restartHour = 4, restartMinute = 0, restartSecond = 0, restartMilisecond = 0;
 const correoinfinty = 'management.infinity.fleets@gmail.com';
 const debug = false;
+const PUSH_DEBUG = String(process.env.PUSH_DEBUG || '1').trim() !== '0';
+
+function maskSecret(value) {
+  const v = String(value || '');
+  if (!v) return '(vacio)';
+  if (v.length <= 6) return '[len=' + v.length + ']';
+  return v.substring(0, 3) + '***' + v.substring(v.length - 2);
+}
+
+function pushDebugLog() {
+  console.log("PUSH_DEBUG", PUSH_DEBUG);
+  if (!PUSH_DEBUG) return;
+  const args = Array.prototype.slice.call(arguments);
+  console.log.apply(console, ['[push-debug]'].concat(args));
+}
 
 /** URL completa del endpoint Laravel, ej: http://127.0.0.1/api/internal/push-by-unidad */
 const LARAVEL_PUSH_URL = (process.env.LARAVEL_PUSH_URL || '').trim();
@@ -239,11 +254,25 @@ function enviarALaravelPorWS(data, opts = {}) {
  */
 function solicitarNotificacionPushPorImei(imei, bodyText, notificationTypeCode) {
   try {
-    if (!LARAVEL_PUSH_URL || !LARAVEL_PUSH_SECRET) return;
-    if (imei == null || bodyText == null) return;
+    const attemptId = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+
+    if (!LARAVEL_PUSH_URL || !LARAVEL_PUSH_SECRET) {
+      pushDebugLog('skip', attemptId, 'faltan vars de entorno', {
+        hasUrl: !!LARAVEL_PUSH_URL,
+        hasSecret: !!LARAVEL_PUSH_SECRET
+      });
+      return;
+    }
+    if (imei == null || bodyText == null) {
+      pushDebugLog('skip', attemptId, 'imei/body null', { imei: imei, bodyText: bodyText });
+      return;
+    }
     const imeiStr = String(imei).trim();
     const bodyStr = String(bodyText);
-    if (!imeiStr || !bodyStr) return;
+    if (!imeiStr || !bodyStr) {
+      pushDebugLog('skip', attemptId, 'imei/body vacio', { imei: imeiStr, body: bodyStr });
+      return;
+    }
 
     const parsed = url.parse(LARAVEL_PUSH_URL);
     const typeCode = notificationTypeCode != null ? String(notificationTypeCode).trim() : '';
@@ -268,13 +297,42 @@ function solicitarNotificacionPushPorImei(imei, bodyText, notificationTypeCode) 
       },
       timeout: 15000
     };
-    const req = mod.request(opts, (res) => {
-      try { res.resume(); } catch (e) {}
+    pushDebugLog('send', attemptId, {
+      url: LARAVEL_PUSH_URL,
+      imei: imeiStr,
+      type: typeCode || '(sin tipo)',
+      secret_masked: maskSecret(LARAVEL_PUSH_SECRET),
+      payload_preview: {
+        imei: imeiStr,
+        body: bodyStr,
+        notification_type_code: typeCode || null
+      }
     });
-    req.on('error', () => {});
+
+    const req = mod.request(opts, (res) => {
+      let responseBody = '';
+      res.on('data', (chunk) => {
+        try { responseBody += chunk.toString('utf8'); } catch (e) {}
+      });
+      res.on('end', () => {
+        pushDebugLog('response', attemptId, {
+          statusCode: res.statusCode,
+          statusMessage: res.statusMessage || '',
+          body: responseBody ? responseBody.substring(0, 500) : '(sin body)'
+        });
+      });
+    });
+    req.on('timeout', () => {
+      pushDebugLog('timeout', attemptId, 'timeout al enviar push');
+      try { req.destroy(); } catch (e) {}
+    });
+    req.on('error', (err) => {
+      pushDebugLog('error', attemptId, err && err.message ? err.message : err);
+    });
     req.write(payload);
     req.end();
   } catch (e) {
+    pushDebugLog('exception', e && e.message ? e.message : e);
     if (debug) console.log('solicitarNotificacionPushPorImei', e);
   }
 }
