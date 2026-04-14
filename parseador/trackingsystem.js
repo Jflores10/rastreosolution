@@ -78,15 +78,8 @@ const debug = false;
 /** URL completa del endpoint Laravel, ej: http://127.0.0.1/api/internal/push-by-unidad */
 const LARAVEL_PUSH_URL = (process.env.LARAVEL_PUSH_URL || '').trim();
 /** Mismo valor que PARSER_PUSH_SECRET en .env de Laravel */
-const LARAVEL_PUSH_SECRET = (process.env.LARAVEL_PUSH_SECRET || process.env.PARSER_PUSH_SECRET || '').trim();
-function maskSecret(value) {
-  const v = String(value || '');
-  if (!v) return '(vacío)';
-  if (v.length <= 6) return '[len=' + v.length + ']';
-  return v.substring(0, 3) + '***' + v.substring(v.length - 2);
-}
-console.log('[env] LARAVEL_PUSH_URL =', LARAVEL_PUSH_URL || '(vacío)');
-console.log('[env] LARAVEL_PUSH_SECRET =', maskSecret(LARAVEL_PUSH_SECRET));
+const LARAVEL_PUSH_SECRET = (process.env.LARAVEL_PUSH_SECRET || '').trim();
+
 /**
  * Deben coincidir con `code` en notification_types (activos):
  * - geofence: entrada a punto de control
@@ -748,7 +741,8 @@ function onClientConnected(socket) {
             // el post-BD (con datos completos) lo hace.
             const isRespMessage = !message.includes(BUFF);
             enviarALaravelPorWS(unidadPayload, { force: isRespMessage, skipThrottleUpdate: isRespMessage });
-
+            const txtPushGeofence = 'Geofence GTFRI unidad ' + data[idx.imei];
+            solicitarNotificacionPushPorImei(data[idx.imei], txtPushGeofence, PUSH_TYPE_GEOFENCE);
             // ===================== ACTUALIZAR BD (NO BLOQUEA) =====================
             dbTrackingSystem.collection('unidads').findOneAndUpdate(
                 { imei: data[idx.imei], estado: 'A' },
