@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Log;
 class InternalPushController extends Controller
 {
     /**
-     * Llamado por el parseador GPS (HTTP). Requiere PARSER_PUSH_SECRET.
+     * Llamado por el parseador GPS (HTTP). Requiere LARAVEL_PUSH_SECRET.
      *
      * notification_type_code: código del tipo en notification_types. Si viene informado, solo reciben push
      * los usuarios con fila en user_notification_settings y enabled=true (sin fila => no enviar).
@@ -22,9 +22,9 @@ class InternalPushController extends Controller
      */
     public function pushByUnidad(Request $request, FcmV1Service $fcm)
     {
-        $expected = env('PARSER_PUSH_SECRET');
+        $expected = env('LARAVEL_PUSH_SECRET');
         if ($expected === null || $expected === '') {
-            return response()->json(array('error' => true, 'message' => 'PARSER_PUSH_SECRET no configurado'), 503);
+            return response()->json(array('error' => true, 'message' => 'LARAVEL_PUSH_SECRET no configurado'), 503);
         }
         if (trim((string) $request->input('secret')) !== trim((string) $expected)) {
             return response()->json(array('error' => true, 'message' => 'Forbidden'), 403);
