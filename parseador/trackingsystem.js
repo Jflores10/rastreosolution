@@ -72,7 +72,15 @@ const debug = false;
 /** URL completa del endpoint Laravel, ej: http://127.0.0.1/api/internal/push-by-unidad */
 const LARAVEL_PUSH_URL = (process.env.LARAVEL_PUSH_URL || '').trim();
 /** Mismo valor que PARSER_PUSH_SECRET en .env de Laravel */
-const LARAVEL_PUSH_SECRET = (process.env.LARAVEL_PUSH_SECRET || '').trim();
+const LARAVEL_PUSH_SECRET = (process.env.LARAVEL_PUSH_SECRET || process.env.PARSER_PUSH_SECRET || '').trim();
+function maskSecret(value) {
+  const v = String(value || '');
+  if (!v) return '(vacío)';
+  if (v.length <= 6) return '[len=' + v.length + ']';
+  return v.substring(0, 3) + '***' + v.substring(v.length - 2);
+}
+console.log('[env] LARAVEL_PUSH_URL =', LARAVEL_PUSH_URL || '(vacío)');
+console.log('[env] LARAVEL_PUSH_SECRET =', maskSecret(LARAVEL_PUSH_SECRET));
 /**
  * Deben coincidir con `code` en notification_types (activos):
  * - geofence: entrada a punto de control

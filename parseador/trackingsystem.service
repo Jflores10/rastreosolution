@@ -10,6 +10,7 @@ Restart=on-abort
 PIDFile=/tmp/trackingsystem.pid
 ExecStart=/root/.nvm/versions/node/v12.13.1/bin/node "/var/www/html/trackingsystem/parseador/trackingsystem.js" &
 Environment="NVM_DIR=/root/.nvm" "PATH=$NVM_DIR/versions/node/v12.13.1/bin:$PATH"
+EnvironmentFile=-/var/www/html/trackingsystem/trackingsystemwebapp/.env
 
 [Install]
 WantedBy=multi-user.target
