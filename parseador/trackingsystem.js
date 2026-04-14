@@ -32,6 +32,12 @@ redisPub.on('error', err => console.error('Redis PUB Error (parser):', err));
 const http = require('http');
 const https = require('https');
 const url = require('url');
+const path = require('path');
+const dotenv = require('dotenv');
+
+// Load env vars from Laravel app first, then fallback to parser .env if present.
+dotenv.config({ path: path.resolve(__dirname, '../trackingsystemwebapp/.env') });
+dotenv.config();
 
 // ===================== CONFIG =====================
 const PORT = 8085;
