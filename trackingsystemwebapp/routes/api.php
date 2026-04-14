@@ -25,7 +25,6 @@ Route::group(['middleware' => ['auth.basic', 'api']], function () {
 });
 Route::post('/recorrido-notify', 'RecorridoController@notify');
 
-Route::post('internal/push-by-unidad', 'InternalPushController@pushByUnidad');
 
 Route::group(['prefix' => 'v2'], function () {
 	Route::group([], function () {
