@@ -34,6 +34,16 @@ class User extends Authenticatable
         return $this->belongsTo('App\Unidad');
     }
 
+    public function device_tokens()
+    {
+        return $this->hasMany('App\DeviceToken', 'user_id', '_id');
+    }
+
+    public function user_notification_settings()
+    {
+        return $this->hasMany('App\UserNotificationSetting', 'user_id', '_id');
+    }
+
     public function creador()
     {
         return $this->belongsTo('App\User');

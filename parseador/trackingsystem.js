@@ -29,6 +29,10 @@ const redis = require('redis');
 const redisPub = redis.createClient();
 redisPub.on('error', err => console.error('Redis PUB Error (parser):', err));
 
+const http = require('http');
+const https = require('https');
+const url = require('url');
+
 // ===================== CONFIG =====================
 const PORT = 8085;
 const connection = 'mongodb://trackingsystem:uVC7x254i1VJ@127.0.0.1:27017/dbtrackingsystem?authSource=admin';
@@ -64,6 +68,18 @@ const GPRMC_DATE_FORMAT = 'DDMMYYHHmmss';
 const restartHour = 4, restartMinute = 0, restartSecond = 0, restartMilisecond = 0;
 const correoinfinty = 'management.infinity.fleets@gmail.com';
 const debug = false;
+
+/** URL completa del endpoint Laravel, ej: http://127.0.0.1/api/internal/push-by-unidad */
+const LARAVEL_PUSH_URL = (process.env.LARAVEL_PUSH_URL || '').trim();
+/** Mismo valor que PARSER_PUSH_SECRET en .env de Laravel */
+const LARAVEL_PUSH_SECRET = (process.env.LARAVEL_PUSH_SECRET || '').trim();
+/**
+ * Deben coincidir con `code` en notification_types (activos):
+ * - geofence: entrada a punto de control
+ * - onoff: encendido/apagado de unidad
+ */
+const PUSH_TYPE_GEOFENCE = (process.env.LARAVEL_PUSH_TYPE_GEOFENCE || 'geofence').trim();
+const PUSH_TYPE_ONOFF = (process.env.LARAVEL_PUSH_TYPE_ONOFF || 'onoff').trim();
 
 // ===================== GLOBALS =====================
 let dbTrackingSystem = null;
@@ -207,6 +223,52 @@ function enviarALaravelPorWS(data, opts = {}) {
 
   } catch (err) {
     console.error('❌ Error en enviarALaravelPorWS:', err);
+  }
+}
+
+/**
+ * Dispara notificación push vía Laravel (FCM).
+ * notificationTypeCode: código del tipo en notification_types; Laravel solo envía a usuarios con esa preferencia activa.
+ */
+function solicitarNotificacionPushPorImei(imei, bodyText, notificationTypeCode) {
+  try {
+    if (!LARAVEL_PUSH_URL || !LARAVEL_PUSH_SECRET) return;
+    if (imei == null || bodyText == null) return;
+    const imeiStr = String(imei).trim();
+    const bodyStr = String(bodyText);
+    if (!imeiStr || !bodyStr) return;
+
+    const parsed = url.parse(LARAVEL_PUSH_URL);
+    const typeCode = notificationTypeCode != null ? String(notificationTypeCode).trim() : '';
+    const bodyPayload = {
+      secret: LARAVEL_PUSH_SECRET,
+      imei: imeiStr,
+      body: bodyStr
+    };
+    if (typeCode) bodyPayload.notification_type_code = typeCode;
+    const payload = JSON.stringify(bodyPayload);
+    const isHttps = parsed.protocol === 'https:';
+    const mod = isHttps ? https : http;
+    const port = parsed.port ? parseInt(parsed.port, 10) : (isHttps ? 443 : 80);
+    const opts = {
+      hostname: parsed.hostname,
+      port: port,
+      path: (parsed.path || '/') + (parsed.search || ''),
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(payload, 'utf8')
+      },
+      timeout: 15000
+    };
+    const req = mod.request(opts, (res) => {
+      try { res.resume(); } catch (e) {}
+    });
+    req.on('error', () => {});
+    req.write(payload);
+    req.end();
+  } catch (e) {
+    if (debug) console.log('solicitarNotificacionPushPorImei', e);
   }
 }
 
@@ -908,6 +970,10 @@ function onClientConnected(socket) {
               js: true
             }, { writeConcern: { w: 0 } }, function (err) {
               if (!err) actualizarSentidoUnidad(dbTrackingSystem, document, pdi, entrada, message);  // ✅
+              if (!err && entrada === 1) {
+                const txtPush = 'Entrada al punto de control: ' + pdi + ' de la unidad ' + data[imei];
+                solicitarNotificacionPushPorImei(data[imei], txtPush, PUSH_TYPE_GEOFENCE);
+              }
             });
           }
         });
@@ -1398,6 +1464,8 @@ function onClientConnected(socket) {
               cooperativa_id: document.cooperativa_id ? String(document.cooperativa_id).trim() : null,
               _raw_message: message
             });
+            const txtApagada = 'Unidad apagada: ' + moment(fecha_gps).format(DATE_FORMAT) + ' (' + lat + '-' + lng + ')';
+            solicitarNotificacionPushPorImei(data[imei], txtApagada, PUSH_TYPE_ONOFF);
           }
         });
       }
@@ -1477,6 +1545,8 @@ function onClientConnected(socket) {
               cooperativa_id: document.cooperativa_id ? String(document.cooperativa_id).trim() : null,
               _raw_message: message
             });
+            const txtEncendida = 'Unidad encendida: ' + moment(fecha_gps).format(DATE_FORMAT) + ' (' + lat + '-' + lng + ')';
+            solicitarNotificacionPushPorImei(data[imei], txtEncendida, PUSH_TYPE_ONOFF);
           }
         });
       }

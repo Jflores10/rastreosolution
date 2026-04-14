@@ -25,6 +25,8 @@ Route::group(['middleware' => ['auth.basic', 'api']], function () {
 });
 Route::post('/recorrido-notify', 'RecorridoController@notify');
 
+Route::post('internal/push-by-unidad', 'InternalPushController@pushByUnidad');
+
 Route::group(['prefix' => 'v2'], function () {
 	Route::group([], function () {
 		Route::post('/command', 'CommandApiController@send_v2');
@@ -42,6 +44,10 @@ Route::group(['prefix' => 'v2'], function () {
 		Route::post('despachos/socios', 'DespachoApiController@getDespachosSocios_v2');
 		Route::post('despachos/punto', 'DespachoApiController@getPuntoControl_v2');
 		Route::post('historico/unidades-meta', 'HistoricoApiController@getUnidadesMeta');
+		Route::post('device-token', 'DeviceTokenApiController@register_v2');
+		Route::get('notification-types', 'UserNotificationSettingsApiController@types_v2');
+		Route::get('user-notification-settings', 'UserNotificationSettingsApiController@index_v2');
+		Route::post('user-notification-settings', 'UserNotificationSettingsApiController@store_v2');
 
 	});
 

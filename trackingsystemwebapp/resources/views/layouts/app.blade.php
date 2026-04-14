@@ -166,6 +166,13 @@
                   </li>
                   @endif
                   @if(Auth::user()->tipo_usuario->valor=='1' || Auth::user()->tipo_usuario->valor=='2')
+                  <li><a><i class="fa fa-bell"></i> Notificaciones <span class="fa fa-chevron-down"></span></a>
+                        <ul class="nav child_menu">
+                          <li><a href="{{ route('configuracion-notificaciones.index') }}">Configuración</a></li>
+                          <li><a href="{{ route('devices-tokens.index') }}">Dispositivos</a></li>
+                          <li><a href="{{ route('notification-types.index') }}">Tipos de notificación</a></li>
+                        </ul>
+                      </li>
                      <li><a href="{{ url('/conductores') }}"><i class="fa fa-group"></i> Conductores</a>
                       </li>
                       <li><a><i class="fa fa-users"></i> Usuarios <span class="fa fa-chevron-down"></span></a>

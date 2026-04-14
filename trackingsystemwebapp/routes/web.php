@@ -169,6 +169,14 @@ Route::group(['middleware' => ['auth', 'usuario']], function () {
         Route::get('/search', 'LogController@search')->name('logs.search');
     });
 
+    Route::get('/configuracion-notificaciones', 'ConfiguracionNotificacionesController@index')->name('configuracion-notificaciones.index');
+    Route::post('/configuracion-notificaciones', 'ConfiguracionNotificacionesController@store')->name('configuracion-notificaciones.store');
+    Route::get('/notificaciones/devices-tokens', 'DeviceTokenController@index')->name('devices-tokens.index');
+    Route::get('notification-types/get/{id}', 'NotificationTypeController@getJson');
+    Route::post('notification-types/update', 'NotificationTypeController@updatePost');
+    Route::post('notification-types/delete/{id}', 'NotificationTypeController@destroyPost');
+    Route::resource('notification-types', 'NotificationTypeController', array('except' => array('create', 'edit', 'show')));
+
     Route::group(['prefix' => 'reportes-unidades'], function () {
         Route::get('puertas', 'ReportePuertasController@index')->name('puertas.index');
         Route::get('velocidad', 'ReporteVelocidadController@index')->name('velocidad.index');
