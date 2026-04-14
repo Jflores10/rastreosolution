@@ -40,7 +40,6 @@ class ListenGps extends Command
      */
     public function handle()
     {
-        $this->info('🟢 ListenGps iniciado');
 
         while (true) {
 
@@ -48,7 +47,6 @@ class ListenGps extends Command
 
                 Redis::subscribe(['gps-channel'], function ($message) {
 
-                    Log::info('📡 GPS recibido', ['raw' => $message]);
 
                     $data = json_decode($message, true);
                     if (!$data || empty($data['imei'])) {
