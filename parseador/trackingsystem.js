@@ -799,8 +799,6 @@ function onClientConnected(socket) {
             // el post-BD (con datos completos) lo hace.
             const isRespMessage = !message.includes(BUFF);
             enviarALaravelPorWS(unidadPayload, { force: isRespMessage, skipThrottleUpdate: isRespMessage });
-            const txtPushGeofence = 'Geofence GTFRI unidad ' + data[idx.imei];
-            solicitarNotificacionPushPorImei(data[idx.imei], txtPushGeofence, PUSH_TYPE_GEOFENCE);
             // ===================== ACTUALIZAR BD (NO BLOQUEA) =====================
             dbTrackingSystem.collection('unidads').findOneAndUpdate(
                 { imei: data[idx.imei], estado: 'A' },
