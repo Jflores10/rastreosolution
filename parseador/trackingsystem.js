@@ -107,6 +107,7 @@ const PUSH_TYPE_OVERSPEED = 'overspeed';
 
 const PUSH_NOTIFICATION_TIMEZONE = (process.env.PUSH_NOTIFICATION_TIMEZONE || 'America/Guayaquil').trim();
 const PUSH_GPS_DATETIME_AS_UTC = String(process.env.PUSH_GPS_DATETIME_AS_UTC || '1').trim() === '1';
+const PUSH_GPS_HOUR_OFFSET = Number(process.env.PUSH_GPS_HOUR_OFFSET || -5);
 
 // ===================== GLOBALS =====================
 let dbTrackingSystem = null;
@@ -349,21 +350,22 @@ function solicitarNotificacionPushPorImei(imei, bodyText, notificationTypeCode) 
 function formatFechaGpsParaPush(fecha_gps) {
   if (fecha_gps == null || !(fecha_gps instanceof Date) || isNaN(fecha_gps.getTime())) return '';
   try {
-    const parts = new Intl.DateTimeFormat('en-GB', {
-      timeZone: PUSH_NOTIFICATION_TIMEZONE,
+    const fechaGpsDate = new Date(fecha_gps);
+    if (isNaN(fechaGpsDate.getTime())) return '';
+    fechaGpsDate.setHours(fechaGpsDate.getHours() + PUSH_GPS_HOUR_OFFSET);
+
+    const fechaTxt = fechaGpsDate.toLocaleDateString('es-EC', {
       day: '2-digit',
       month: '2-digit',
-      year: 'numeric',
+      year: 'numeric'
+    });
+    const horaTxt = fechaGpsDate.toLocaleTimeString('es-EC', {
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit',
       hour12: false
-    }).formatToParts(fecha_gps);
-    const pick = function (t) {
-      const p = parts.find(function (x) { return x.type === t; });
-      return p ? p.value : '';
-    };
-    return pick('day') + '/' + pick('month') + '/' + pick('year') + ' ' + pick('hour') + ':' + pick('minute') + ':' + pick('second');
+    });
+    return fechaTxt + ' ' + horaTxt;
   } catch (e) {
     return '';
   }
