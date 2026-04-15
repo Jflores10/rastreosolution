@@ -1528,7 +1528,7 @@ function onClientConnected(socket) {
               cooperativa_id: document.cooperativa_id ? String(document.cooperativa_id).trim() : null,
               _raw_message: message
             });
-            const txtApagada = 'Unidad apagada: ' + moment(fecha_gps).format(DATE_FORMAT) + ' (' + lat + '-' + lng + ')';
+            const txtApagada = '<i class="fa fa-plug" style="color:red;"></i> Dispositivo GPS sin conexion de energia ' + fecha_gps + ' ' + lat + ', ' + lng;
             solicitarNotificacionPushPorImei(data[imei], txtApagada, PUSH_TYPE_ONOFF);
           }
         });
@@ -1609,7 +1609,8 @@ function onClientConnected(socket) {
               cooperativa_id: document.cooperativa_id ? String(document.cooperativa_id).trim() : null,
               _raw_message: message
             });
-            const txtEncendida = 'Unidad encendida: ' + moment(fecha_gps).format(DATE_FORMAT) + ' (' + lat + '-' + lng + ')';
+
+            const txtEncendida = '<i class="fa fa-plug" style="color:green;"></i> Dispositivo GPS con conexion de energia ' + fecha_gps + ' ' + lat + ', ' + lng;
             solicitarNotificacionPushPorImei(data[imei], txtEncendida, PUSH_TYPE_ONOFF);
           }
         });
