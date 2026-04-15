@@ -1101,7 +1101,7 @@ function onClientConnected(socket) {
                   unidadTxtGeo + ':🚩🟢 Entrada a punto de control\n' +
                   '* 🚍 Vehiculo:* ' + unidadTxtGeo + '\n' +
                   '* 📅 Fecha:* ' + fechaTxtGeo + '\n' +
-                  '* ⏰ Hora:* ' + horaTxtGeo + '\n' +
+                  '* ⏰ Hora:* ' + horaTxtGeo;
                   solicitarNotificacionPushPorImei(data[imei], txtGeofenceEntrada, PUSH_TYPE_GEOFENCE);
               } else if (entrada === 0) {
                 const fechaHoraTxtGeo = formatFechaGpsParaPush(fecha_gps);
@@ -1114,7 +1114,7 @@ function onClientConnected(socket) {
                   unidadTxtGeo + ':🚩🔴 Salida del punto de control\n' +
                   '* 🚍 Vehiculo:* ' + unidadTxtGeo + '\n' +
                   '* 📅 Fecha:* ' + fechaTxtGeo + '\n' +
-                  '* ⏰ Hora:* ' + horaTxtGeo + '\n' +
+                  '* ⏰ Hora:* ' + horaTxtGeo;
                   solicitarNotificacionPushPorImei(data[imei], txtGeofenceSalida, PUSH_TYPE_GEOFENCE);
               }
             });
