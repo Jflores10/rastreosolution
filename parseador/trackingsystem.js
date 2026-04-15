@@ -60,6 +60,8 @@ const GTLOG = 'GTLOG';
 const GTGOT = 'GTGOT';
 const GTGIN = 'GTGIN';
 const GTRTL = 'GTRTL';
+const GTSPD = 'GTSPD';
+
 
 const ACK = 'ACK';
 const GTALC = 'GTALC';
@@ -97,21 +99,14 @@ const LARAVEL_PUSH_SECRET = (process.env.LARAVEL_PUSH_SECRET || '').trim();
 
 /**
  * Deben coincidir con `code` en notification_types (activos):
- * - geofence: entrada a punto de control
- * - onoff: encendido/apagado de unidad
  */
-const PUSH_TYPE_GEOFENCE = (process.env.LARAVEL_PUSH_TYPE_GEOFENCE || 'geofence').trim();
-const PUSH_TYPE_ONOFF = (process.env.LARAVEL_PUSH_TYPE_ONOFF || 'onoff').trim();
-/** Zona horaria para el texto de push (Ecuador). Ej: America/Guayaquil */
+const PUSH_TYPE_GEOFENCE =  'geofence';
+const PUSH_TYPE_ONOFF =  'onoff';
+const PUSH_TYPE_IGN = 'ign';
+const PUSH_TYPE_OVERSPEED = 'overspeed';
+
 const PUSH_NOTIFICATION_TIMEZONE = (process.env.PUSH_NOTIFICATION_TIMEZONE || 'America/Guayaquil').trim();
-/**
- * 1 = el timestamp del GPS (YYYYMMDDHHmmss) viene en UTC (muy habitual en trackers).
- * 0 = interpretarlo en la zona local del servidor (moment local).
- */
 const PUSH_GPS_DATETIME_AS_UTC = String(process.env.PUSH_GPS_DATETIME_AS_UTC || '1').trim() === '1';
-/** Visible en bandeja del sistema (FCM no pinta Font Awesome en el body). */
-const PUSH_ICON_POWER_ON = '\uD83D\uDFE2\uD83D\uDD0C ';
-const PUSH_ICON_POWER_OFF = '\uD83D\uDD34\uD83D\uDD0C ';
 
 // ===================== GLOBALS =====================
 let dbTrackingSystem = null;
@@ -125,10 +120,10 @@ let wsReconnectTimeout = 3000;
 const unidadStateCache = new Map();
 
 function buildUnidadPayloadRealtime(base, extra = {}) {
-    const key = String(base.imei || base._id || '').trim();
-    const prev = unidadStateCache.get(key) || {};
+  const key = String(base.imei || base._id || '').trim();
+  const prev = unidadStateCache.get(key) || {};
 
-    // Merge: lo nuevo pisa lo viejo, pero NO borra campos
+  // Merge: lo nuevo pisa lo viejo, pero NO borra campos
   const payload = Object.assign({}, prev, base, extra);
 
   // Do NOT persist raw TCP message into the cache. If callers passed
@@ -136,7 +131,7 @@ function buildUnidadPayloadRealtime(base, extra = {}) {
   // decision in enviarALaravelPorWS, but must not survive in the
   // cached state (otherwise a single BUFF would block future sends).
   const cacheCopy = Object.assign({}, payload);
-  try { delete cacheCopy._raw_message; } catch (e) {}
+  try { delete cacheCopy._raw_message; } catch (e) { }
   unidadStateCache.set(key, cacheCopy);
 
   return payload;
@@ -198,7 +193,7 @@ function enviarALaravelPorWS(data, opts = {}) {
       if (data._raw_message && String(data._raw_message).includes(BUFF)) {
         isBuff = true;
       }
-    } catch (e) {}
+    } catch (e) { }
 
     const now = Date.now();
 
@@ -217,19 +212,19 @@ function enviarALaravelPorWS(data, opts = {}) {
 
     // 2) TRACKING (unidad.updated)
     if (data.type === 'unidad.updated') {
-        const key = String(data.imei || data._id || '').trim();
-        if (!key) return;
+      const key = String(data.imei || data._id || '').trim();
+      if (!key) return;
 
-        // 🔑 recuperar desde cache si no viene en el payload
-        let coop = data.cooperativa_id;
-        if (!coop) {
-            const cached = unidadStateCache.get(key);
-            if (cached && cached.cooperativa_id) {
-                coop = cached.cooperativa_id;
-            }
+      // 🔑 recuperar desde cache si no viene en el payload
+      let coop = data.cooperativa_id;
+      if (!coop) {
+        const cached = unidadStateCache.get(key);
+        if (cached && cached.cooperativa_id) {
+          coop = cached.cooperativa_id;
         }
-        coop = String(coop || '').trim();
-        if (!coop) return; // aquí sí, no hay forma
+      }
+      coop = String(coop || '').trim();
+      if (!coop) return; // aquí sí, no hay forma
 
       // Throttle inteligente: solo limita si NO hay movimiento
       // Los BUFF nunca actualizan el throttle (no consumen el slot de tiempo)
@@ -322,7 +317,7 @@ function solicitarNotificacionPushPorImei(imei, bodyText, notificationTypeCode) 
     const req = mod.request(opts, (res) => {
       let responseBody = '';
       res.on('data', (chunk) => {
-        try { responseBody += chunk.toString('utf8'); } catch (e) {}
+        try { responseBody += chunk.toString('utf8'); } catch (e) { }
       });
       res.on('end', () => {
         pushDebugLog('response', attemptId, {
@@ -334,7 +329,7 @@ function solicitarNotificacionPushPorImei(imei, bodyText, notificationTypeCode) 
     });
     req.on('timeout', () => {
       pushDebugLog('timeout', attemptId, 'timeout al enviar push');
-      try { req.destroy(); } catch (e) {}
+      try { req.destroy(); } catch (e) { }
     });
     req.on('error', (err) => {
       pushDebugLog('error', attemptId, err && err.message ? err.message : err);
@@ -605,10 +600,10 @@ MongoClient.connect(connection, { useUnifiedTopology: true }, function (error, c
     process.exit(1);
   }
 
-    dbTrackingSystem = client.db('dbtrackingsystem');
+  dbTrackingSystem = client.db('dbtrackingsystem');
 
   // ===================== CARGA INICIAL CACHE UNIDADES =====================
-  
+
   const server = net.createServer(onClientConnected);
   server.listen(PORT);
   dbTrackingSystem = client.db('dbtrackingsystem');
@@ -790,7 +785,7 @@ function onClientConnected(socket) {
   socket.on('data', (dataRaw) => {
     const message = dataRaw.toString();
     sendLogsToAdminSockets(message);
-    
+
     const imeiIndex = 2;
 
     try {
@@ -809,110 +804,110 @@ function onClientConnected(socket) {
       }
 
       // ================== GTFRI (TRACKING) ==================
-     // ================== GTFRI (REALTIME + ESTADO COMPLETO) ==================
-        else if (message.includes(GTFRI) && !message.includes(ACK)) {
+      // ================== GTFRI (REALTIME + ESTADO COMPLETO) ==================
+      else if (message.includes(GTFRI) && !message.includes(ACK)) {
 
-            const idx = {
-                imei: 2,
-                voltage: 4,
-                speed: 8,
-                angle: 9,
-                height: 10,
-                longitude: 11,
-                latitude: 12,
-                datetime: 13,
-                mileage: 17,
-                battery: 23,
-                status: 24,
-                sentTime: 28
-            };
+        const idx = {
+          imei: 2,
+          voltage: 4,
+          speed: 8,
+          angle: 9,
+          height: 10,
+          longitude: 11,
+          latitude: 12,
+          datetime: 13,
+          mileage: 17,
+          battery: 23,
+          status: 24,
+          sentTime: 28
+        };
 
-            const data = message.split(',');
-            const now = new Date();
-            const fechaGPS = toInteger(data[idx.datetime]);
-           
-            // ===================== DATOS NUEVOS (GPS) =====================
-            const gpsData = {
-                type: 'unidad.updated',
-                imei: data[idx.imei],
-                latitud: toFloat(data[idx.latitude]),
-                longitud: toFloat(data[idx.longitude]),
-                voltaje: toFloat(data[idx.voltage]),
-                velocidad_actual: toFloat(data[idx.speed]),
-                bateria: toFloat(data[idx.battery]),
-                mileage: toDecimalHex(data[idx.mileage]),
-                angulo: toInteger(data[idx.angle]),
-                estado_movil: (toInteger(data[idx.status]) >= 420000) ? 'M' : 'D',
-                fecha_gps: (fechaGPS !== 0)
-                    ? moment(data[idx.datetime], DEVICE_DATE_FORMAT).toDate()
-                    : now,
-                fecha: now,
-                is_atm: (message.includes(ATM) ? 1 : 0),
-                _raw_message:message 
-            };
+        const data = message.split(',');
+        const now = new Date();
+        const fechaGPS = toInteger(data[idx.datetime]);
 
-            // ===================== PAYLOAD COMPLETO (CACHE + GPS) =====================
-            const unidadPayload = buildUnidadPayloadRealtime(gpsData);
+        // ===================== DATOS NUEVOS (GPS) =====================
+        const gpsData = {
+          type: 'unidad.updated',
+          imei: data[idx.imei],
+          latitud: toFloat(data[idx.latitude]),
+          longitud: toFloat(data[idx.longitude]),
+          voltaje: toFloat(data[idx.voltage]),
+          velocidad_actual: toFloat(data[idx.speed]),
+          bateria: toFloat(data[idx.battery]),
+          mileage: toDecimalHex(data[idx.mileage]),
+          angulo: toInteger(data[idx.angle]),
+          estado_movil: (toInteger(data[idx.status]) >= 420000) ? 'M' : 'D',
+          fecha_gps: (fechaGPS !== 0)
+            ? moment(data[idx.datetime], DEVICE_DATE_FORMAT).toDate()
+            : now,
+          fecha: now,
+          is_atm: (message.includes(ATM) ? 1 : 0),
+          _raw_message: message
+        };
 
-            // 🔥🔥🔥 ENVIAR AL FRONT INMEDIATO
-            // Si es +RESP (no BUFF), forzar envío saltando throttle.
-            // skipThrottleUpdate: no consume el slot de throttle aquí;
-            // el post-BD (con datos completos) lo hace.
-            const isRespMessage = !message.includes(BUFF);
-            enviarALaravelPorWS(unidadPayload, { force: isRespMessage, skipThrottleUpdate: isRespMessage });
-            // ===================== ACTUALIZAR BD (NO BLOQUEA) =====================
-            dbTrackingSystem.collection('unidads').findOneAndUpdate(
-                { imei: data[idx.imei], estado: 'A' },
-                {
-                    $set: {
-                        estado_movil: gpsData.estado_movil,
-                        latitud: gpsData.latitud,
-                        longitud: gpsData.longitud,
-                        voltaje: gpsData.voltaje,
-                        velocidad_actual: gpsData.velocidad_actual,
-                        mileage: gpsData.mileage,
-                        bateria: gpsData.bateria,
-                        is_atm: gpsData.is_atm,
-                        angulo: gpsData.angulo,
-                        fecha_gps: gpsData.fecha_gps,
-                        fecha: now
-                    }
-                },
-                { returnDocument: 'after', writeConcern: { w: 0 } },
-                function (err, result) {
+        // ===================== PAYLOAD COMPLETO (CACHE + GPS) =====================
+        const unidadPayload = buildUnidadPayloadRealtime(gpsData);
 
-                    if (err || !result || !result.value) return;
+        // 🔥🔥🔥 ENVIAR AL FRONT INMEDIATO
+        // Si es +RESP (no BUFF), forzar envío saltando throttle.
+        // skipThrottleUpdate: no consume el slot de throttle aquí;
+        // el post-BD (con datos completos) lo hace.
+        const isRespMessage = !message.includes(BUFF);
+        enviarALaravelPorWS(unidadPayload, { force: isRespMessage, skipThrottleUpdate: isRespMessage });
+        // ===================== ACTUALIZAR BD (NO BLOQUEA) =====================
+        dbTrackingSystem.collection('unidads').findOneAndUpdate(
+          { imei: data[idx.imei], estado: 'A' },
+          {
+            $set: {
+              estado_movil: gpsData.estado_movil,
+              latitud: gpsData.latitud,
+              longitud: gpsData.longitud,
+              voltaje: gpsData.voltaje,
+              velocidad_actual: gpsData.velocidad_actual,
+              mileage: gpsData.mileage,
+              bateria: gpsData.bateria,
+              is_atm: gpsData.is_atm,
+              angulo: gpsData.angulo,
+              fecha_gps: gpsData.fecha_gps,
+              fecha: now
+            }
+          },
+          { returnDocument: 'after', writeConcern: { w: 0 } },
+          function (err, result) {
 
-                    const unidad = result.value; // 🔥 unidad ya actualizada
+            if (err || !result || !result.value) return;
 
-                    // Enviar una publicación autorizada basada en la unidad en BD
-                    // Esto garantiza que el campo `sentido` viene desde la tabla `unidads`
-                    // y fuerza el envío sin pasar por el throttle (opts.force = true).
-                    try {
-                      const unidadFromDbPayload = buildUnidadPayloadRealtime(Object.assign({ type: 'unidad.updated', _raw_message: gpsData._raw_message }, unidad));
-                      // Si es +RESP (no BUFF), forzar envío siempre (saltamos throttle)
-                      enviarALaravelPorWS(unidadFromDbPayload, { force: isRespMessage });
-                    } catch (e) {
-                      if (debug) console.error('Error publicando unidad desde BD:', e);
-                    }
+            const unidad = result.value; // 🔥 unidad ya actualizada
 
-                    // ===================== TRABAJO PESADO =====================
-                    setImmediate(() => {
-                        try {
+            // Enviar una publicación autorizada basada en la unidad en BD
+            // Esto garantiza que el campo `sentido` viene desde la tabla `unidads`
+            // y fuerza el envío sin pasar por el throttle (opts.force = true).
+            try {
+              const unidadFromDbPayload = buildUnidadPayloadRealtime(Object.assign({ type: 'unidad.updated', _raw_message: gpsData._raw_message }, unidad));
+              // Si es +RESP (no BUFF), forzar envío siempre (saltamos throttle)
+              enviarALaravelPorWS(unidadFromDbPayload, { force: isRespMessage });
+            } catch (e) {
+              if (debug) console.error('Error publicando unidad desde BD:', e);
+            }
 
-                            procesarRecorridosYAlertas_GTFRI(
-                                unidad,   
-                                data,
-                                message,
-                                idx
-                            );
+            // ===================== TRABAJO PESADO =====================
+            setImmediate(() => {
+              try {
 
-                        } catch (e) {}
-                    });
+                procesarRecorridosYAlertas_GTFRI(
+                  unidad,
+                  data,
+                  message,
+                  idx
+                );
 
-                }
-            );
-        }
+              } catch (e) { }
+            });
+
+          }
+        );
+      }
 
       // ================== GTDAT ==================
       else if (message.includes(GTDAT) && !message.includes(ACK)) {
@@ -1096,8 +1091,31 @@ function onClientConnected(socket) {
             }, { writeConcern: { w: 0 } }, function (err) {
               if (!err) actualizarSentidoUnidad(dbTrackingSystem, document, pdi, entrada, message);  // ✅
               if (!err && entrada === 1) {
-                const txtPush = 'Entrada al punto de control: ' + pdi + ' de la unidad ' + data[imei];
-                solicitarNotificacionPushPorImei(data[imei], txtPush, PUSH_TYPE_GEOFENCE);
+                const fechaHoraTxtGeo = formatFechaGpsParaPush(fecha_gps);
+                const fechaPartesGeo = fechaHoraTxtGeo.split(' ');
+                const fechaTxtGeo = fechaPartesGeo.length > 0 ? fechaPartesGeo[0] : fechaHoraTxtGeo;
+                const horaTxtGeo = fechaPartesGeo.length > 1 ? fechaPartesGeo[1] : '';
+                const unidadTxtGeo = String(document.descripcion).trim();
+                const mapUrlGeo = 'https://www.google.com/maps/search/?api=1&query=' + latitud + ',' + longitudV;
+                const txtGeofenceEntrada =
+                  unidadTxtGeo + ':🚩🟢 Entrada a punto de control\n' +
+                  '* 🚍 Vehiculo:* ' + unidadTxtGeo + '\n' +
+                  '* 📅 Fecha:* ' + fechaTxtGeo + '\n' +
+                  '* ⏰ Hora:* ' + horaTxtGeo + '\n' +
+                  solicitarNotificacionPushPorImei(data[imei], txtGeofenceEntrada, PUSH_TYPE_GEOFENCE);
+              } else if (entrada === 0) {
+                const fechaHoraTxtGeo = formatFechaGpsParaPush(fecha_gps);
+                const fechaPartesGeo = fechaHoraTxtGeo.split(' ');
+                const fechaTxtGeo = fechaPartesGeo.length > 0 ? fechaPartesGeo[0] : fechaHoraTxtGeo;
+                const horaTxtGeo = fechaPartesGeo.length > 1 ? fechaPartesGeo[1] : '';
+                const unidadTxtGeo = String(document.descripcion).trim();
+                const mapUrlGeo = 'https://www.google.com/maps/search/?api=1&query=' + latitud + ',' + longitudV;
+                const txtGeofenceSalida =
+                  unidadTxtGeo + ':🚩🔴 Salida del punto de control\n' +
+                  '* 🚍 Vehiculo:* ' + unidadTxtGeo + '\n' +
+                  '* 📅 Fecha:* ' + fechaTxtGeo + '\n' +
+                  '* ⏰ Hora:* ' + horaTxtGeo + '\n' +
+                  solicitarNotificacionPushPorImei(data[imei], txtGeofenceSalida, PUSH_TYPE_GEOFENCE);
               }
             });
           }
@@ -1252,265 +1270,303 @@ function onClientConnected(socket) {
       }
 
       // ================== GTDIS (PUERTAS) ==================
-        else if (message.includes(GTDIS) && !message.includes(ACK)) {
+      else if (message.includes(GTDIS) && !message.includes(ACK)) {
 
-            let imei = 2;
-            let speed = 8;
-            let angle = 9;
-            let longitude = 11;
-            let latitude = 12;
-            let datetime = 13;
-            let sentTime = 20;
-            let indexdoor = 5;
+        let imei = 2;
+        let speed = 8;
+        let angle = 9;
+        let longitude = 11;
+        let latitude = 12;
+        let datetime = 13;
+        let sentTime = 20;
+        let indexdoor = 5;
 
-            let data = message.split(',');
+        let data = message.split(',');
 
-            let puerta = '';
-            if (toInteger(data[indexdoor]) === 20) puerta = 'PUERTA ABIERTA (DELANTERA)';
-            if (toInteger(data[indexdoor]) === 21) puerta = 'PUERTA CERRADA (DELANTERA)';
-            if (toInteger(data[indexdoor]) === 30) puerta = 'PUERTA ABIERTA (TRASERA)';
-            if (toInteger(data[indexdoor]) === 31) puerta = 'PUERTA CERRADA (TRASERA)';
+        let puerta = '';
+        if (toInteger(data[indexdoor]) === 20) puerta = 'PUERTA ABIERTA (DELANTERA)';
+        if (toInteger(data[indexdoor]) === 21) puerta = 'PUERTA CERRADA (DELANTERA)';
+        if (toInteger(data[indexdoor]) === 30) puerta = 'PUERTA ABIERTA (TRASERA)';
+        if (toInteger(data[indexdoor]) === 31) puerta = 'PUERTA CERRADA (TRASERA)';
 
-            dbTrackingSystem.collection('unidads').findOne(
-                { imei: data[imei], estado: 'A' },
-                function (err, document) {
-                    if (err || !document) return;
+        dbTrackingSystem.collection('unidads').findOne(
+          { imei: data[imei], estado: 'A' },
+          function (err, document) {
+            if (err || !document) return;
 
-                    let latitud = toFloat(data[latitude]);
-                    let longitudV = toFloat(data[longitude]);
-                    let fecha_servidor = new Date();
-                    let fecha_gps = (toInteger(data[datetime]) !== 0)
-                        ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate()
-                        : new Date();
+            let latitud = toFloat(data[latitude]);
+            let longitudV = toFloat(data[longitude]);
+            let fecha_servidor = new Date();
+            let fecha_gps = (toInteger(data[datetime]) !== 0)
+              ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate()
+              : new Date();
 
-                    if (latitud === 0 || longitudV === 0) {
-                        latitud = document.latitud;
-                        longitudV = document.longitud;
-                    }
+            if (latitud === 0 || longitudV === 0) {
+              latitud = document.latitud;
+              longitudV = document.longitud;
+            }
 
-                    // Registrar recorrido
-                    dbTrackingSystem.collection('recorridos').insertOne({
-                        imei: data[imei],
-                        tipo: GTDIS,
-                        unidad_id: document._id,
-                        velocidad: toFloat(data[speed]),
-                        angulo: toInteger(data[angle]),
-                        longitud: longitudV,
-                        latitud: latitud,
-                        fecha_gps: fecha_gps,
-                        fecha: fecha_servidor,
-                        evento: puerta,
-                        fecha_envio: (toInteger(data[sentTime]) !== 0)
-                            ? moment(data[sentTime], DEVICE_DATE_FORMAT).toDate()
-                            : new Date(),
-                        js: true
-                    }, { writeConcern: { w: 0 } });
+            // Registrar recorrido
+            dbTrackingSystem.collection('recorridos').insertOne({
+              imei: data[imei],
+              tipo: GTDIS,
+              unidad_id: document._id,
+              velocidad: toFloat(data[speed]),
+              angulo: toInteger(data[angle]),
+              longitud: longitudV,
+              latitud: latitud,
+              fecha_gps: fecha_gps,
+              fecha: fecha_servidor,
+              evento: puerta,
+              fecha_envio: (toInteger(data[sentTime]) !== 0)
+                ? moment(data[sentTime], DEVICE_DATE_FORMAT).toDate()
+                : new Date(),
+              js: true
+            }, { writeConcern: { w: 0 } });
 
-                    // ================= PUERTA DELANTERA =================
-                    if (toInteger(data[indexdoor]) === 20 || toInteger(data[indexdoor]) === 21) {
+            // ================= PUERTA DELANTERA =================
+            if (toInteger(data[indexdoor]) === 20 || toInteger(data[indexdoor]) === 21) {
 
-                        let fechaPuertaAbierta = null;
-                        let fechaPuertaCerrada = null;
+              let fechaPuertaAbierta = null;
+              let fechaPuertaCerrada = null;
 
-                        if (puerta === 'PUERTA ABIERTA (DELANTERA)') {
-                            fechaPuertaAbierta = fecha_gps;
-                        } else if (document.fecha_puerta_abierta !== undefined && document.fecha_puerta_abierta !== null) {
-                            fechaPuertaAbierta = document.fecha_puerta_abierta;
-                        }
+              if (puerta === 'PUERTA ABIERTA (DELANTERA)') {
+                fechaPuertaAbierta = fecha_gps;
+              } else if (document.fecha_puerta_abierta !== undefined && document.fecha_puerta_abierta !== null) {
+                fechaPuertaAbierta = document.fecha_puerta_abierta;
+              }
 
-                        if (puerta === 'PUERTA CERRADA (DELANTERA)') {
-                            fechaPuertaCerrada = fecha_gps;
-                        } else if (document.fecha_puerta_cerrada !== undefined && document.fecha_puerta_cerrada !== null) {
-                            fechaPuertaCerrada = document.fecha_puerta_cerrada;
-                        }
+              if (puerta === 'PUERTA CERRADA (DELANTERA)') {
+                fechaPuertaCerrada = fecha_gps;
+              } else if (document.fecha_puerta_cerrada !== undefined && document.fecha_puerta_cerrada !== null) {
+                fechaPuertaCerrada = document.fecha_puerta_cerrada;
+              }
 
-                        dbTrackingSystem.collection('unidads').updateOne(
-                            { _id: document._id },
-                            {
-                                $set: {
-                                    puerta: puerta,
-                                    alerta_puerta_message: puerta,
-                                    alerta_puerta_fecha: fecha_gps,
-                                    fecha_puerta_abierta: fechaPuertaAbierta,
-                                    fecha_puerta_cerrada: fechaPuertaCerrada,
-                                    is_atm: 0
-                                }
-                            },
-                            { writeConcern: { w: 0 } }
-                        );
+              dbTrackingSystem.collection('unidads').updateOne(
+                { _id: document._id },
+                {
+                  $set: {
+                    puerta: puerta,
+                    alerta_puerta_message: puerta,
+                    alerta_puerta_fecha: fecha_gps,
+                    fecha_puerta_abierta: fechaPuertaAbierta,
+                    fecha_puerta_cerrada: fechaPuertaCerrada,
+                    is_atm: 0
+                  }
+                },
+                { writeConcern: { w: 0 } }
+              );
 
-                        enviarALaravelPorWS({
-                            type: 'unidad.alerta.puerta',
-                            unidad_id: document._id,
-                            imei: document.imei,
-                            puerta: 'DELANTERA',
-                            estado: puerta,
-                            fecha: fecha_gps,
-                            cooperativa_id: document.cooperativa_id
-                                ? String(document.cooperativa_id).trim()
-                                : null,
-                            _raw_message:message
-                        });
+              enviarALaravelPorWS({
+                type: 'unidad.alerta.puerta',
+                unidad_id: document._id,
+                imei: document.imei,
+                puerta: 'DELANTERA',
+                estado: puerta,
+                fecha: fecha_gps,
+                cooperativa_id: document.cooperativa_id
+                  ? String(document.cooperativa_id).trim()
+                  : null,
+                _raw_message: message
+              });
 
-                    }
-                    // ================= PUERTA TRASERA =================
-                    else {
+            }
+            // ================= PUERTA TRASERA =================
+            else {
 
-                        let fechaPuertaAbiertaT = null;
-                        let fechaPuertaCerradaT = null;
+              let fechaPuertaAbiertaT = null;
+              let fechaPuertaCerradaT = null;
 
-                        if (puerta === 'PUERTA ABIERTA (TRASERA)') {
-                            fechaPuertaAbiertaT = fecha_gps;
-                        } else if (document.fecha_puerta_abierta_trasera !== undefined && document.fecha_puerta_abierta_trasera !== null) {
-                            fechaPuertaAbiertaT = document.fecha_puerta_abierta_trasera;
-                        }
+              if (puerta === 'PUERTA ABIERTA (TRASERA)') {
+                fechaPuertaAbiertaT = fecha_gps;
+              } else if (document.fecha_puerta_abierta_trasera !== undefined && document.fecha_puerta_abierta_trasera !== null) {
+                fechaPuertaAbiertaT = document.fecha_puerta_abierta_trasera;
+              }
 
-                        if (puerta === 'PUERTA CERRADA (TRASERA)') {
-                            fechaPuertaCerradaT = fecha_gps;
-                        } else if (document.fecha_puerta_cerrada_trasera !== undefined && document.fecha_puerta_cerrada_trasera !== null) {
-                            fechaPuertaCerradaT = document.fecha_puerta_cerrada_trasera;
-                        }
+              if (puerta === 'PUERTA CERRADA (TRASERA)') {
+                fechaPuertaCerradaT = fecha_gps;
+              } else if (document.fecha_puerta_cerrada_trasera !== undefined && document.fecha_puerta_cerrada_trasera !== null) {
+                fechaPuertaCerradaT = document.fecha_puerta_cerrada_trasera;
+              }
 
-                        dbTrackingSystem.collection('unidads').updateOne(
-                            { _id: document._id },
-                            {
-                                $set: {
-                                    puerta_trasera: puerta,
-                                    alerta_puerta_message_trasera: puerta,
-                                    alerta_puerta_fecha_trasera: fecha_gps,
-                                    fecha_puerta_abierta_trasera: fechaPuertaAbiertaT,
-                                    fecha_puerta_cerrada_trasera: fechaPuertaCerradaT,
-                                    is_atm: 0
-                                }
-                            },
-                            { writeConcern: { w: 0 } }
-                        );
+              dbTrackingSystem.collection('unidads').updateOne(
+                { _id: document._id },
+                {
+                  $set: {
+                    puerta_trasera: puerta,
+                    alerta_puerta_message_trasera: puerta,
+                    alerta_puerta_fecha_trasera: fecha_gps,
+                    fecha_puerta_abierta_trasera: fechaPuertaAbiertaT,
+                    fecha_puerta_cerrada_trasera: fechaPuertaCerradaT,
+                    is_atm: 0
+                  }
+                },
+                { writeConcern: { w: 0 } }
+              );
 
-                        enviarALaravelPorWS({
-                            type: 'unidad.alerta.puerta',
-                            unidad_id: document._id,
-                            imei: document.imei,
-                            puerta: 'TRASERA',
-                            estado: puerta,
-                            fecha: fecha_gps,
-                            cooperativa_id: document.cooperativa_id
-                                ? String(document.cooperativa_id).trim()
-                                : null,
-                            _raw_message:message
-                        });
-                    }
-                }
-            );
-        }
+              enviarALaravelPorWS({
+                type: 'unidad.alerta.puerta',
+                unidad_id: document._id,
+                imei: document.imei,
+                puerta: 'TRASERA',
+                estado: puerta,
+                fecha: fecha_gps,
+                cooperativa_id: document.cooperativa_id
+                  ? String(document.cooperativa_id).trim()
+                  : null,
+                _raw_message: message
+              });
+            }
+          }
+        );
+      }
       // ================== GTIGN / GTIGF ==================
 
-        else if (message.includes(GTIGN) && !message.includes(ACK)) {
-            let imei = 2;
-            let data = message.split(',');
-            let speed = 6;
-            let angle = 7;
-            let height = 8;
-            let longitude = 9;
-            let latitude = 10;
-            let datetime = 11;
-            let fechaGPS = toInteger(data[datetime]);
+      else if (message.includes(GTIGN) && !message.includes(ACK)) {
+        let imei = 2;
+        let data = message.split(',');
+        let speed = 6;
+        let angle = 7;
+        let height = 8;
+        let longitude = 9;
+        let latitude = 10;
+        let datetime = 11;
+        let fechaGPS = toInteger(data[datetime]);
 
-            dbTrackingSystem.collection('unidads').findOne(
-                { imei: data[imei], estado: 'A' },
-                function(err, unidad) {
-                    if (err || !unidad) return;
+        dbTrackingSystem.collection('unidads').findOne(
+          { imei: data[imei], estado: 'A' },
+          function (err, unidad) {
+            if (err || !unidad) return;
 
-                    dbTrackingSystem.collection('unidads').updateOne(
-                        { _id: unidad._id },
-                        { $set: {
-                            ignicionf: 'on',
-                            fecha_gps: (fechaGPS != 0) ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate() : new Date(),
-                            latitud: toFloat(data[latitude]),
-                            longitud: toFloat(data[longitude]),
-                            velocidad_actual: toFloat(data[speed]),
-                            altura: toFloat(data[height]),
-                            angulo: toInteger(data[angle]),
-                            fecha: new Date()
-                        }},
-                        { writeConcern: { w: 0 } },
-                        function(uErr) { if (uErr) console.log(uErr); }
-                    );
-
-                    // Persistir ignicionf='on' en el cache para que los GTFRI posteriores lo incluyan
-                    buildUnidadPayloadRealtime({ imei: unidad.imei, _id: unidad._id, ignicionf: 'on' });
-
-                    enviarALaravelPorWS({
-                        type: 'unidad.ignicion',
-                        unidad_id: unidad._id,
-                        _id: unidad._id,
-                        imei: unidad.imei,
-                        ignicionf: 'on',
-                        latitud: toFloat(data[latitude]),
-                        longitud: toFloat(data[longitude]),
-                        velocidad_actual: toFloat(data[speed]),
-                        angulo: toInteger(data[angle]),
-                        fecha_gps: (fechaGPS != 0) ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate() : new Date(),
-                        fecha: new Date(),
-                        cooperativa_id: unidad.cooperativa_id ? String(unidad.cooperativa_id).trim() : null,
-                        _raw_message: message
-                    });
+            dbTrackingSystem.collection('unidads').updateOne(
+              { _id: unidad._id },
+              {
+                $set: {
+                  ignicionf: 'on',
+                  fecha_gps: (fechaGPS != 0) ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate() : new Date(),
+                  latitud: toFloat(data[latitude]),
+                  longitud: toFloat(data[longitude]),
+                  velocidad_actual: toFloat(data[speed]),
+                  altura: toFloat(data[height]),
+                  angulo: toInteger(data[angle]),
+                  fecha: new Date()
                 }
+              },
+              { writeConcern: { w: 0 } },
+              function (uErr) { if (uErr) console.log(uErr); }
             );
-        }
 
-        else if (message.includes(GTIGF) && !message.includes(ACK)) {
-            let imei = 2;
-            let data = message.split(',');
-            let speed = 6;
-            let angle = 7;
-            let height = 8;
-            let longitude = 9;
-            let latitude = 10;
-            let datetime = 11;
-            let fechaGPS = toInteger(data[datetime]);
+            // Persistir ignicionf='on' en el cache para que los GTFRI posteriores lo incluyan
+            buildUnidadPayloadRealtime({ imei: unidad.imei, _id: unidad._id, ignicionf: 'on' });
 
-            dbTrackingSystem.collection('unidads').findOne(
-                { imei: data[imei], estado: 'A' },
-                function(err, unidad) {
-                    if (err || !unidad) return;
+            enviarALaravelPorWS({
+              type: 'unidad.ignicion',
+              unidad_id: unidad._id,
+              _id: unidad._id,
+              imei: unidad.imei,
+              ignicionf: 'on',
+              latitud: toFloat(data[latitude]),
+              longitud: toFloat(data[longitude]),
+              velocidad_actual: toFloat(data[speed]),
+              angulo: toInteger(data[angle]),
+              fecha_gps: (fechaGPS != 0) ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate() : new Date(),
+              fecha: new Date(),
+              cooperativa_id: unidad.cooperativa_id ? String(unidad.cooperativa_id).trim() : null,
+              _raw_message: message
+            });
 
-                    dbTrackingSystem.collection('unidads').updateOne(
-                        { _id: unidad._id },
-                        { $set: {
-                            ignicionf: 'off',
-                            fecha_gps: (fechaGPS != 0) ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate() : new Date(),
-                            latitud: toFloat(data[latitude]),
-                            longitud: toFloat(data[longitude]),
-                            velocidad_actual: toFloat(data[speed]),
-                            altura: toFloat(data[height]),
-                            angulo: toInteger(data[angle]),
-                            fecha: new Date()
-                        }},
-                        { writeConcern: { w: 0 } },
-                        function(uErr) { if (uErr) console.log(uErr); }
-                    );
+            const fecha_gps = fechaGpsFromGpsField(data[datetime], fechaGPS);
+            const lat = toFloat(data[latitude]);
+            const lng = toFloat(data[longitude]);
+            const fechaHoraTxtEnc = formatFechaGpsParaPush(fecha_gps);
+            const fechaPartesEnc = fechaHoraTxtEnc.split(' ');
+            const fechaTxtEnc = fechaPartesEnc.length > 0 ? fechaPartesEnc[0] : fechaHoraTxtEnc;
+            const horaTxtEnc = fechaPartesEnc.length > 1 ? fechaPartesEnc[1] : '';
+            const unidadTxtEnc = String(unidad.descripcion).trim();
+            const mapUrlEnc = 'https://www.google.com/maps/search/?api=1&query=' + lat + ',' + lng;
+            const txtIgnEncendida =
+              unidadTxtEnc + ':🟢 Ignicion ON\n' +
+              '* 🚍 Vehiculo:* ' + unidadTxtEnc + '\n' +
+              '* 📅 Fecha:* ' + fechaTxtEnc + '\n' +
+              '* ⏰ Hora:* ' + horaTxtEnc + '\n' +
+              '* 📍 Ver en Mapa:* ' + mapUrlEnc;
+            solicitarNotificacionPushPorImei(data[imei], txtIgnEncendida, PUSH_TYPE_IGN);
+          }
+        );
+      }
 
-                    // Persistir ignicionf='off' en el cache para que los GTFRI posteriores lo incluyan
-                    buildUnidadPayloadRealtime({ imei: unidad.imei, _id: unidad._id, ignicionf: 'off' });
+      else if (message.includes(GTIGF) && !message.includes(ACK)) {
+        let imei = 2;
+        let data = message.split(',');
+        let speed = 6;
+        let angle = 7;
+        let height = 8;
+        let longitude = 9;
+        let latitude = 10;
+        let datetime = 11;
+        let fechaGPS = toInteger(data[datetime]);
 
-                    enviarALaravelPorWS({
-                        type: 'unidad.ignicion',
-                        unidad_id: unidad._id,
-                        _id: unidad._id,
-                        imei: unidad.imei,
-                        ignicionf: 'off',
-                        latitud: toFloat(data[latitude]),
-                        longitud: toFloat(data[longitude]),
-                        velocidad_actual: toFloat(data[speed]),
-                        angulo: toInteger(data[angle]),
-                        fecha_gps: (fechaGPS != 0) ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate() : new Date(),
-                        fecha: new Date(),
-                        cooperativa_id: unidad.cooperativa_id ? String(unidad.cooperativa_id).trim() : null,
-                        _raw_message: message
-                    });
+        dbTrackingSystem.collection('unidads').findOne(
+          { imei: data[imei], estado: 'A' },
+          function (err, unidad) {
+            if (err || !unidad) return;
+
+            dbTrackingSystem.collection('unidads').updateOne(
+              { _id: unidad._id },
+              {
+                $set: {
+                  ignicionf: 'off',
+                  fecha_gps: (fechaGPS != 0) ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate() : new Date(),
+                  latitud: toFloat(data[latitude]),
+                  longitud: toFloat(data[longitude]),
+                  velocidad_actual: toFloat(data[speed]),
+                  altura: toFloat(data[height]),
+                  angulo: toInteger(data[angle]),
+                  fecha: new Date()
                 }
+              },
+              { writeConcern: { w: 0 } },
+              function (uErr) { if (uErr) console.log(uErr); }
             );
-        }
+
+            // Persistir ignicionf='off' en el cache para que los GTFRI posteriores lo incluyan
+            buildUnidadPayloadRealtime({ imei: unidad.imei, _id: unidad._id, ignicionf: 'off' });
+
+            enviarALaravelPorWS({
+              type: 'unidad.ignicion',
+              unidad_id: unidad._id,
+              _id: unidad._id,
+              imei: unidad.imei,
+              ignicionf: 'off',
+              latitud: toFloat(data[latitude]),
+              longitud: toFloat(data[longitude]),
+              velocidad_actual: toFloat(data[speed]),
+              angulo: toInteger(data[angle]),
+              fecha_gps: (fechaGPS != 0) ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate() : new Date(),
+              fecha: new Date(),
+              cooperativa_id: unidad.cooperativa_id ? String(unidad.cooperativa_id).trim() : null,
+              _raw_message: message
+            });
+
+            const fecha_gps = fechaGpsFromGpsField(data[datetime], fechaGPS);
+            const lat = toFloat(data[latitude]);
+            const lng = toFloat(data[longitude]);
+            const fechaHoraTxtApag = formatFechaGpsParaPush(fecha_gps);
+            const fechaPartesApag = fechaHoraTxtApag.split(' ');
+            const fechaTxtApag = fechaPartesApag.length > 0 ? fechaPartesApag[0] : fechaHoraTxtApag;
+            const horaTxtApag = fechaPartesApag.length > 1 ? fechaPartesApag[1] : '';
+            const unidadTxtApag = String(unidad.descripcion).trim();
+            const mapUrlApag = 'https://www.google.com/maps/search/?api=1&query=' + lat + ',' + lng;
+            const txtIgnApagada =
+              unidadTxtApag + ':🔴 Ignicion OFF\n' +
+              '* 🚍 Vehiculo:* ' + unidadTxtApag + '\n' +
+              '* 📅 Fecha:* ' + fechaTxtApag + '\n' +
+              '* ⏰ Hora:* ' + horaTxtApag + '\n' +
+              '* 📍 Ver en Mapa:* ' + mapUrlApag;
+            solicitarNotificacionPushPorImei(data[imei],txtIgnApagada, PUSH_TYPE_IGN);
+          }
+        );
+      }
 
 
       // ================== GTMPF / GTMPN ==================
@@ -1589,7 +1645,18 @@ function onClientConnected(socket) {
               cooperativa_id: document.cooperativa_id ? String(document.cooperativa_id).trim() : null,
               _raw_message: message
             });
-            const txtApagada = '<i class="fa fa-plug" style="color:red;"></i> Dispositivo GPS sin conexion de energia ' + formatFechaGpsParaPush(fecha_gps) + ' ' + lat + ', ' + lng;
+            const fechaHoraTxtApag = formatFechaGpsParaPush(fecha_gps);
+            const fechaPartesApag = fechaHoraTxtApag.split(' ');
+            const fechaTxtApag = fechaPartesApag.length > 0 ? fechaPartesApag[0] : fechaHoraTxtApag;
+            const horaTxtApag = fechaPartesApag.length > 1 ? fechaPartesApag[1] : '';
+            const unidadTxtApag = String(document.descripcion).trim();
+            const mapUrlApag = 'https://www.google.com/maps/search/?api=1&query=' + lat + ',' + lng;
+            const txtApagada =
+              unidadTxtApag + ':🔴🔌 Dispositivo GPS sin conexion de energia\n' +
+              '* 🚍 Vehiculo:* ' + unidadTxtApag + '\n' +
+              '* 📅 Fecha:* ' + fechaTxtApag + '\n' +
+              '* ⏰ Hora:* ' + horaTxtApag + '\n' +
+              '* 📍 Ver en Mapa:* ' + mapUrlApag;
             solicitarNotificacionPushPorImei(data[imei], txtApagada, PUSH_TYPE_ONOFF);
           }
         });
@@ -1671,7 +1738,18 @@ function onClientConnected(socket) {
               _raw_message: message
             });
 
-            const txtEncendida = PUSH_ICON_POWER_ON + 'Dispositivo GPS con conexion de energia ' + formatFechaGpsParaPush(fecha_gps) + ' ' + lat + ', ' + lng;
+            const fechaHoraTxtEnc = formatFechaGpsParaPush(fecha_gps);
+            const fechaPartesEnc = fechaHoraTxtEnc.split(' ');
+            const fechaTxtEnc = fechaPartesEnc.length > 0 ? fechaPartesEnc[0] : fechaHoraTxtEnc;
+            const horaTxtEnc = fechaPartesEnc.length > 1 ? fechaPartesEnc[1] : '';
+            const unidadTxtEnc = String(document.descripcion).trim();
+            const mapUrlEnc = 'https://www.google.com/maps/search/?api=1&query=' + lat + ',' + lng;
+            const txtEncendida =
+              unidadTxtEnc + ':🟢🔌 Dispositivo GPS con conexion de energia\n' +
+              '* 🚍 Vehiculo:* ' + unidadTxtEnc + '\n' +
+              '* 📅 Fecha:* ' + fechaTxtEnc + '\n' +
+              '* ⏰ Hora:* ' + horaTxtEnc + '\n' +
+              '* 📍 Ver en Mapa:* ' + mapUrlEnc;
             solicitarNotificacionPushPorImei(data[imei], txtEncendida, PUSH_TYPE_ONOFF);
           }
         });
@@ -1778,56 +1856,103 @@ function onClientConnected(socket) {
         });
       }
 
-       // ================== GTRTL ==================
+      // ================== GTRTL ==================
 
       else if (message.includes(GTRTL) && !message.includes(ACK)) {
-          
-          let imei = 2;
-          let data = message.split(',');
-          let speed = 8;
-          let angle = 9;
-          let height = 10;
-          let longitude = 11;
-          let latitude = 12;
-          let datetime = 13;
 
-          let fechaGPS = toInteger(data[datetime]);
+        let imei = 2;
+        let data = message.split(',');
+        let speed = 8;
+        let angle = 9;
+        let height = 10;
+        let longitude = 11;
+        let latitude = 12;
+        let datetime = 13;
 
-          let lat = toFloat(data[latitude]);
-          let lng = toFloat(data[longitude]);
+        let fechaGPS = toInteger(data[datetime]);
 
-          let fecha_gps = (fechaGPS != 0)
-              ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate()
-              : new Date();
+        let lat = toFloat(data[latitude]);
+        let lng = toFloat(data[longitude]);
 
-          dbTrackingSystem.collection('unidads').findOne(
-              { imei: data[imei], estado: 'A' },
-              function(err, unidad) {
+        let fecha_gps = fechaGpsFromGpsField(data[datetime], fechaGPS);
 
-                  if (err || !unidad) return;
+        dbTrackingSystem.collection('unidads').findOne(
+          { imei: data[imei], estado: 'A' },
+          function (err, unidad) {
 
-                  // ================= ENVIAR AL FRONT =================
-                    const gpsDataLocation = {
-                      type: 'unidad.location',
-                      unidad_id: unidad._id,
-                      _id:unidad._id,
-                      imei: data[imei],
-                      cooperativa_id: unidad.cooperativa_id ? String(unidad.cooperativa_id) : null,
-                      latitud: lat,
-                      longitud: lng,
-                      velocidad_actual: toFloat(data[speed]),
-                      angulo: toInteger(data[angle]),
-                      altura: toFloat(data[height]),
-                      fecha_gps: fecha_gps,
-                      _raw_message: message
-                  };
+            if (err || !unidad) return;
 
-                  const unidadLocation = buildUnidadPayloadRealtime(gpsDataLocation);
-                  enviarALaravelPorWS(unidadLocation);
+            // ================= ENVIAR AL FRONT =================
+            const gpsDataLocation = {
+              type: 'unidad.location',
+              unidad_id: unidad._id,
+              _id: unidad._id,
+              imei: data[imei],
+              cooperativa_id: unidad.cooperativa_id ? String(unidad.cooperativa_id) : null,
+              latitud: lat,
+              longitud: lng,
+              velocidad_actual: toFloat(data[speed]),
+              angulo: toInteger(data[angle]),
+              altura: toFloat(data[height]),
+              fecha_gps: fecha_gps,
+              _raw_message: message
+            };
 
-              }
-          );
+            const unidadLocation = buildUnidadPayloadRealtime(gpsDataLocation);
+            enviarALaravelPorWS(unidadLocation);
+
+          }
+        );
       }
+
+      // ================== GTSPD ==================
+
+      else if (message.includes(GTSPD) && !message.includes(ACK)) {
+
+        let imei = 2;
+        let data = message.split(',');
+        let speed = 8;
+        let angle = 9;
+        let height = 10;
+        let longitude = 11;
+        let latitude = 12;
+        let datetime = 13;
+
+        let fechaGPS = toInteger(data[datetime]);
+
+        let lat = toFloat(data[latitude]);
+        let lng = toFloat(data[longitude]);
+
+        let fecha_gps = (fechaGPS != 0)
+          ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate()
+          : new Date();
+
+        dbTrackingSystem.collection('unidads').findOne(
+          { imei: data[imei], estado: 'A' },
+          function (err, unidad) {
+
+            if (err || !unidad) return;
+
+            const fechaHoraTxtEV = formatFechaGpsParaPush(fecha_gps);
+            const fechaPartesEV = fechaHoraTxtEV.split(' ');
+            const fechaTxtEV = fechaPartesEV.length > 0 ? fechaPartesEV[0] : fechaHoraTxtEV;
+            const horaTxtEV = fechaPartesEV.length > 1 ? fechaPartesEV[1] : '';
+            const unidadTxtEV = String(unidad.descripcion).trim();
+            const velocidadTxtEV = toFloat(data[speed]);
+            const mapUrlEV = 'https://www.google.com/maps/search/?api=1&query=' + lat + ',' + lng;
+            const txtExcesoVelocidad =
+              unidadTxtEV + ':⚠️ Exceso de velocidad \n' +
+              '* 🚍 Vehiculo:* ' + unidadTxtEV + '\n' +
+              '* 🏎️ Velocidad:* ' + velocidadTxtEV + ' km/h\n' +
+              '* 📅 Fecha:* ' + fechaTxtEV + '\n' +
+              '* ⏰ Hora:* ' + horaTxtEV + '\n' +
+              '* 📍 Ver en Mapa:* ' + mapUrlEV;
+            solicitarNotificacionPushPorImei(data[imei], txtExcesoVelocidad, PUSH_TYPE_OVERSPEED);
+
+          }
+        );
+      }
+
 
 
       // ================== DEFAULT: siempre registrar TRAMA (BATCH) ==================
