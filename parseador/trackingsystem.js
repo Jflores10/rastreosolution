@@ -102,8 +102,16 @@ const LARAVEL_PUSH_SECRET = (process.env.LARAVEL_PUSH_SECRET || '').trim();
  */
 const PUSH_TYPE_GEOFENCE = (process.env.LARAVEL_PUSH_TYPE_GEOFENCE || 'geofence').trim();
 const PUSH_TYPE_ONOFF = (process.env.LARAVEL_PUSH_TYPE_ONOFF || 'onoff').trim();
-/** Zona horaria para el texto de push (evita desfase vs Ecuador). Ej: America/Guayaquil */
-const PUSH_NOTIFICATION_TIMEZONE =  'America/Guayaquil';
+/** Zona horaria para el texto de push (Ecuador). Ej: America/Guayaquil */
+const PUSH_NOTIFICATION_TIMEZONE = (process.env.PUSH_NOTIFICATION_TIMEZONE || 'America/Guayaquil').trim();
+/**
+ * 1 = el timestamp del GPS (YYYYMMDDHHmmss) viene en UTC (muy habitual en trackers).
+ * 0 = interpretarlo en la zona local del servidor (moment local).
+ */
+const PUSH_GPS_DATETIME_AS_UTC = String(process.env.PUSH_GPS_DATETIME_AS_UTC || '1').trim() === '1';
+/** Visible en bandeja del sistema (FCM no pinta Font Awesome en el body). */
+const PUSH_ICON_POWER_ON = '\uD83D\uDFE2\uD83D\uDD0C ';
+const PUSH_ICON_POWER_OFF = '\uD83D\uDD34\uD83D\uDD0C ';
 
 // ===================== GLOBALS =====================
 let dbTrackingSystem = null;
@@ -364,6 +372,30 @@ function formatFechaGpsParaPush(fecha_gps) {
   } catch (e) {
     return '';
   }
+}
+
+/**
+ * Convierte el campo texto YYYYMMDDHHmmss del dispositivo a Date.
+ * Por defecto UTC (ver PUSH_GPS_DATETIME_AS_UTC).
+ */
+function deviceDatetimeStringToDate(raw) {
+  if (raw == null || raw === '') return null;
+  const s = String(raw).replace(/\D/g, '');
+  if (s.length < 14) return null;
+  const piece = s.slice(0, 14);
+  if (PUSH_GPS_DATETIME_AS_UTC) {
+    const mUtc = moment.utc(piece, DEVICE_DATE_FORMAT, true);
+    if (mUtc.isValid()) return mUtc.toDate();
+  }
+  const mLocal = moment(piece, DEVICE_DATE_FORMAT, true);
+  return mLocal.isValid() ? mLocal.toDate() : null;
+}
+
+function fechaGpsFromGpsField(raw, fechaGPSInt) {
+  if (!fechaGPSInt || fechaGPSInt === 0) return new Date();
+  const d = deviceDatetimeStringToDate(raw);
+  if (d) return d;
+  return moment(raw, DEVICE_DATE_FORMAT).toDate();
 }
 
 function getSocket(imei) {
@@ -1496,7 +1528,7 @@ function onClientConnected(socket) {
         dbTrackingSystem.collection('unidads').findOne({ imei: data[imei], estado: 'A' }, function (err, document) {
           if (err) console.log(err);
           else if (document) {
-            const fecha_gps = (fechaGPS != 0) ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate() : new Date();
+            const fecha_gps = fechaGpsFromGpsField(data[datetime], fechaGPS);
             const now = new Date();
             const lat = toFloat(data[latitude]);
             const lng = toFloat(data[longitude]);
@@ -1577,7 +1609,7 @@ function onClientConnected(socket) {
         dbTrackingSystem.collection('unidads').findOne({ imei: data[imei], estado: 'A' }, function (err, document) {
           if (err) console.log(err);
           else if (document) {
-            const fecha_gps = (fechaGPS != 0) ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate() : new Date();
+            const fecha_gps = fechaGpsFromGpsField(data[datetime], fechaGPS);
             const now = new Date();
             const lat = toFloat(data[latitude]);
             const lng = toFloat(data[longitude]);
@@ -1639,7 +1671,7 @@ function onClientConnected(socket) {
               _raw_message: message
             });
 
-            const txtEncendida = '<i class="fa fa-plug" style="color:green;"></i> Dispositivo GPS con conexion de energia ' + formatFechaGpsParaPush(fecha_gps) + ' ' + lat + ', ' + lng;
+            const txtEncendida = PUSH_ICON_POWER_ON + 'Dispositivo GPS con conexion de energia ' + formatFechaGpsParaPush(fecha_gps) + ' ' + lat + ', ' + lng;
             solicitarNotificacionPushPorImei(data[imei], txtEncendida, PUSH_TYPE_ONOFF);
           }
         });
