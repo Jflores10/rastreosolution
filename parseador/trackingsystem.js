@@ -1182,6 +1182,33 @@ function onClientConnected(socket) {
               js: true
             }, { writeConcern: { w: 0 } }, function (err) {
               if (!err) actualizarSentidoUnidad(dbTrackingSystem, document, pdi, inout, message);  // ✅
+              if (!err && inout === 1) {
+                const fechaHoraTxtGeo = formatFechaGpsParaPush(fecha_gps);
+                const fechaPartesGeo = fechaHoraTxtGeo.split(' ');
+                const fechaTxtGeo = fechaPartesGeo.length > 0 ? fechaPartesGeo[0] : fechaHoraTxtGeo;
+                const horaTxtGeo = fechaPartesGeo.length > 1 ? fechaPartesGeo[1] : '';
+                const unidadTxtGeo = String(document.descripcion).trim();
+                const mapUrlGeo = 'https://www.google.com/maps/search/?api=1&query=' + latitud + ',' + longitudV;
+                const txtGeofenceEntrada =
+                  unidadTxtGeo + ':🚩🟢 Entrada a punto de control\n' +
+                  '* 🚍 Vehiculo:* ' + unidadTxtGeo + '\n' +
+                  '* 📅 Fecha:* ' + fechaTxtGeo + '\n' +
+                  '* ⏰ Hora:* ' + horaTxtGeo;
+                solicitarNotificacionPushPorImei(data[imei], txtGeofenceEntrada, PUSH_TYPE_GEOFENCE);
+              } else if (inout === 0) {
+                const fechaHoraTxtGeo = formatFechaGpsParaPush(fecha_gps);
+                const fechaPartesGeo = fechaHoraTxtGeo.split(' ');
+                const fechaTxtGeo = fechaPartesGeo.length > 0 ? fechaPartesGeo[0] : fechaHoraTxtGeo;
+                const horaTxtGeo = fechaPartesGeo.length > 1 ? fechaPartesGeo[1] : '';
+                const unidadTxtGeo = String(document.descripcion).trim();
+                const mapUrlGeo = 'https://www.google.com/maps/search/?api=1&query=' + latitud + ',' + longitudV;
+                const txtGeofenceSalida =
+                  unidadTxtGeo + ':🚩🔴 Salida del punto de control\n' +
+                  '* 🚍 Vehiculo:* ' + unidadTxtGeo + '\n' +
+                  '* 📅 Fecha:* ' + fechaTxtGeo + '\n' +
+                  '* ⏰ Hora:* ' + horaTxtGeo;
+                solicitarNotificacionPushPorImei(data[imei], txtGeofenceSalida, PUSH_TYPE_GEOFENCE);
+              }
             });
           }
         });
