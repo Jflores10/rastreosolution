@@ -19,6 +19,10 @@ class InternalPushController extends Controller
      * notification_type_code: código del tipo en notification_types. Si viene informado, solo reciben push
      * los usuarios con fila en user_notification_settings y enabled=true (sin fila => no enviar).
      * Si viene vacío, se envía a todos los usuarios enlazados a la unidad (comportamiento legacy).
+     *
+     * Cuerpo con HTML (p. ej. icono fa-plug): FCM no renderiza HTML en la bandeja del sistema.
+     * FcmV1Service envía texto plano en notification.body y el HTML en data.html_body; la app móvil debe
+     * usar html_body al construir la notificación (p. ej. Html.fromHtml) si se quiere ver el icono FA.
      */
     public function pushByUnidad(Request $request, FcmV1Service $fcm)
     {
@@ -95,7 +99,7 @@ class InternalPushController extends Controller
             return response()->json(array('error' => false, 'sent' => 0, 'message' => 'Firebase no configurado'));
         }
 
-        $title = 'Rastreo Solution';
+        $title = 'Aviso';
         $sent = 0;
         foreach ($tokens as $row) {
             if (!empty($row->token) && $fcm->sendToDevice($row->token, $title, $body)) {

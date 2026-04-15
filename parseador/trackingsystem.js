@@ -102,6 +102,8 @@ const LARAVEL_PUSH_SECRET = (process.env.LARAVEL_PUSH_SECRET || '').trim();
  */
 const PUSH_TYPE_GEOFENCE = (process.env.LARAVEL_PUSH_TYPE_GEOFENCE || 'geofence').trim();
 const PUSH_TYPE_ONOFF = (process.env.LARAVEL_PUSH_TYPE_ONOFF || 'onoff').trim();
+/** Zona horaria para el texto de push (evita desfase vs Ecuador). Ej: America/Guayaquil */
+const PUSH_NOTIFICATION_TIMEZONE =  'America/Guayaquil';
 
 // ===================== GLOBALS =====================
 let dbTrackingSystem = null;
@@ -334,6 +336,33 @@ function solicitarNotificacionPushPorImei(imei, bodyText, notificationTypeCode) 
   } catch (e) {
     pushDebugLog('exception', e && e.message ? e.message : e);
     if (debug) console.log('solicitarNotificacionPushPorImei', e);
+  }
+}
+
+/**
+ * fecha_gps como Date (instante UTC interno) -> DD/MM/YYYY HH:mm:ss en zona configurada.
+ * Las notificaciones FCM no renderizan HTML; usar este string para hora local correcta.
+ */
+function formatFechaGpsParaPush(fecha_gps) {
+  if (fecha_gps == null || !(fecha_gps instanceof Date) || isNaN(fecha_gps.getTime())) return '';
+  try {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: PUSH_NOTIFICATION_TIMEZONE,
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    }).formatToParts(fecha_gps);
+    const pick = function (t) {
+      const p = parts.find(function (x) { return x.type === t; });
+      return p ? p.value : '';
+    };
+    return pick('day') + '/' + pick('month') + '/' + pick('year') + ' ' + pick('hour') + ':' + pick('minute') + ':' + pick('second');
+  } catch (e) {
+    return '';
   }
 }
 
@@ -1528,7 +1557,7 @@ function onClientConnected(socket) {
               cooperativa_id: document.cooperativa_id ? String(document.cooperativa_id).trim() : null,
               _raw_message: message
             });
-            const txtApagada = '<i class="fa fa-plug" style="color:red;"></i> Dispositivo GPS sin conexion de energia ' + fecha_gps + ' ' + lat + ', ' + lng;
+            const txtApagada = '<i class="fa fa-plug" style="color:red;"></i> Dispositivo GPS sin conexion de energia ' + formatFechaGpsParaPush(fecha_gps) + ' ' + lat + ', ' + lng;
             solicitarNotificacionPushPorImei(data[imei], txtApagada, PUSH_TYPE_ONOFF);
           }
         });
@@ -1610,7 +1639,7 @@ function onClientConnected(socket) {
               _raw_message: message
             });
 
-            const txtEncendida = '<i class="fa fa-plug" style="color:green;"></i> Dispositivo GPS con conexion de energia ' + fecha_gps + ' ' + lat + ', ' + lng;
+            const txtEncendida = '<i class="fa fa-plug" style="color:green;"></i> Dispositivo GPS con conexion de energia ' + formatFechaGpsParaPush(fecha_gps) + ' ' + lat + ', ' + lng;
             solicitarNotificacionPushPorImei(data[imei], txtEncendida, PUSH_TYPE_ONOFF);
           }
         });

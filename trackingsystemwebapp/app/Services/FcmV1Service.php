@@ -120,6 +120,10 @@ class FcmV1Service
     }
 
     /**
+     * Envía FCM HTTP v1. El campo notification.body es SIEMPRE texto plano en Android/iOS (no hay HTML).
+     * Si el cuerpo trae etiquetas HTML, se envía además data.html_body con el HTML original para que la app
+     * pinte el icono (p. ej. Html.fromHtml en Android) al mostrar o al expandir la notificación.
+     *
      * @param string $deviceToken
      * @param string $title
      * @param string $body
@@ -138,14 +142,30 @@ class FcmV1Service
         $projectId = $account['project_id'];
         $url = 'https://fcm.googleapis.com/v1/projects/' . rawurlencode($projectId) . '/messages:send';
 
-        $payload = array(
-            'message' => array(
-                'token' => $deviceToken,
-                'notification' => array(
-                    'title' => $title,
-                    'body' => $body,
-                ),
+        $hasHtml = (stripos($body, '<') !== false && stripos($body, '>') !== false);
+        $plainBody = $body;
+        if ($hasHtml) {
+            $plainBody = trim(preg_replace('/\s+/', ' ', strip_tags($body)));
+            if ($plainBody === '') {
+                $plainBody = 'Aviso';
+            }
+        }
+
+        $message = array(
+            'token' => $deviceToken,
+            'notification' => array(
+                'title' => $title,
+                'body' => $plainBody,
             ),
+        );
+        if ($hasHtml) {
+            $message['data'] = array(
+                'html_body' => $body,
+            );
+        }
+
+        $payload = array(
+            'message' => $message,
         );
 
         try {
