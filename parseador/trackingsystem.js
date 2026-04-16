@@ -1093,7 +1093,7 @@ function onClientConnected(socket) {
             }, { writeConcern: { w: 0 } }, function (err) {
               if (!err) actualizarSentidoUnidad(dbTrackingSystem, document, pdi, entrada, message);  // ✅
               if (!err) {
-                dbTrackingSystem.collection('punto_controls').findOne({ pdi: pdi }, function (errPuntoControl, puntoControl) {
+                dbTrackingSystem.collection('punto_controls').findOne({ pdi: String(pdi), cooperativa_id: String(document.cooperativa_id) }, function (errPuntoControl, puntoControl) {
                   if (errPuntoControl) console.error('❌ Error buscando punto_controls (GTGIN/GTGOT):', errPuntoControl);
 
                   let descripcionPuntoControl = '';
@@ -1195,8 +1195,6 @@ function onClientConnected(socket) {
             }, { writeConcern: { w: 0 } }, function (err) {
               if (!err) actualizarSentidoUnidad(dbTrackingSystem, document, pdi, inout, message);  // ✅
               if (!err) {
-                console.log('GTGEO pdi notificacion:', pdi);
-                console.log('GTGEO Cooperativa:', document.cooperativa_id);
 
                 dbTrackingSystem.collection('punto_controls').findOne({ pdi: String(pdi), cooperativa_id: String(document.cooperativa_id) }, function (errPuntoControl, puntoControl) {
                   if (errPuntoControl) console.error('❌ Error buscando punto_controls (GTGEO):', errPuntoControl);
