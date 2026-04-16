@@ -26,9 +26,10 @@ class InternalPushController extends Controller
      */
     public function pushByUnidad(Request $request, FcmV1Service $fcm)
     {
+
         $expected = env('LARAVEL_PUSH_SECRET');
         if ($expected === null || $expected === '') {
-            return response()->json(array('error' => true, 'message' => 'LARAVEL_PUSH_SECRET no configurado'), 503);
+            return response()->json(array('error' => true, 'message' => 'LARAVEL_PUSH_SECRET no configurado2'), 503);
         }
         if (trim((string) $request->input('secret')) !== trim((string) $expected)) {
             return response()->json(array('error' => true, 'message' => 'Forbidden'), 403);
