@@ -18,6 +18,16 @@ class DeviceTokenApiController extends Controller
             'token' => 'required|string|max:512',
             'platform' => 'required|string|max:32',
             'device_id' => 'required|string|max:128',
+        ), array(
+            'token.required' => 'El token del dispositivo es obligatorio.',
+            'token.string' => 'El token del dispositivo debe ser texto.',
+            'token.max' => 'El token del dispositivo no puede superar 512 caracteres.',
+            'platform.required' => 'La plataforma del dispositivo es obligatoria.',
+            'platform.string' => 'La plataforma del dispositivo debe ser texto.',
+            'platform.max' => 'La plataforma del dispositivo no puede superar 32 caracteres.',
+            'device_id.required' => 'El identificador del dispositivo es obligatorio.',
+            'device_id.string' => 'El identificador del dispositivo debe ser texto.',
+            'device_id.max' => 'El identificador del dispositivo no puede superar 128 caracteres.',
         ));
         if ($validator->fails()) {
             return response()->json(array(
@@ -38,6 +48,20 @@ class DeviceTokenApiController extends Controller
 
         $uid = (string) $user->_id;
         $deviceId = trim($request->input('device_id'));
+        $token = trim($request->input('token'));
+        $platform = trim($request->input('platform'));
+
+        // Si el mismo dispositivo inicia sesión con otro usuario,
+        // desactivar asociaciones previas para evitar notificaciones cruzadas.
+        DeviceToken::where('device_id', $deviceId)
+            ->where('user_id', '!=', $uid)
+            ->update(array('active' => false));
+
+        // También desactivar el mismo token cuando esté asociado a otro usuario.
+        // Esto cubre casos donde el token rota o el device_id no llega consistente.
+        DeviceToken::where('token', $token)
+            ->where('user_id', '!=', $uid)
+            ->update(array('active' => false));
 
         $row = DeviceToken::where('user_id', $uid)->where('device_id', $deviceId)->first();
         if (!$row) {
@@ -45,8 +69,8 @@ class DeviceTokenApiController extends Controller
             $row->user_id = $uid;
             $row->device_id = $deviceId;
         }
-        $row->token = $request->input('token');
-        $row->platform = trim($request->input('platform'));
+        $row->token = $token;
+        $row->platform = $platform;
         $row->active = true;
         $row->save();
 
