@@ -1198,7 +1198,6 @@ function onClientConnected(socket) {
 
                 dbTrackingSystem.collection('punto_controls').findOne({ pdi: String(pdi), cooperativa_id: String(document.cooperativa_id) }, function (errPuntoControl, puntoControl) {
                   if (errPuntoControl) console.error('❌ Error buscando punto_controls (GTGEO):', errPuntoControl);
-                  console.log('GTGEO puntoControl notificacion:', puntoControl);
                   const descripcionPuntoControl = (puntoControl && puntoControl.descripcion) ? String(puntoControl.descripcion).trim() : '';
                   const lineaPuntoControl = descripcionPuntoControl ? '* 📍 P. Control:* ' + descripcionPuntoControl + '\n' : '';
 
