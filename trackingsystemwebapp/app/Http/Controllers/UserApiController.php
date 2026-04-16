@@ -43,6 +43,12 @@ class UserApiController extends Controller
         $validator = Validator::make($request->all(), [
             'email' => 'required|max:255|exists:users',
     		'password' => 'required|max:255'
+        ], [
+            'email.required' => 'El correo electrónico es obligatorio.',
+            'email.max' => 'El correo electrónico no puede superar 255 caracteres.',
+            'email.exists' => 'El correo electrónico no está registrado.',
+            'password.required' => 'La contraseña es obligatoria.',
+            'password.max' => 'La contraseña no puede superar 255 caracteres.',
         ]);
 
         if ($validator->fails()) {
