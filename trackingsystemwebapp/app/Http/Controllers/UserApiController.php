@@ -86,4 +86,38 @@ class UserApiController extends Controller
             'user' => $user,
         ], 200);
     }
+
+    public function cambiarContrasena(Request $request, $id)
+    {
+        $validator = Validator::make($request->all(), [
+            'password' => 'required|min:6|confirmed',
+            'contrasena_actual' => 'required',
+            'password_confirmation' => 'required'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'error' => true,
+                'tipo_error' => 'validacion',
+                'messages' => $validator->errors()
+            ]);
+        }
+
+        $user = User::findOrFail($id);
+        if (Hash::check($request->input('contrasena_actual'), $user->password)) {
+            $user->password = bcrypt($request->input('password'));
+            $user->modificador_id = $id;
+            $user->save();
+
+            return response()->json([
+                'error' => false,
+                'user' => $user
+            ]);
+        }
+
+        return response()->json([
+            'error' => true,
+            'tipo_error' => 'No se pudo cambiar la contraseña. La contraseña actual no es la correcta.'
+        ]);
+    }
 }
