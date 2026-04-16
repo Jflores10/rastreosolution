@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use GuzzleHttp\Client;
+use GuzzleHttp\Exception\RequestException;
 
 /**
  * Envío FCM HTTP v1 usando cuenta de servicio (JSON) sin SDK de Firebase.
@@ -139,7 +140,11 @@ class FcmV1Service
         if (!$access) {
             return false;
         }
-        $projectId = $account['project_id'];
+        // Permite forzar project_id desde .env cuando el JSON pertenece a otra cuenta/proyecto.
+        $projectId = trim((string) env('FIREBASE_PROJECT_ID', $account['project_id']));
+        if ($projectId === '') {
+            $projectId = $account['project_id'];
+        }
         $url = 'https://fcm.googleapis.com/v1/projects/' . rawurlencode($projectId) . '/messages:send';
 
         $hasHtml = (stripos($body, '<') !== false && stripos($body, '>') !== false);
@@ -151,18 +156,50 @@ class FcmV1Service
             }
         }
 
+        // Siempre enviar data + notification.
+        // - notification: bandeja del sistema (app cerrada/background)
+        // - data: permite que la app en foreground pinte preview local (estilo WhatsApp)
+        $dataPayload = array(
+            'title' => (string) $title,
+            'body' => (string) $plainBody,
+            'preview' => (string) $plainBody,
+            'sent_at' => (string) time(),
+            'channel' => 'alerts',
+        );
+        if ($hasHtml) {
+            $dataPayload['html_body'] = (string) $body;
+        }
+
         $message = array(
             'token' => $deviceToken,
             'notification' => array(
                 'title' => $title,
                 'body' => $plainBody,
             ),
+            'data' => $dataPayload,
+            'android' => array(
+                'priority' => 'HIGH',
+                'notification' => array(
+                    // Este channel_id debe existir en la app móvil con IMPORTANCE_HIGH
+                    'channel_id' => 'alerts',
+                    'sound' => 'default',
+                    'default_vibrate_timings' => true,
+                    'notification_priority' => 'PRIORITY_MAX',
+                ),
+            ),
+            'apns' => array(
+                'headers' => array(
+                    'apns-priority' => '10',
+                    'apns-push-type' => 'alert',
+                ),
+                'payload' => array(
+                    'aps' => array(
+                        'sound' => 'default',
+                        'content-available' => 1,
+                    ),
+                ),
+            ),
         );
-        if ($hasHtml) {
-            $message['data'] = array(
-                'html_body' => $body,
-            );
-        }
 
         $payload = array(
             'message' => $message,
@@ -178,8 +215,29 @@ class FcmV1Service
                 'body' => json_encode($payload),
             ));
             return true;
+        } catch (RequestException $e) {
+            $responseBody = '';
+            if ($e->hasResponse()) {
+                $responseBody = (string) $e->getResponse()->getBody();
+            }
+
+            $tokenHint = (strlen((string) $deviceToken) > 16)
+                ? ('...' . substr((string) $deviceToken, -12))
+                : (string) $deviceToken;
+
+            \Log::warning('FCM send error', array(
+                'project_id' => $projectId,
+                'client_email' => isset($account['client_email']) ? $account['client_email'] : null,
+                'token_hint' => $tokenHint,
+                'message' => $e->getMessage(),
+                'response' => $responseBody,
+            ));
+            return false;
         } catch (\Exception $e) {
-            \Log::warning('FCM send error: ' . $e->getMessage());
+            \Log::warning('FCM send error: ' . $e->getMessage(), array(
+                'project_id' => $projectId,
+                'client_email' => isset($account['client_email']) ? $account['client_email'] : null,
+            ));
             return false;
         }
     }
