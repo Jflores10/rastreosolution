@@ -1195,8 +1195,10 @@ function onClientConnected(socket) {
             }, { writeConcern: { w: 0 } }, function (err) {
               if (!err) actualizarSentidoUnidad(dbTrackingSystem, document, pdi, inout, message);  // ✅
               if (!err) {
+                console.log('GTGEO pdi notificacion:', pdi);
                 dbTrackingSystem.collection('punto_controls').findOne({ pdi: pdi }, function (errPuntoControl, puntoControl) {
                   if (errPuntoControl) console.error('❌ Error buscando punto_controls (GTGEO):', errPuntoControl);
+                  console.log('GTGEO puntoControl notificacion:', puntoControl);
                   const descripcionPuntoControl = (puntoControl && puntoControl.descripcion) ? String(puntoControl.descripcion).trim() : '';
                   const lineaPuntoControl = descripcionPuntoControl ? '* 📍 P. Control:* ' + descripcionPuntoControl + '\n' : '';
 
