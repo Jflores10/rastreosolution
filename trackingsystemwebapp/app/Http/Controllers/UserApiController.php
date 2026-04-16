@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use App\User;
+use App\DeviceToken;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 
 //use Validator;
@@ -44,9 +46,9 @@ class UserApiController extends Controller
             'email' => 'required|max:255|exists:users',
     		'password' => 'required|max:255'
         ], [
-            'email.required' => 'El correo electrónico es obligatorio.',
-            'email.max' => 'El correo electrónico no puede superar 255 caracteres.',
-            'email.exists' => 'El correo electrónico no está registrado.',
+            'email.required' => 'El usuario es obligatorio.',
+            'email.max' => 'El usuario no puede superar 255 caracteres.',
+            'email.exists' => 'El usuario no está registrado.',
             'password.required' => 'La contraseña es obligatoria.',
             'password.max' => 'La contraseña no puede superar 255 caracteres.',
         ]);
@@ -90,6 +92,52 @@ class UserApiController extends Controller
             'api_version' => 'v2',
             'usuario' => true,
             'user' => $user,
+        ], 200);
+    }
+
+    /**
+     * Logout API v2: desactiva el token FCM del dispositivo para el usuario autenticado (Basic).
+     * Así el teléfono deja de recibir notificaciones de esa sesión al cerrar sesión en la app.
+     */
+    public function logout_v2(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'device_id' => 'required|string|max:128',
+        ], [
+            'device_id.required' => 'El identificador del dispositivo es obligatorio.',
+            'device_id.string' => 'El identificador del dispositivo debe ser texto.',
+            'device_id.max' => 'El identificador del dispositivo no puede superar 128 caracteres.',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'error' => true,
+                'api_version' => 'v2',
+                'messages' => $validator->errors(),
+            ], 422);
+        }
+
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json([
+                'error' => true,
+                'api_version' => 'v2',
+                'message' => 'No autorizado.',
+            ], 401);
+        }
+
+        $uid = (string) $user->_id;
+        $deviceId = trim($request->input('device_id'));
+
+        $updated = DeviceToken::where('user_id', $uid)
+            ->where('device_id', $deviceId)
+            ->update(['active' => false]);
+
+        return response()->json([
+            'error' => false,
+            'api_version' => 'v2',
+            'message' => 'Sesión cerrada en el servidor; notificaciones desactivadas para este dispositivo.',
+            'tokens_desactivados' => (int) $updated,
         ], 200);
     }
 
