@@ -857,8 +857,6 @@ function onClientConnected(socket) {
         // el post-BD (con datos completos) lo hace.
         const isRespMessage = !message.includes(BUFF);
         enviarALaravelPorWS(unidadPayload, { force: isRespMessage, skipThrottleUpdate: isRespMessage });
-        const txtGeofenceSalida = "Test de notificación push";
-        solicitarNotificacionPushPorImei(data[idx.imei], txtGeofenceSalida, PUSH_TYPE_GEOFENCE);
         // ===================== ACTUALIZAR BD (NO BLOQUEA) =====================
         dbTrackingSystem.collection('unidads').findOneAndUpdate(
           { imei: data[idx.imei], estado: 'A' },
@@ -1094,32 +1092,42 @@ function onClientConnected(socket) {
               js: true
             }, { writeConcern: { w: 0 } }, function (err) {
               if (!err) actualizarSentidoUnidad(dbTrackingSystem, document, pdi, entrada, message);  // ✅
-              if (!err && entrada === 1) {
-                const fechaHoraTxtGeo = formatFechaGpsParaPush(fecha_gps);
-                const fechaPartesGeo = fechaHoraTxtGeo.split(' ');
-                const fechaTxtGeo = fechaPartesGeo.length > 0 ? fechaPartesGeo[0] : fechaHoraTxtGeo;
-                const horaTxtGeo = fechaPartesGeo.length > 1 ? fechaPartesGeo[1] : '';
-                const unidadTxtGeo = String(document.descripcion).trim();
-                const mapUrlGeo = 'https://www.google.com/maps/search/?api=1&query=' + latitud + ',' + longitudV;
-                const txtGeofenceEntrada =
-                  unidadTxtGeo + ':🚩🟢 Entrada a punto de control\n' +
-                  '* 🚍 Vehiculo:* ' + unidadTxtGeo + '\n' +
-                  '* 📅 Fecha:* ' + fechaTxtGeo + '\n' +
-                  '* ⏰ Hora:* ' + horaTxtGeo;
-                  solicitarNotificacionPushPorImei(data[imei], txtGeofenceEntrada, PUSH_TYPE_GEOFENCE);
-              } else if (entrada === 0) {
-                const fechaHoraTxtGeo = formatFechaGpsParaPush(fecha_gps);
-                const fechaPartesGeo = fechaHoraTxtGeo.split(' ');
-                const fechaTxtGeo = fechaPartesGeo.length > 0 ? fechaPartesGeo[0] : fechaHoraTxtGeo;
-                const horaTxtGeo = fechaPartesGeo.length > 1 ? fechaPartesGeo[1] : '';
-                const unidadTxtGeo = String(document.descripcion).trim();
-                const mapUrlGeo = 'https://www.google.com/maps/search/?api=1&query=' + latitud + ',' + longitudV;
-                const txtGeofenceSalida =
-                  unidadTxtGeo + ':🚩🔴 Salida del punto de control\n' +
-                  '* 🚍 Vehiculo:* ' + unidadTxtGeo + '\n' +
-                  '* 📅 Fecha:* ' + fechaTxtGeo + '\n' +
-                  '* ⏰ Hora:* ' + horaTxtGeo;
-                  solicitarNotificacionPushPorImei(data[imei], txtGeofenceSalida, PUSH_TYPE_GEOFENCE);
+              if (!err) {
+                dbTrackingSystem.collection('punto_controls').findOne({ pdi: pdi }, function (errPuntoControl, puntoControl) {
+                  if (errPuntoControl) console.error('❌ Error buscando punto_controls (GTGIN/GTGOT):', errPuntoControl);
+
+                  let descripcionPuntoControl = '';
+                  if (puntoControl && puntoControl.descripcion) descripcionPuntoControl = String(puntoControl.descripcion).trim();
+                  const lineaPuntoControl = descripcionPuntoControl ? '* 📍 P. Control:* ' + descripcionPuntoControl + '\n' : '';
+
+                  if (entrada === 1) {
+                    const fechaHoraTxtGeo = formatFechaGpsParaPush(fecha_gps);
+                    const fechaPartesGeo = fechaHoraTxtGeo.split(' ');
+                    const fechaTxtGeo = fechaPartesGeo.length > 0 ? fechaPartesGeo[0] : fechaHoraTxtGeo;
+                    const horaTxtGeo = fechaPartesGeo.length > 1 ? fechaPartesGeo[1] : '';
+                    const unidadTxtGeo = String(document.descripcion).trim();
+                    const txtGeofenceEntrada =
+                      unidadTxtGeo + ':🚩🟢 Entrada a punto de control\n' +
+                      '* 🚍 Vehiculo:* ' + unidadTxtGeo + '\n' +
+                      lineaPuntoControl +
+                      '* 📅 Fecha:* ' + fechaTxtGeo + '\n' +
+                      '* ⏰ Hora:* ' + horaTxtGeo;
+                      solicitarNotificacionPushPorImei(data[imei], txtGeofenceEntrada, PUSH_TYPE_GEOFENCE);
+                  } else if (entrada === 0) {
+                    const fechaHoraTxtGeo = formatFechaGpsParaPush(fecha_gps);
+                    const fechaPartesGeo = fechaHoraTxtGeo.split(' ');
+                    const fechaTxtGeo = fechaPartesGeo.length > 0 ? fechaPartesGeo[0] : fechaHoraTxtGeo;
+                    const horaTxtGeo = fechaPartesGeo.length > 1 ? fechaPartesGeo[1] : '';
+                    const unidadTxtGeo = String(document.descripcion).trim();
+                    const txtGeofenceSalida =
+                      unidadTxtGeo + ':🚩🔴 Salida del punto de control\n' +
+                      '* 🚍 Vehiculo:* ' + unidadTxtGeo + '\n' +
+                      lineaPuntoControl +
+                      '* 📅 Fecha:* ' + fechaTxtGeo + '\n' +
+                      '* ⏰ Hora:* ' + horaTxtGeo;
+                      solicitarNotificacionPushPorImei(data[imei], txtGeofenceSalida, PUSH_TYPE_GEOFENCE);
+                  }
+                });
               }
             });
           }
@@ -1186,32 +1194,40 @@ function onClientConnected(socket) {
               js: true
             }, { writeConcern: { w: 0 } }, function (err) {
               if (!err) actualizarSentidoUnidad(dbTrackingSystem, document, pdi, inout, message);  // ✅
-              if (!err && inout === 1) {
-                const fechaHoraTxtGeo = formatFechaGpsParaPush(fecha_gps);
-                const fechaPartesGeo = fechaHoraTxtGeo.split(' ');
-                const fechaTxtGeo = fechaPartesGeo.length > 0 ? fechaPartesGeo[0] : fechaHoraTxtGeo;
-                const horaTxtGeo = fechaPartesGeo.length > 1 ? fechaPartesGeo[1] : '';
-                const unidadTxtGeo = String(document.descripcion).trim();
-                const mapUrlGeo = 'https://www.google.com/maps/search/?api=1&query=' + latitud + ',' + longitudV;
-                const txtGeofenceEntrada =
-                  unidadTxtGeo + ':🚩🟢 Entrada a punto de control\n' +
-                  '* 🚍 Vehiculo:* ' + unidadTxtGeo + '\n' +
-                  '* 📅 Fecha:* ' + fechaTxtGeo + '\n' +
-                  '* ⏰ Hora:* ' + horaTxtGeo;
-                solicitarNotificacionPushPorImei(data[imei], txtGeofenceEntrada, PUSH_TYPE_GEOFENCE);
-              } else if (inout === 0) {
-                const fechaHoraTxtGeo = formatFechaGpsParaPush(fecha_gps);
-                const fechaPartesGeo = fechaHoraTxtGeo.split(' ');
-                const fechaTxtGeo = fechaPartesGeo.length > 0 ? fechaPartesGeo[0] : fechaHoraTxtGeo;
-                const horaTxtGeo = fechaPartesGeo.length > 1 ? fechaPartesGeo[1] : '';
-                const unidadTxtGeo = String(document.descripcion).trim();
-                const mapUrlGeo = 'https://www.google.com/maps/search/?api=1&query=' + latitud + ',' + longitudV;
-                const txtGeofenceSalida =
-                  unidadTxtGeo + ':🚩🔴 Salida del punto de control\n' +
-                  '* 🚍 Vehiculo:* ' + unidadTxtGeo + '\n' +
-                  '* 📅 Fecha:* ' + fechaTxtGeo + '\n' +
-                  '* ⏰ Hora:* ' + horaTxtGeo;
-                solicitarNotificacionPushPorImei(data[imei], txtGeofenceSalida, PUSH_TYPE_GEOFENCE);
+              if (!err) {
+                dbTrackingSystem.collection('punto_controls').findOne({ pdi: pdi }, function (errPuntoControl, puntoControl) {
+                  if (errPuntoControl) console.error('❌ Error buscando punto_controls (GTGEO):', errPuntoControl);
+                  const descripcionPuntoControl = (puntoControl && puntoControl.descripcion) ? String(puntoControl.descripcion).trim() : '';
+                  const lineaPuntoControl = descripcionPuntoControl ? '* 📍 P. Control:* ' + descripcionPuntoControl + '\n' : '';
+
+                  if (inout === 1) {
+                    const fechaHoraTxtGeo = formatFechaGpsParaPush(fecha_gps);
+                    const fechaPartesGeo = fechaHoraTxtGeo.split(' ');
+                    const fechaTxtGeo = fechaPartesGeo.length > 0 ? fechaPartesGeo[0] : fechaHoraTxtGeo;
+                    const horaTxtGeo = fechaPartesGeo.length > 1 ? fechaPartesGeo[1] : '';
+                    const unidadTxtGeo = String(document.descripcion).trim();
+                    const txtGeofenceEntrada =
+                      unidadTxtGeo + ':🚩🟢 Entrada a punto de control\n' +
+                      '* 🚍 Vehiculo:* ' + unidadTxtGeo + '\n' +
+                      lineaPuntoControl +
+                      '* 📅 Fecha:* ' + fechaTxtGeo + '\n' +
+                      '* ⏰ Hora:* ' + horaTxtGeo;
+                    solicitarNotificacionPushPorImei(data[imei], txtGeofenceEntrada, PUSH_TYPE_GEOFENCE);
+                  } else if (inout === 0) {
+                    const fechaHoraTxtGeo = formatFechaGpsParaPush(fecha_gps);
+                    const fechaPartesGeo = fechaHoraTxtGeo.split(' ');
+                    const fechaTxtGeo = fechaPartesGeo.length > 0 ? fechaPartesGeo[0] : fechaHoraTxtGeo;
+                    const horaTxtGeo = fechaPartesGeo.length > 1 ? fechaPartesGeo[1] : '';
+                    const unidadTxtGeo = String(document.descripcion).trim();
+                    const txtGeofenceSalida =
+                      unidadTxtGeo + ':🚩🔴 Salida del punto de control\n' +
+                      '* 🚍 Vehiculo:* ' + unidadTxtGeo + '\n' +
+                      lineaPuntoControl +
+                      '* 📅 Fecha:* ' + fechaTxtGeo + '\n' +
+                      '* ⏰ Hora:* ' + horaTxtGeo;
+                    solicitarNotificacionPushPorImei(data[imei], txtGeofenceSalida, PUSH_TYPE_GEOFENCE);
+                  }
+                });
               }
             });
           }
@@ -1514,13 +1530,11 @@ function onClientConnected(socket) {
             const fechaTxtEnc = fechaPartesEnc.length > 0 ? fechaPartesEnc[0] : fechaHoraTxtEnc;
             const horaTxtEnc = fechaPartesEnc.length > 1 ? fechaPartesEnc[1] : '';
             const unidadTxtEnc = String(unidad.descripcion).trim();
-            const mapUrlEnc = 'https://www.google.com/maps/search/?api=1&query=' + lat + ',' + lng;
             const txtIgnEncendida =
               unidadTxtEnc + ':🟢 Ignicion ON\n' +
               '* 🚍 Vehiculo:* ' + unidadTxtEnc + '\n' +
               '* 📅 Fecha:* ' + fechaTxtEnc + '\n' +
-              '* ⏰ Hora:* ' + horaTxtEnc + '\n' +
-              '* 📍 Ver en Mapa:* ' + mapUrlEnc;
+              '* ⏰ Hora:* ' + horaTxtEnc;
             solicitarNotificacionPushPorImei(data[imei], txtIgnEncendida, PUSH_TYPE_IGN);
           }
         );
@@ -1587,13 +1601,11 @@ function onClientConnected(socket) {
             const fechaTxtApag = fechaPartesApag.length > 0 ? fechaPartesApag[0] : fechaHoraTxtApag;
             const horaTxtApag = fechaPartesApag.length > 1 ? fechaPartesApag[1] : '';
             const unidadTxtApag = String(unidad.descripcion).trim();
-            const mapUrlApag = 'https://www.google.com/maps/search/?api=1&query=' + lat + ',' + lng;
             const txtIgnApagada =
               unidadTxtApag + ':🔴 Ignicion OFF\n' +
               '* 🚍 Vehiculo:* ' + unidadTxtApag + '\n' +
               '* 📅 Fecha:* ' + fechaTxtApag + '\n' +
-              '* ⏰ Hora:* ' + horaTxtApag + '\n' +
-              '* 📍 Ver en Mapa:* ' + mapUrlApag;
+              '* ⏰ Hora:* ' + horaTxtApag;
             solicitarNotificacionPushPorImei(data[imei],txtIgnApagada, PUSH_TYPE_IGN);
           }
         );
@@ -1681,13 +1693,11 @@ function onClientConnected(socket) {
             const fechaTxtApag = fechaPartesApag.length > 0 ? fechaPartesApag[0] : fechaHoraTxtApag;
             const horaTxtApag = fechaPartesApag.length > 1 ? fechaPartesApag[1] : '';
             const unidadTxtApag = String(document.descripcion).trim();
-            const mapUrlApag = 'https://www.google.com/maps/search/?api=1&query=' + lat + ',' + lng;
             const txtApagada =
               unidadTxtApag + ':🔴🔌 Dispositivo GPS sin conexion de energia\n' +
               '* 🚍 Vehiculo:* ' + unidadTxtApag + '\n' +
               '* 📅 Fecha:* ' + fechaTxtApag + '\n' +
-              '* ⏰ Hora:* ' + horaTxtApag + '\n' +
-              '* 📍 Ver en Mapa:* ' + mapUrlApag;
+              '* ⏰ Hora:* ' + horaTxtApag;
             solicitarNotificacionPushPorImei(data[imei], txtApagada, PUSH_TYPE_ONOFF);
           }
         });
@@ -1774,13 +1784,11 @@ function onClientConnected(socket) {
             const fechaTxtEnc = fechaPartesEnc.length > 0 ? fechaPartesEnc[0] : fechaHoraTxtEnc;
             const horaTxtEnc = fechaPartesEnc.length > 1 ? fechaPartesEnc[1] : '';
             const unidadTxtEnc = String(document.descripcion).trim();
-            const mapUrlEnc = 'https://www.google.com/maps/search/?api=1&query=' + lat + ',' + lng;
             const txtEncendida =
               unidadTxtEnc + ':🟢🔌 Dispositivo GPS con conexion de energia\n' +
               '* 🚍 Vehiculo:* ' + unidadTxtEnc + '\n' +
               '* 📅 Fecha:* ' + fechaTxtEnc + '\n' +
-              '* ⏰ Hora:* ' + horaTxtEnc + '\n' +
-              '* 📍 Ver en Mapa:* ' + mapUrlEnc;
+              '* ⏰ Hora:* ' + horaTxtEnc;
             solicitarNotificacionPushPorImei(data[imei], txtEncendida, PUSH_TYPE_ONOFF);
           }
         });
@@ -1970,14 +1978,12 @@ function onClientConnected(socket) {
             const horaTxtEV = fechaPartesEV.length > 1 ? fechaPartesEV[1] : '';
             const unidadTxtEV = String(unidad.descripcion).trim();
             const velocidadTxtEV = toFloat(data[speed]);
-            const mapUrlEV = 'https://www.google.com/maps/search/?api=1&query=' + lat + ',' + lng;
             const txtExcesoVelocidad =
               unidadTxtEV + ':⚠️ Exceso de velocidad \n' +
               '* 🚍 Vehiculo:* ' + unidadTxtEV + '\n' +
               '* 🏎️ Velocidad:* ' + velocidadTxtEV + ' km/h\n' +
               '* 📅 Fecha:* ' + fechaTxtEV + '\n' +
-              '* ⏰ Hora:* ' + horaTxtEV + '\n' +
-              '* 📍 Ver en Mapa:* ' + mapUrlEV;
+              '* ⏰ Hora:* ' + horaTxtEV;
             solicitarNotificacionPushPorImei(data[imei], txtExcesoVelocidad, PUSH_TYPE_OVERSPEED);
 
           }
