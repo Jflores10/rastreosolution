@@ -86,7 +86,6 @@ function maskSecret(value) {
 }
 
 function pushDebugLog() {
-  console.log("PUSH_DEBUG", PUSH_DEBUG);
   if (!PUSH_DEBUG) return;
   const args = Array.prototype.slice.call(arguments);
   console.log.apply(console, ['[push-debug]'].concat(args));
