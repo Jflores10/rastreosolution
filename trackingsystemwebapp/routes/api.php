@@ -35,6 +35,7 @@ Route::group(['prefix' => 'v2'], function () {
 
 	Route::group(['middleware' => ['auth.basic', 'api']], function () {
 		Route::post('login', 'UserApiController@login_v2');
+		Route::post('logout', 'UserApiController@logout_v2');
 		Route::post('users/{id}/cambiar-contrasena', 'UserApiController@cambiarContrasena');
 
 		Route::get('unidades', 'UnidadApiController@index_v2');
