@@ -1163,7 +1163,6 @@ function conectarSSE(coopId) {
     sse.addEventListener('unidad.updated', (evt) => {
         try {
             const data = JSON.parse(evt.data);
-            console.log(data)
             const uid = normalizarUnidadId(data && data._id ? data._id : (data ? data.unidad_id : null));
             if (!uid) return;
             data._id = uid;
@@ -1177,6 +1176,12 @@ function conectarSSE(coopId) {
 
             // RESP: detener parpadeo (si estaba activo) y procesar normalmente
             setBuffBlink(uid, false);
+
+            // Sincronizar diferencia (min) con fecha_gps para no_envia_trama igual que append/Historico
+            try {
+                const _dm = minutosDesdeFechaGpsVsAhora(data);
+                if (_dm != null) data.diferencia = _dm;
+            } catch (e) { /* ignore */ }
 
             // Always update marker on map
             actualizarUnidadRealtime(data);
@@ -1539,6 +1544,69 @@ function parseFechaUnidad(raw) {
 }
 
 /**
+ * Parsea fecha_gps / fecha del SSE o de Mongo para validar antigüedad (no_envia_trama).
+ * - ISO con Z u offset: instante correcto.
+ * - "Y-m-d H:i:s" o "Y-m-dTH:i:s" sin zona: se interpreta como UTC (evita que el navegador
+ *   lo trate como hora local y subestime minutos transcurridos).
+ */
+function parseFechaGpsParaValidacion(raw) {
+    if (raw == null || raw === '') return null;
+    try {
+        if (raw instanceof Date && !isNaN(raw.getTime())) return raw;
+        if (typeof raw === 'number' && isFinite(raw)) {
+            var dn = new Date(raw);
+            if (!isNaN(dn.getTime())) return dn;
+        }
+        if (typeof raw === 'object') {
+            if (raw.$date != null) return parseFechaGpsParaValidacion(raw.$date);
+            if (raw.date != null) return parseFechaGpsParaValidacion(raw.date);
+        }
+        if (typeof raw === 'string') {
+            var s = raw.trim();
+            if (!s) return null;
+            var hasTz = /[zZ]$|[+\-]\d{2}:?\d{2}$/.test(s);
+            if (s.indexOf('T') > 0 && !hasTz) {
+                s = s + 'Z';
+                hasTz = true;
+            }
+            if (!hasTz) {
+                var m = s.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})(\.\d+)?$/);
+                if (m) {
+                    var ms = Date.UTC(
+                        parseInt(m[1], 10),
+                        parseInt(m[2], 10) - 1,
+                        parseInt(m[3], 10),
+                        parseInt(m[4], 10),
+                        parseInt(m[5], 10),
+                        parseInt(m[6], 10)
+                    );
+                    return new Date(ms);
+                }
+            }
+            var d = new Date(s);
+            if (!isNaN(d.getTime())) return d;
+        }
+    } catch (e) { /* ignore */ }
+    return null;
+}
+
+/**
+ * Minutos entre la fecha/hora GPS (ajustada con GPS_HOUR_OFFSET en ms) y la fecha actual
+ * (mismo ajuste). Matemáticamente equivale a (Date.now() - instanteGpsUtc) / 60000;
+ * se deja explícito para alinear con la lista que desplaza horas con GPS_HOUR_OFFSET.
+ */
+function minutosDesdeFechaGpsVsAhora(u) {
+    if (!u) return null;
+    var d = parseFechaGpsParaValidacion(u.fecha_gps);
+    if (!d || isNaN(d.getTime())) {
+        d = parseFechaGpsParaValidacion(u.fecha);
+    }
+    if (!d || isNaN(d.getTime())) return null;
+    var offMs = GPS_HOUR_OFFSET * 3600000;
+    return ((Date.now() + offMs) - (d.getTime() + offMs)) / 60000;
+}
+
+/**
  * Misma secuencia que el bucle de appendUnidades (estado → velocidad → diferencia → fecha_gps en array_fechas).
  */
 function estadoVistaListaUnidad(u) {
@@ -1550,11 +1618,10 @@ function estadoVistaListaUnidad(u) {
     if (parseFloat(u.velocidad_actual) == 0) estado = 'D';
     else estado = 'M';
 
-    // Priorizar la última fecha de trama real para evitar que "diferencia" vieja
-    // deje congelado el estado no_envia_trama después de recibir nueva trama.
-    var fechaTrama = parseFechaUnidad(u.fecha_gps) ;
-    if (fechaTrama) {
-        var diffMin = (Date.now() - fechaTrama.getTime()) / 60000;
+    // Antigüedad real de la última trama (fecha_gps, o fecha servidor como respaldo).
+    var diffMin = minutosDesdeFechaGpsVsAhora(u);
+    console.log(diffMin)
+    if (diffMin != null) {
         if (diffMin > 30) return 'no_envia_trama';
         return estado;
     }
