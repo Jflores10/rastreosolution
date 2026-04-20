@@ -1638,28 +1638,19 @@ function estadoVistaListaUnidad(u) {
     return estado;
 }
 
-/**
- * Modelo de unidad para contadores (M/D/E/no_envia_trama).
- * Tras SSE, currentU vive en el <li> (updateUnidadInList). En carga inicial appendUnidades
- * también lo dejamos en el <li>; #i{id} puede quedar desactualizado o sin currentU tras innerHTML.
- */
+/** currentU del bus: en carga vive en #i{id}; el <li> puede no tenerlo o tener un modelo sin fecha tras SSE. */
 function obtenerCurrentUContador(row) {
     if (!row || !row.id) return null;
-    if (row.currentU) return row.currentU;
     var ic = document.getElementById('i' + row.id);
     if (ic && ic.currentU) return ic.currentU;
-    return null;
+    return row.currentU || null;
 }
 
 function computeEstadoMovilParaContador(unidad) {
     return estadoVistaListaUnidad(unidad);
 }
 
-/**
- * Actualiza #cantidad y desglose (verde / rojo / naranja / violeta) según estadoVistaListaUnidad
- * y el currentU de cada <li>. Pensado para actualizaciones en vivo (p. ej. SSE / updateUnidadInList).
- * La carga inicial sigue usando los contadores del append (servidor / array_fechas).
- */
+/** Actualiza #cantidad y desglose (verde / rojo / naranja / violeta) según currentU de cada fila — usado tras SSE (no reemplaza el conteo inicial de appendUnidades). */
 function refreshContadoresEstadoUnidades() {
     var ul = document.getElementById('ul_unidades');
     if (!ul) return;
@@ -4222,19 +4213,8 @@ $("#velocimetro").myfunc({divFact:10});
                         }
                     }
                 }
-                // Mismo modelo en el <li> para contadores y SSE (obtenerCurrentUContador prioriza el li).
-                var liRow = document.getElementById(data.unidades[i]._id);
-                if (liRow) {
-                    liRow.currentU = currentU;
-                    liRow.currentFechagps = currentFechagps;
-                    liRow.currentFecha = currentFecha;
-                }
             }
 
-            // Contadores iniciales: mismos números que el switch del append (array_fechas / servidor).
-            // NO llamar refreshContadoresEstadoUnidades() aquí: usa estadoVistaListaUnidad en cliente y
-            // no coincide 1:1 con la clasificación inicial del Historico, y marca casi todo en violeta.
-            // Tras SSE, updateUnidadInList sí llama refreshContadoresEstadoUnidades().
             $('#cantidad_no').text(unidad_no);
             $('#cantidad_movimiento').text(unidad_movimiento);
             $('#cantidad_e').text(unidad_e);
