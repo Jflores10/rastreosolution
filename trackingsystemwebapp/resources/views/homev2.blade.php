@@ -1117,16 +1117,26 @@ setInterval(function () {
  * isBuff=true  → agrega .marker-buff-blink al ícono y marca li._is_buff=true
  * isBuff=false → remueve la clase y marca li._is_buff=false
  */
+function toIsBuffFlag(value) {
+    if (typeof value === 'string') {
+        const normalized = value.trim().toLowerCase();
+        if (normalized === 'true' || normalized === '1') return true;
+        if (normalized === 'false' || normalized === '0' || normalized === '') return false;
+    }
+    return value === true || value === 1;
+}
+
 function setBuffBlink(uid, isBuff) {
     try {
         const sid = normalizarUnidadId(uid);
         if (!sid) return;
         const li = document.getElementById(sid);
         if (!li) return;
-        li._is_buff = !!isBuff;
+        const buffActive = toIsBuffFlag(isBuff);
+        li._is_buff = buffActive;
         const markerEl = document.getElementById('g' + sid);
         if (!markerEl) return;
-        if (isBuff) {
+        if (buffActive) {
             markerEl.classList.add('marker-buff-blink');
         } else {
             markerEl.classList.remove('marker-buff-blink');
@@ -1159,7 +1169,7 @@ function conectarSSE(coopId) {
             if (!unidadPerteneceAFiltroRutaActual(uid)) return;
 
             // Si es BUFF: solo parpadear, NO actualizar nada en el front
-            if (data.is_buff) {
+            if (toIsBuffFlag(data.is_buff)) {
                 setBuffBlink(uid, true);
                 return;
             }
@@ -1227,7 +1237,7 @@ function conectarSSE(coopId) {
             data.unidad_id = uidSentido;
 
             // Si es BUFF: solo parpadear, NO actualizar sentido ni lista
-            if (data.is_buff) {
+            if (toIsBuffFlag(data.is_buff)) {
                 setBuffBlink(data.unidad_id, true);
                 return;
             }
@@ -1252,7 +1262,7 @@ function conectarSSE(coopId) {
             if (!li || !li.currentU) return;
 
             // Si es BUFF: solo parpadear, NO actualizar estado de puertas ni lista
-            if (msg.is_buff) {
+            if (toIsBuffFlag(msg.is_buff)) {
                 setBuffBlink(msg.unidad_id, true);
                 return;
             }
