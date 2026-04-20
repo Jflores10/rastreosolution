@@ -1591,19 +1591,26 @@ function parseFechaGpsParaValidacion(raw) {
 }
 
 /**
- * Minutos entre la fecha/hora GPS (ajustada con GPS_HOUR_OFFSET en ms) y la fecha actual
- * (mismo ajuste). Matemáticamente equivale a (Date.now() - instanteGpsUtc) / 60000;
- * se deja explícito para alinear con la lista que desplaza horas con GPS_HOUR_OFFSET.
+ * Minutos entre la hora actual del navegador y la fecha/hora de la última trama,
+ * usando el MISMO criterio que la lista (updateUnidadInList): clonar el instante,
+ * aplicar setHours(getHours() + offset) y comparar con new Date() sin desplazar.
+ * Así una fecha_gps "2026-04-21T00:04:57.000Z" pasa a leerse ~14:04 hora local (con -5)
+ * y si "ahora" es ~18:16 local, la diferencia es >30 min → no_envia_trama (violeta).
+ * (Comparar solo en UTC ms puede dar signo o magnitud distintos a lo que ve el usuario.)
  */
 function minutosDesdeFechaGpsVsAhora(u) {
     if (!u) return null;
     var d = parseFechaGpsParaValidacion(u.fecha_gps);
+    var horasOffset = GPS_HOUR_OFFSET;
     if (!d || isNaN(d.getTime())) {
         d = parseFechaGpsParaValidacion(u.fecha);
+        horasOffset = SERVER_HOUR_OFFSET;
     }
     if (!d || isNaN(d.getTime())) return null;
-    var offMs = GPS_HOUR_OFFSET * 3600000;
-    return ((Date.now() + offMs) - (d.getTime() + offMs)) / 60000;
+    var dAjust = new Date(d.getTime());
+    dAjust.setHours(dAjust.getHours() + horasOffset);
+    var ahora = new Date();
+    return (ahora.getTime() - dAjust.getTime()) / 60000;
 }
 
 /**
@@ -1618,9 +1625,8 @@ function estadoVistaListaUnidad(u) {
     if (parseFloat(u.velocidad_actual) == 0) estado = 'D';
     else estado = 'M';
 
-    // Antigüedad real de la última trama (fecha_gps, o fecha servidor como respaldo).
+    // Antigüedad de la última trama (misma lógica de hora ajustada que la lista lateral).
     var diffMin = minutosDesdeFechaGpsVsAhora(u);
-    console.log(diffMin)
     if (diffMin != null) {
         if (diffMin > 30) return 'no_envia_trama';
         return estado;
