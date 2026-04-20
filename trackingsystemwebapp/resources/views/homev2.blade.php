@@ -1134,73 +1134,6 @@ function setBuffBlink(uid, isBuff) {
     } catch (e) { /* silencioso */ }
 }
 
-/**
- * Marca la unidad como BUFF en la vista:
- * - mantiene el parpadeo del marcador
- * - fuerza estado no_envia_trama (color violeta)
- * - evita procesar la actualización normal del evento
- */
-function applyUnidadBuffState(uid, payload) {
-    try {
-        const sid = normalizarUnidadId(uid);
-        if (!sid) return;
-        setBuffBlink(sid, true);
-
-        const li = document.getElementById(sid);
-        const icon = document.getElementById('i' + sid);
-
-        // Base confiable de la unidad ya renderizada (si existe),
-        // para no perder campos como descripcion.
-        const base = (li && li.currentU)
-            ? li.currentU
-            : ((icon && icon.currentU) ? icon.currentU : {});
-
-        // En BUFF NO se debe actualizar la unidad con nuevos datos.
-        // Se conserva el último snapshot válido (normal / no BUFF).
-        const incoming = payload || {};
-        const hasBase = base && Object.keys(base).length > 0;
-        const u = hasBase ? Object.assign({}, base) : Object.assign({}, incoming);
-
-        if ((!u.descripcion || u.descripcion === '') && base && base.descripcion) {
-            u.descripcion = base.descripcion;
-        }
-
-        u._id = sid;
-        u.unidad_id = sid;
-        u.is_buff = true;
-
-        updateUnidadInList(u);
-    } catch (e) {
-        console.warn('applyUnidadBuffState failed', e);
-    }
-}
-
-/**
- * Limpia estado BUFF cuando llega una trama normal (no BUFF),
- * para permitir actualización completa de la unidad.
- */
-function clearUnidadBuffState(uid, payload) {
-    try {
-        const sid = normalizarUnidadId(uid);
-        if (!sid) return;
-        setBuffBlink(sid, false);
-
-        if (payload) payload.is_buff = false;
-
-        const li = document.getElementById(sid);
-        if (li && li.currentU) {
-            li.currentU.is_buff = false;
-        }
-
-        const icon = document.getElementById('i' + sid);
-        if (icon && icon.currentU) {
-            icon.currentU.is_buff = false;
-        }
-    } catch (e) {
-        console.warn('clearUnidadBuffState failed', e);
-    }
-}
-
 function conectarSSE(coopId) {
 
     if (sse && sse.readyState === EventSource.OPEN) {
@@ -1225,14 +1158,14 @@ function conectarSSE(coopId) {
             data._id = uid;
             if (!unidadPerteneceAFiltroRutaActual(uid)) return;
 
-            // Si es BUFF: forzar estado no_envia_trama y NO aplicar actualización normal
+            // Si es BUFF: solo parpadear, NO actualizar nada en el front
             if (data.is_buff) {
-                applyUnidadBuffState(uid, data);
+                setBuffBlink(uid, true);
                 return;
             }
 
-            // RESP: detener parpadeo y salir explícitamente de modo BUFF
-            clearUnidadBuffState(uid, data);
+            // RESP: detener parpadeo (si estaba activo) y procesar normalmente
+            setBuffBlink(uid, false);
 
             // Always update marker on map
             actualizarUnidadRealtime(data);
@@ -1293,15 +1226,15 @@ function conectarSSE(coopId) {
             if (!uidSentido || !unidadPerteneceAFiltroRutaActual(uidSentido)) return;
             data.unidad_id = uidSentido;
 
-            // Si es BUFF: forzar estado no_envia_trama y no aplicar actualización normal
+            // Si es BUFF: solo parpadear, NO actualizar sentido ni lista
             if (data.is_buff) {
-                applyUnidadBuffState(data.unidad_id, data);
+                setBuffBlink(data.unidad_id, true);
                 return;
             }
 
             const li = document.getElementById(data.unidad_id);
             if (li && li.currentU) {
-                clearUnidadBuffState(data.unidad_id, data);
+                setBuffBlink(data.unidad_id, false);
                 li.currentU.sentido = data.nuevo_sentido;
                 updateUnidadInList(li.currentU);
             }
@@ -1318,13 +1251,13 @@ function conectarSSE(coopId) {
             const li = document.getElementById(msg.unidad_id);
             if (!li || !li.currentU) return;
 
-            // Si es BUFF: forzar estado no_envia_trama y no aplicar actualización normal
+            // Si es BUFF: solo parpadear, NO actualizar estado de puertas ni lista
             if (msg.is_buff) {
-                applyUnidadBuffState(msg.unidad_id, msg);
+                setBuffBlink(msg.unidad_id, true);
                 return;
             }
 
-            clearUnidadBuffState(msg.unidad_id, msg);
+            setBuffBlink(msg.unidad_id, false);
 
             if (msg.puerta === 'DELANTERA') {
                 li.currentU.puerta = msg.estado;
@@ -1344,16 +1277,9 @@ function conectarSSE(coopId) {
             msg._id = _uidLoc;
             msg.unidad_id = _uidLoc;
 
-            // Si es BUFF: forzar estado no_envia_trama y no aplicar actualización normal
-            if (msg.is_buff) {
-                applyUnidadBuffState(_uidLoc, msg);
-                return;
-            }
-
             zoomUnidad=true;
             zoomUnidadID=msg._id || msg.unidad_id;
             map.setZoom(30);
-            clearUnidadBuffState(_uidLoc, msg);
             // 1) Place marker on map using existing helper
             try {
                 // actualizarUnidadRealtime already validates lat/lng and calls setMarcadorUnidad
@@ -1399,10 +1325,6 @@ function conectarSSE(coopId) {
                                         try {
                                             const pending = li._pending_update;
                                             li._pending_update = null;
-                                            if (pending && pending.is_buff) {
-                                                applyUnidadBuffState(pending._id || pending.unidad_id, pending);
-                                                return;
-                                            }
                                             // apply same logic as unidad.updated immediate path
                                             const meta = {
                                                 ruta_actual: pending.ruta_actual || '',
@@ -1596,7 +1518,6 @@ function fechaGpsTramaPresente(fg) {
  */
 function estadoVistaListaUnidad(u) {
     if (!u) return 'no_envia_trama';
-    if (u.is_buff) return 'no_envia_trama';
     var estado = u.estado_movil;
     if (estado == '-') {
         estado = (parseFloat(u.velocidad_actual) == 0) ? 'D' : 'M';
@@ -3966,10 +3887,6 @@ $("#velocimetro").myfunc({divFact:10});
                     estado="D";
                 else
                     estado="M";
-
-                if (data.unidades[i].is_buff) {
-                    estado = 'no_envia_trama';
-                }
 
                 if(data.array_fechas[i].diferencia!=null) {
                     if (data.array_fechas[i].diferencia > 30)
