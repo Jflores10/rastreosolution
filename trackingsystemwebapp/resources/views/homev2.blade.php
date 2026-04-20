@@ -1134,6 +1134,39 @@ function setBuffBlink(uid, isBuff) {
     } catch (e) { /* silencioso */ }
 }
 
+/**
+ * Marca la unidad como BUFF en la vista:
+ * - mantiene el parpadeo del marcador
+ * - fuerza estado no_envia_trama (color violeta)
+ * - evita procesar la actualización normal del evento
+ */
+function applyUnidadBuffState(uid, payload) {
+    try {
+        const sid = normalizarUnidadId(uid);
+        if (!sid) return;
+        setBuffBlink(sid, true);
+
+        const li = document.getElementById(sid);
+        let u = null;
+
+        if (li && li.currentU) {
+            u = Object.assign({}, li.currentU);
+        } else if (payload) {
+            u = Object.assign({}, payload);
+        } else {
+            u = {};
+        }
+
+        u._id = sid;
+        u.unidad_id = sid;
+        u.is_buff = true;
+
+        updateUnidadInList(u);
+    } catch (e) {
+        console.warn('applyUnidadBuffState failed', e);
+    }
+}
+
 function conectarSSE(coopId) {
 
     if (sse && sse.readyState === EventSource.OPEN) {
@@ -1158,9 +1191,9 @@ function conectarSSE(coopId) {
             data._id = uid;
             if (!unidadPerteneceAFiltroRutaActual(uid)) return;
 
-            // Si es BUFF: solo parpadear, NO actualizar nada en el front
+            // Si es BUFF: forzar estado no_envia_trama y NO aplicar actualización normal
             if (data.is_buff) {
-                setBuffBlink(uid, true);
+                applyUnidadBuffState(uid, data);
                 return;
             }
 
@@ -1226,9 +1259,9 @@ function conectarSSE(coopId) {
             if (!uidSentido || !unidadPerteneceAFiltroRutaActual(uidSentido)) return;
             data.unidad_id = uidSentido;
 
-            // Si es BUFF: solo parpadear, NO actualizar sentido ni lista
+            // Si es BUFF: forzar estado no_envia_trama y no aplicar actualización normal
             if (data.is_buff) {
-                setBuffBlink(data.unidad_id, true);
+                applyUnidadBuffState(data.unidad_id, data);
                 return;
             }
 
@@ -1251,9 +1284,9 @@ function conectarSSE(coopId) {
             const li = document.getElementById(msg.unidad_id);
             if (!li || !li.currentU) return;
 
-            // Si es BUFF: solo parpadear, NO actualizar estado de puertas ni lista
+            // Si es BUFF: forzar estado no_envia_trama y no aplicar actualización normal
             if (msg.is_buff) {
-                setBuffBlink(msg.unidad_id, true);
+                applyUnidadBuffState(msg.unidad_id, msg);
                 return;
             }
 
@@ -1276,6 +1309,12 @@ function conectarSSE(coopId) {
             if (!_uidLoc || !unidadPerteneceAFiltroRutaActual(_uidLoc)) return;
             msg._id = _uidLoc;
             msg.unidad_id = _uidLoc;
+
+            // Si es BUFF: forzar estado no_envia_trama y no aplicar actualización normal
+            if (msg.is_buff) {
+                applyUnidadBuffState(_uidLoc, msg);
+                return;
+            }
 
             zoomUnidad=true;
             zoomUnidadID=msg._id || msg.unidad_id;
@@ -1325,6 +1364,10 @@ function conectarSSE(coopId) {
                                         try {
                                             const pending = li._pending_update;
                                             li._pending_update = null;
+                                            if (pending && pending.is_buff) {
+                                                applyUnidadBuffState(pending._id || pending.unidad_id, pending);
+                                                return;
+                                            }
                                             // apply same logic as unidad.updated immediate path
                                             const meta = {
                                                 ruta_actual: pending.ruta_actual || '',
@@ -1518,6 +1561,7 @@ function fechaGpsTramaPresente(fg) {
  */
 function estadoVistaListaUnidad(u) {
     if (!u) return 'no_envia_trama';
+    if (u.is_buff) return 'no_envia_trama';
     var estado = u.estado_movil;
     if (estado == '-') {
         estado = (parseFloat(u.velocidad_actual) == 0) ? 'D' : 'M';
@@ -3887,6 +3931,10 @@ $("#velocimetro").myfunc({divFact:10});
                     estado="D";
                 else
                     estado="M";
+
+                if (data.unidades[i].is_buff) {
+                    estado = 'no_envia_trama';
+                }
 
                 if(data.array_fechas[i].diferencia!=null) {
                     if (data.array_fechas[i].diferencia > 30)
