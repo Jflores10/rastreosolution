@@ -1147,14 +1147,22 @@ function applyUnidadBuffState(uid, payload) {
         setBuffBlink(sid, true);
 
         const li = document.getElementById(sid);
-        let u = null;
+        const icon = document.getElementById('i' + sid);
 
-        if (li && li.currentU) {
-            u = Object.assign({}, li.currentU);
-        } else if (payload) {
-            u = Object.assign({}, payload);
-        } else {
-            u = {};
+        // Base confiable de la unidad ya renderizada (si existe),
+        // para no perder campos como descripcion.
+        const base = (li && li.currentU)
+            ? li.currentU
+            : ((icon && icon.currentU) ? icon.currentU : {});
+
+        // En BUFF NO se debe actualizar la unidad con nuevos datos.
+        // Se conserva el último snapshot válido (normal / no BUFF).
+        const incoming = payload || {};
+        const hasBase = base && Object.keys(base).length > 0;
+        const u = hasBase ? Object.assign({}, base) : Object.assign({}, incoming);
+
+        if ((!u.descripcion || u.descripcion === '') && base && base.descripcion) {
+            u.descripcion = base.descripcion;
         }
 
         u._id = sid;
@@ -1164,6 +1172,32 @@ function applyUnidadBuffState(uid, payload) {
         updateUnidadInList(u);
     } catch (e) {
         console.warn('applyUnidadBuffState failed', e);
+    }
+}
+
+/**
+ * Limpia estado BUFF cuando llega una trama normal (no BUFF),
+ * para permitir actualización completa de la unidad.
+ */
+function clearUnidadBuffState(uid, payload) {
+    try {
+        const sid = normalizarUnidadId(uid);
+        if (!sid) return;
+        setBuffBlink(sid, false);
+
+        if (payload) payload.is_buff = false;
+
+        const li = document.getElementById(sid);
+        if (li && li.currentU) {
+            li.currentU.is_buff = false;
+        }
+
+        const icon = document.getElementById('i' + sid);
+        if (icon && icon.currentU) {
+            icon.currentU.is_buff = false;
+        }
+    } catch (e) {
+        console.warn('clearUnidadBuffState failed', e);
     }
 }
 
@@ -1197,8 +1231,8 @@ function conectarSSE(coopId) {
                 return;
             }
 
-            // RESP: detener parpadeo (si estaba activo) y procesar normalmente
-            setBuffBlink(uid, false);
+            // RESP: detener parpadeo y salir explícitamente de modo BUFF
+            clearUnidadBuffState(uid, data);
 
             // Always update marker on map
             actualizarUnidadRealtime(data);
@@ -1267,7 +1301,7 @@ function conectarSSE(coopId) {
 
             const li = document.getElementById(data.unidad_id);
             if (li && li.currentU) {
-                setBuffBlink(data.unidad_id, false);
+                clearUnidadBuffState(data.unidad_id, data);
                 li.currentU.sentido = data.nuevo_sentido;
                 updateUnidadInList(li.currentU);
             }
@@ -1290,7 +1324,7 @@ function conectarSSE(coopId) {
                 return;
             }
 
-            setBuffBlink(msg.unidad_id, false);
+            clearUnidadBuffState(msg.unidad_id, msg);
 
             if (msg.puerta === 'DELANTERA') {
                 li.currentU.puerta = msg.estado;
@@ -1319,6 +1353,7 @@ function conectarSSE(coopId) {
             zoomUnidad=true;
             zoomUnidadID=msg._id || msg.unidad_id;
             map.setZoom(30);
+            clearUnidadBuffState(_uidLoc, msg);
             // 1) Place marker on map using existing helper
             try {
                 // actualizarUnidadRealtime already validates lat/lng and calls setMarcadorUnidad
