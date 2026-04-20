@@ -1134,6 +1134,11 @@ function setBuffBlink(uid, isBuff) {
     } catch (e) { /* silencioso */ }
 }
 
+/** Trama BUFF (buffer del equipo): solo parpadeo; el parseador envía is_buff en el JSON. */
+function ssePayloadIsBuff(d) {
+    return !!(d && d.is_buff);
+}
+
 function conectarSSE(coopId) {
 
     if (sse && sse.readyState === EventSource.OPEN) {
@@ -1159,7 +1164,7 @@ function conectarSSE(coopId) {
             if (!unidadPerteneceAFiltroRutaActual(uid)) return;
 
             // Si es BUFF: solo parpadear, NO actualizar nada en el front
-            if (data.is_buff) {
+            if (ssePayloadIsBuff(data)) {
                 setBuffBlink(uid, true);
                 return;
             }
@@ -1198,7 +1203,8 @@ function conectarSSE(coopId) {
                     applyMetaToLi(uid, meta, 'sse');
                 }
 
-                updateUnidadInList(data);
+                // RESP: no reutilizar diferencia antigua (>30) si el payload no la trae — debe reflejar solo esta trama
+                updateUnidadInList(data, { skipMergeStaleDiferenciaFromPrev: true });
 
                 if (!unidadesMetaFetchedOnce[uid]) {
                     unidadesMetaFetchedOnce[uid] = true;
@@ -1227,7 +1233,7 @@ function conectarSSE(coopId) {
             data.unidad_id = uidSentido;
 
             // Si es BUFF: solo parpadear, NO actualizar sentido ni lista
-            if (data.is_buff) {
+            if (ssePayloadIsBuff(data)) {
                 setBuffBlink(data.unidad_id, true);
                 return;
             }
@@ -1252,7 +1258,7 @@ function conectarSSE(coopId) {
             if (!li || !li.currentU) return;
 
             // Si es BUFF: solo parpadear, NO actualizar estado de puertas ni lista
-            if (msg.is_buff) {
+            if (ssePayloadIsBuff(msg)) {
                 setBuffBlink(msg.unidad_id, true);
                 return;
             }
@@ -1325,6 +1331,8 @@ function conectarSSE(coopId) {
                                         try {
                                             const pending = li._pending_update;
                                             li._pending_update = null;
+                                            // Pending siempre es RESP (BUFF no entra aquí); quitar parpadeo BUFF por si llegó un BUFF durante el lock
+                                            try { setBuffBlink(pending._id, false); } catch (e2) {}
                                             // apply same logic as unidad.updated immediate path
                                             const meta = {
                                                 ruta_actual: pending.ruta_actual || '',
@@ -1338,7 +1346,7 @@ function conectarSSE(coopId) {
                                                 unidadesMetaCache[pending._id] = { data: meta, ts: Date.now() };
                                                 applyMetaToLi(pending._id, meta, 'sse');
                                             }
-                                            updateUnidadInList(pending);
+                                            updateUnidadInList(pending, { skipMergeStaleDiferenciaFromPrev: true });
                                         } catch (e) { console.warn('apply pending update on unlock failed', e); }
                                     }
                                 } catch (e) { console.warn('cleanup after temp marker failed', e); }
@@ -1456,8 +1464,13 @@ function conectarSSE(coopId) {
             const uidFallback = normalizarUnidadId(data && (data._id || data.unidad_id));
             if (data && uidFallback && unidadPerteneceAFiltroRutaActual(uidFallback)) {
                 data._id = uidFallback;
+                if (ssePayloadIsBuff(data)) {
+                    setBuffBlink(uidFallback, true);
+                    return;
+                }
+                setBuffBlink(uidFallback, false);
                 actualizarUnidadRealtime(data);
-                updateUnidadInList(data);
+                updateUnidadInList(data, { skipMergeStaleDiferenciaFromPrev: true });
             }
         } catch (e) {}
     };
@@ -1573,8 +1586,12 @@ function refreshContadoresEstadoUnidades() {
 }
 
 // Buscar el <li> de la unidad en la lista lateral y actualizar sus campos.
-function updateUnidadInList(unidad) {
+// listOpts.skipMergeStaleDiferenciaFromPrev: tramas RESP por SSE sin campo diferencia no deben heredar
+// un diferencia viejo (>30) del currentU anterior (quedaba en "no envía trama" tras buff…buff…normal).
+function updateUnidadInList(unidad, listOpts) {
     if (!unidad) return;
+    listOpts = listOpts || {};
+    var skipStaleDif = !!listOpts.skipMergeStaleDiferenciaFromPrev;
     var uidList = normalizarUnidadId(unidad._id || unidad.unidad_id);
     if (!uidList) return;
     unidad._id = uidList;
@@ -1598,7 +1615,7 @@ function updateUnidadInList(unidad) {
             if ((unidad.tiempo_power == null || unidad.tiempo_power === 0) && prev.tiempo_power) unidad.tiempo_power = prev.tiempo_power;
             if (!unidad.tiempo_power_update && prev.tiempo_power_update) unidad.tiempo_power_update = prev.tiempo_power_update;
             if ((unidad.fecha_gps == null || unidad.fecha_gps === '') && prev.fecha_gps) unidad.fecha_gps = prev.fecha_gps;
-            if (unidad.diferencia == null && prev.diferencia != null) unidad.diferencia = prev.diferencia;
+            if (!skipStaleDif && unidad.diferencia == null && prev.diferencia != null) unidad.diferencia = prev.diferencia;
             
             // Preserve sentido (direction) if incoming payload lacks it
             //if ((!unidad.sentido || unidad.sentido === '') && prev.sentido) unidad.sentido = prev.sentido;
@@ -1607,7 +1624,7 @@ function updateUnidadInList(unidad) {
         if (iconForMerge && iconForMerge.currentU) {
             var pIcon = iconForMerge.currentU;
             if ((unidad.fecha_gps == null || unidad.fecha_gps === '') && pIcon.fecha_gps) unidad.fecha_gps = pIcon.fecha_gps;
-            if (unidad.diferencia == null && pIcon.diferencia != null) unidad.diferencia = pIcon.diferencia;
+            if (!skipStaleDif && unidad.diferencia == null && pIcon.diferencia != null) unidad.diferencia = pIcon.diferencia;
         }
     } catch (e) {
         console.warn('Merge existing meta failed', e);
@@ -1753,8 +1770,9 @@ function updateUnidadInList(unidad) {
     // Tooltip profesional del bolt (siempre presente en todos los LI)
     var boltTipText = 'Sin datos';
     try {
+        var _liTip = document.getElementById(uidList);
         var _tpuRaw = unidad.tiempo_power_update ||
-                      (li._tiempo_power_update ? li._tiempo_power_update.toISOString() : null);
+                      (_liTip && _liTip._tiempo_power_update ? _liTip._tiempo_power_update.toISOString() : null);
         if (_tpuRaw) {
             var _tpuD = new Date(_tpuRaw);
             if (!isNaN(_tpuD.getTime())) {
