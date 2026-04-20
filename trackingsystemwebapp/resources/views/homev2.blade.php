@@ -1523,6 +1523,20 @@ function fechaGpsTramaPresente(fg) {
     return true;
 }
 
+function parseFechaUnidad(raw) {
+    if (raw == null || raw === '') return null;
+    try {
+        if (raw instanceof Date && !isNaN(raw.getTime())) return raw;
+        if (typeof raw === 'object') {
+            if (raw.$date != null) return parseFechaUnidad(raw.$date);
+            if (raw.date != null) return parseFechaUnidad(raw.date);
+        }
+        var d = new Date(raw);
+        if (!isNaN(d.getTime())) return d;
+    } catch (e) { /* ignore */ }
+    return null;
+}
+
 /**
  * Misma secuencia que el bucle de appendUnidades (estado → velocidad → diferencia → fecha_gps en array_fechas).
  */
@@ -1534,6 +1548,17 @@ function estadoVistaListaUnidad(u) {
     }
     if (parseFloat(u.velocidad_actual) == 0) estado = 'D';
     else estado = 'M';
+
+    // Priorizar la última fecha de trama real para evitar que "diferencia" vieja
+    // deje congelado el estado no_envia_trama después de recibir nueva trama.
+    var fechaTrama = parseFechaUnidad(u.fecha_gps) ;
+    if (fechaTrama) {
+        var diffMin = (Date.now() - fechaTrama.getTime()) / 60000;
+        if (diffMin > 30) return 'no_envia_trama';
+        return estado;
+    }
+
+    // Fallback: mantener lógica histórica si no hay fecha parseable.
     if (u.diferencia != null && u.diferencia > 30) return 'no_envia_trama';
     if (!fechaGpsTramaPresente(u.fecha_gps)) return 'no_envia_trama';
     return estado;
