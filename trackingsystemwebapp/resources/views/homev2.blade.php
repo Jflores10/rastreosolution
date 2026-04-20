@@ -1177,11 +1177,6 @@ function conectarSSE(coopId) {
             // RESP: detener parpadeo (si estaba activo) y procesar normalmente
             setBuffBlink(uid, false);
 
-            try {
-                const _dm = minutosDesdeFechaGpsVsAhora(data);
-                if (_dm != null) data.diferencia = _dm;
-            } catch (e) { /* ignore */ }
-
             // Always update marker on map
             actualizarUnidadRealtime(data);
 
@@ -1353,10 +1348,6 @@ function conectarSSE(coopId) {
                                                 unidadesMetaCache[pending._id] = { data: meta, ts: Date.now() };
                                                 applyMetaToLi(pending._id, meta, 'sse');
                                             }
-                                            try {
-                                                const _dmP = minutosDesdeFechaGpsVsAhora(pending);
-                                                if (_dmP != null) pending.diferencia = _dmP;
-                                            } catch (e) { /* ignore */ }
                                             updateUnidadInList(pending);
                                         } catch (e) { console.warn('apply pending update on unlock failed', e); }
                                     }
@@ -1533,74 +1524,7 @@ function fechaGpsTramaPresente(fg) {
 }
 
 /**
- * Parsea fecha_gps / fecha para validar antigüedad (SSE / lista en vivo).
- * ISO con Z; "Y-m-d H:i:s" sin zona → UTC (evita subestimar minutos por zona del navegador).
- */
-function parseFechaGpsParaValidacion(raw) {
-    if (raw == null || raw === '') return null;
-    try {
-        if (raw instanceof Date && !isNaN(raw.getTime())) return raw;
-        if (typeof raw === 'number' && isFinite(raw)) {
-            var dn = new Date(raw);
-            if (!isNaN(dn.getTime())) return dn;
-        }
-        if (typeof raw === 'object') {
-            if (raw.$date != null) return parseFechaGpsParaValidacion(raw.$date);
-            if (raw.date != null) return parseFechaGpsParaValidacion(raw.date);
-        }
-        if (typeof raw === 'string') {
-            var s = raw.trim();
-            if (!s) return null;
-            var hasTz = /[zZ]$|[+\-]\d{2}:?\d{2}$/.test(s);
-            if (s.indexOf('T') > 0 && !hasTz) {
-                s = s + 'Z';
-                hasTz = true;
-            }
-            if (!hasTz) {
-                var m = s.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})(\.\d+)?$/);
-                if (m) {
-                    var ms = Date.UTC(
-                        parseInt(m[1], 10),
-                        parseInt(m[2], 10) - 1,
-                        parseInt(m[3], 10),
-                        parseInt(m[4], 10),
-                        parseInt(m[5], 10),
-                        parseInt(m[6], 10)
-                    );
-                    return new Date(ms);
-                }
-            }
-            var d = new Date(s);
-            if (!isNaN(d.getTime())) return d;
-        }
-    } catch (e) { /* ignore */ }
-    return null;
-}
-
-/**
- * Minutos entre "ahora" y la fecha de trama, con el mismo criterio que la lista al mostrar hora GPS:
- * clonar instante, setHours(getHours() + offset), comparar con new Date() sin desplazar "ahora".
- * Ej.: "2026-04-21T00:04:57.000Z" + GPS_HOUR_OFFSET (-5) alinea con la hora local mostrada; si >30 min → no_envia_trama.
- */
-function minutosDesdeFechaGpsVsAhora(u) {
-    if (!u) return null;
-    var d = parseFechaGpsParaValidacion(u.fecha_gps);
-    var horasOffset = GPS_HOUR_OFFSET;
-    if (!d || isNaN(d.getTime())) {
-        d = parseFechaGpsParaValidacion(u.fecha);
-        horasOffset = SERVER_HOUR_OFFSET;
-    }
-    if (!d || isNaN(d.getTime())) return null;
-    var dAjust = new Date(d.getTime());
-    dAjust.setHours(dAjust.getHours() + horasOffset);
-    var ahora = new Date();
-    return (ahora.getTime() - dAjust.getTime()) / 60000;
-}
-
-/**
- * Estado visual de la fila: D/M/E o no_envia_trama (violeta).
- * En vivo (SSE) la antigüedad se calcula con fecha_gps + GPS_HOUR_OFFSET vs ahora (>30 min → violeta).
- * Si no hay fecha parseable, se usa el fallback del Historico (diferencia / fecha_gps presente).
+ * Misma secuencia que el bucle de appendUnidades (estado → velocidad → diferencia → fecha_gps en array_fechas).
  */
 function estadoVistaListaUnidad(u) {
     if (!u) return 'no_envia_trama';
@@ -1610,23 +1534,17 @@ function estadoVistaListaUnidad(u) {
     }
     if (parseFloat(u.velocidad_actual) == 0) estado = 'D';
     else estado = 'M';
-
- 
-
     if (u.diferencia != null && u.diferencia > 30) return 'no_envia_trama';
     if (!fechaGpsTramaPresente(u.fecha_gps)) return 'no_envia_trama';
     return estado;
 }
 
-/**
- * Modelo para contadores en vivo: priorizar <li>.currentU (SSE / updateUnidadInList), luego #i{id} (carga).
- */
+/** currentU del bus: en carga vive en #i{id}; el <li> puede no tenerlo o tener un modelo sin fecha tras SSE. */
 function obtenerCurrentUContador(row) {
     if (!row || !row.id) return null;
-    if (row.currentU) return row.currentU;
     var ic = document.getElementById('i' + row.id);
     if (ic && ic.currentU) return ic.currentU;
-    return null;
+    return row.currentU || null;
 }
 
 function computeEstadoMovilParaContador(unidad) {
@@ -4195,12 +4113,6 @@ $("#velocimetro").myfunc({divFact:10});
                             if (_boltElI) _boltElI.classList.add('bolt-power-blink');
                         }
                     }
-                }
-                var liRow = document.getElementById(data.unidades[i]._id);
-                if (liRow) {
-                    liRow.currentU = currentU;
-                    liRow.currentFechagps = currentFechagps;
-                    liRow.currentFecha = currentFecha;
                 }
             }
 
