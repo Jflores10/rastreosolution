@@ -1611,11 +1611,7 @@ function estadoVistaListaUnidad(u) {
     if (parseFloat(u.velocidad_actual) == 0) estado = 'D';
     else estado = 'M';
 
-    var diffMin = minutosDesdeFechaGpsVsAhora(u);
-    if (diffMin != null) {
-        if (diffMin > 30) return 'no_envia_trama';
-        return estado;
-    }
+ 
 
     if (u.diferencia != null && u.diferencia > 30) return 'no_envia_trama';
     if (!fechaGpsTramaPresente(u.fecha_gps)) return 'no_envia_trama';
