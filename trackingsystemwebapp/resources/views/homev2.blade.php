@@ -1546,23 +1546,19 @@ function fechaDesdeCualquierFormato(raw) {
 function calcularDiferenciaHistorico(fechaGpsRaw, data) {
     var fechaGps = fechaDesdeCualquierFormato(fechaGpsRaw);
     if (!fechaGps) return null;
-
-    var fechaGpsAjustada = new Date(fechaGps.getTime());
-    fechaGpsAjustada.setHours(fechaGpsAjustada.getHours() - 10);
-    
-    var diffMs = Math.abs(Date.now() - fechaGpsAjustada.getTime());
-    
+    if(data.imei=='868789024290792'){
+        console.log("Fecha GPS: "+fechaGps);
+        console.log("Fecha Now: "+Date.now());
+    }           
+    var diffMs = Math.abs(Date.now() - fechaGps.getTime());
+    if(data.imei=='868789024290792'){
+        console.log("Diff MS: "+diffMs);
+    }
     var diffTotalMin = Math.floor(diffMs / 60000);
     if(data.imei=='868789024290792'){
         console.log("Diff Total Min: "+diffTotalMin);
-        console.log("Fecha GPS: "+fechaGps);
-        console.log("Fecha GPS Ajustada: "+fechaGpsAjustada);
-        console.log("Fecha Now: "+Date.now());
-        console.log("Diff MS: "+diffMs);
-
-        
     }
-    return diffTotalMin - (5 * 60);
+    return diffTotalMin;
 }
 
 /**
@@ -1579,7 +1575,6 @@ function estadoVistaListaUnidad(u) {
 
     var diferencia = calcularDiferenciaHistorico(u.fecha_gps,u);
     if(u.imei=='868789024290792'){
-        console.log("Fecha GPS: "+u.fecha_gps);
         console.log("Diferencia: "+diferencia);
     }
     if (u.diferencia == null && diferencia != null) {
