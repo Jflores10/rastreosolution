@@ -1163,9 +1163,6 @@ function conectarSSE(coopId) {
     sse.addEventListener('unidad.updated', (evt) => {
         try {
             const data = JSON.parse(evt.data);
-            if(data.imei == '868789024290792'){
-                console.log(data);
-            }
             const uid = normalizarUnidadId(data && data._id ? data._id : (data ? data.unidad_id : null));
             if (!uid) return;
             data._id = uid;
@@ -1526,43 +1523,6 @@ function fechaGpsTramaPresente(fg) {
     return true;
 }
 
-function fechaDesdeCualquierFormato(raw) {
-    if (raw == null || raw === '') return null;
-    var candidate = raw;
-    if (typeof candidate === 'object') {
-        if (candidate.date != null) candidate = candidate.date;
-        else if (candidate.$date != null) candidate = candidate.$date;
-    }
-    var d = new Date(candidate);
-    return isNaN(d.getTime()) ? null : d;
-}
-
-/**
- * Replica el cálculo de HistoricoController (L727-L737):
- * 1) fecha_gps - 10h
- * 2) diff con "ahora"
- * 3) minutos + ((horas - 5) * 60) + (dias * 24 * 60)
- */
-function calcularDiferenciaHistorico(fechaGpsRaw, data) {
-    var fechaGps = fechaDesdeCualquierFormato(fechaGpsRaw);
-    if (!fechaGps) return null;
-   
-
-    if(data.imei=='868789024290792'){
-        console.log("Fecha GPS: "+fechaGps);
-        console.log("Fecha Now: "+Date.now());
-    }           
-    var diffMs = Math.abs(Date.now() - fechaGps.getTime());
-    if(data.imei=='868789024290792'){
-        console.log("Diff MS: "+diffMs);
-    }
-    var diffTotalMin = Math.floor(diffMs / 60000);
-    if(data.imei=='868789024290792'){
-        console.log("Diff Total Min: "+diffTotalMin);
-    }
-    return diffTotalMin;
-}
-
 /**
  * Misma secuencia que el bucle de appendUnidades (estado → velocidad → diferencia → fecha_gps en array_fechas).
  */
@@ -1574,15 +1534,7 @@ function estadoVistaListaUnidad(u) {
     }
     if (parseFloat(u.velocidad_actual) == 0) estado = 'D';
     else estado = 'M';
-
-    var diferencia = calcularDiferenciaHistorico(u.fecha_gps,u);
-    if(u.imei=='868789024290792'){
-        console.log("Diferencia: "+diferencia);
-    }
-    if (u.diferencia == null && diferencia != null) {
-        u.diferencia = diferencia;
-    }
-    if (!isNaN(diferencia) && diferencia > 30) return 'no_envia_trama';
+    if (u.diferencia != null && u.diferencia > 30) return 'no_envia_trama';
     if (!fechaGpsTramaPresente(u.fecha_gps)) return 'no_envia_trama';
     return estado;
 }
@@ -1596,9 +1548,6 @@ function obtenerCurrentUContador(row) {
 }
 
 function computeEstadoMovilParaContador(unidad) {
-    if(unidad.imei=='868789024290792'){
-        console.log("Unidad 2: "+unidad.fecha_gps);
-    }
     return estadoVistaListaUnidad(unidad);
 }
 
@@ -1748,12 +1697,7 @@ function updateUnidadInList(unidad) {
 
     var voltaje = (unidad.voltaje != null) ? String(unidad.voltaje).substring(0,2) : '--';
     var velocidad_num = Number(unidad.velocidad_actual) || 0;
-    
-    if(unidad.imei=='868789024290792'){
-        
-        console.log("Unidad 1: "+fecha_gpsDate1);
-    }
-    
+
     var estado = estadoVistaListaUnidad(unidad);
 
     var iId = 'i' + unidad._id;
