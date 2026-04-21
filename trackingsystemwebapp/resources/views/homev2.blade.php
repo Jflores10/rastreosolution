@@ -1549,9 +1549,12 @@ function calcularDiferenciaHistorico(fechaGpsRaw) {
 
     var fechaGpsAjustada = new Date(fechaGps.getTime());
     fechaGpsAjustada.setHours(fechaGpsAjustada.getHours() - 10);
-
+    console.log("Fecha GPS Ajustada: "+fechaGpsAjustada);
+    console.log("Fecha Now: "+Date.now());
     var diffMs = Math.abs(Date.now() - fechaGpsAjustada.getTime());
+    console.log("Diff MS: "+diffMs);
     var diffTotalMin = Math.floor(diffMs / 60000);
+    console.log("Diff Total Min: "+diffTotalMin);
     return diffTotalMin - (5 * 60);
 }
 
@@ -1569,6 +1572,7 @@ function estadoVistaListaUnidad(u) {
 
     var diferencia = calcularDiferenciaHistorico(u.fecha_gps);
     if(u.imei=='868789024290792'){
+        console.log("Fecha GPS: "+u.fecha_gps);
         console.log("Diferencia: "+diferencia);
     }
     if (u.diferencia == null && diferencia != null) {
