@@ -1523,6 +1523,35 @@ function fechaGpsTramaPresente(fg) {
     return true;
 }
 
+function fechaDesdeCualquierFormato(raw) {
+    if (raw == null || raw === '') return null;
+    var candidate = raw;
+    if (typeof candidate === 'object') {
+        if (candidate.date != null) candidate = candidate.date;
+        else if (candidate.$date != null) candidate = candidate.$date;
+    }
+    var d = new Date(candidate);
+    return isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * Replica el cálculo de HistoricoController (L727-L737):
+ * 1) fecha_gps - 10h
+ * 2) diff con "ahora"
+ * 3) minutos + ((horas - 5) * 60) + (dias * 24 * 60)
+ */
+function calcularDiferenciaHistorico(fechaGpsRaw) {
+    var fechaGps = fechaDesdeCualquierFormato(fechaGpsRaw);
+    if (!fechaGps) return null;
+
+    var fechaGpsAjustada = new Date(fechaGps.getTime());
+    fechaGpsAjustada.setHours(fechaGpsAjustada.getHours() - 10);
+
+    var diffMs = Math.abs(Date.now() - fechaGpsAjustada.getTime());
+    var diffTotalMin = Math.floor(diffMs / 60000);
+    return diffTotalMin - (5 * 60);
+}
+
 /**
  * Misma secuencia que el bucle de appendUnidades (estado → velocidad → diferencia → fecha_gps en array_fechas).
  */
@@ -1534,7 +1563,12 @@ function estadoVistaListaUnidad(u) {
     }
     if (parseFloat(u.velocidad_actual) == 0) estado = 'D';
     else estado = 'M';
-    if (u.diferencia != null && u.diferencia > 30) return 'no_envia_trama';
+
+    var diferencia = (u.diferencia != null) ? Number(u.diferencia) : calcularDiferenciaHistorico(u.fecha_gps);
+    if (u.diferencia == null && diferencia != null) {
+        u.diferencia = diferencia;
+    }
+    if (!isNaN(diferencia) && diferencia > 30) return 'no_envia_trama';
     if (!fechaGpsTramaPresente(u.fecha_gps)) return 'no_envia_trama';
     return estado;
 }
