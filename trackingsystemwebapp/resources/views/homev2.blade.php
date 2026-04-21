@@ -1555,9 +1555,12 @@ function calcularDiferenciaHistorico(fechaGpsRaw, data) {
     var diffTotalMin = Math.floor(diffMs / 60000);
     if(data.imei=='868789024290792'){
         console.log("Diff Total Min: "+diffTotalMin);
+        console.log("Fecha GPS: "+fechaGps);
         console.log("Fecha GPS Ajustada: "+fechaGpsAjustada);
         console.log("Fecha Now: "+Date.now());
         console.log("Diff MS: "+diffMs);
+
+        
     }
     return diffTotalMin - (5 * 60);
 }
