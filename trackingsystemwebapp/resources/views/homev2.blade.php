@@ -1748,11 +1748,16 @@ function updateUnidadInList(unidad) {
 
     var voltaje = (unidad.voltaje != null) ? String(unidad.voltaje).substring(0,2) : '--';
     var velocidad_num = Number(unidad.velocidad_actual) || 0;
-    if(unidad.imei=='868789024290792'){
-        const fecha_gpsDate1 = new Date(unidad.fecha_gps);
-        if (isNaN(fecha_gpsDate1.getTime())) return null;
+    const fecha_gpsDate1 = new Date(unidad.fecha_gps);
+
+    if (!isNaN(fecha_gpsDate1.getTime())){
         fecha_gpsDate1.setHours(fecha_gpsDate1.getHours() + GPS_HOUR_OFFSET);
-        console.log("Unidad 1: "+fecha_gpsDate1);
+        unidad.fecha_gps = fecha_gpsDate1;
+    } 
+
+    if(unidad.imei=='868789024290792'){
+        
+        console.log("Unidad 1: "+ unidad.fecha_gps);
     }
     
     var estado = estadoVistaListaUnidad(unidad);
