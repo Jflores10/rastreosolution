@@ -1177,6 +1177,10 @@ function conectarSSE(coopId) {
             // RESP: detener parpadeo (si estaba activo) y procesar normalmente
             setBuffBlink(uid, false);
 
+            if (fechaGpsTramaPresente(data.fecha_gps)) {
+                data._fechaGpsSource = 'sse';
+            }
+
             // Always update marker on map
             actualizarUnidadRealtime(data);
 
@@ -1299,6 +1303,7 @@ function conectarSSE(coopId) {
             // 1b) Also update the LI so its displayed time (and other transient fields)
             // reflect the newest location immediately.
             try {
+                if (fechaGpsTramaPresente(msg.fecha_gps)) msg._fechaGpsSource = 'sse';
                 updateUnidadInList(msg);
             } catch (e) { console.warn('failed to update LI from unidad.location', e); }
 
@@ -1348,6 +1353,7 @@ function conectarSSE(coopId) {
                                                 unidadesMetaCache[pending._id] = { data: meta, ts: Date.now() };
                                                 applyMetaToLi(pending._id, meta, 'sse');
                                             }
+                                            if (fechaGpsTramaPresente(pending.fecha_gps)) pending._fechaGpsSource = 'sse';
                                             updateUnidadInList(pending);
                                         } catch (e) { console.warn('apply pending update on unlock failed', e); }
                                     }
@@ -1430,6 +1436,7 @@ function conectarSSE(coopId) {
                 li.currentU.latitud             = msg.latitud   || li.currentU.latitud;
                 li.currentU.longitud            = msg.longitud  || li.currentU.longitud;
                 li.currentU.fecha_gps           = msg.fecha_gps || li.currentU.fecha_gps;
+                if (fechaGpsTramaPresente(msg.fecha_gps)) li.currentU._fechaGpsSource = 'sse';
                 li.currentU.fecha               = msg.fecha     || li.currentU.fecha;
                 li.currentU.velocidad_actual    = msg.velocidad_actual != null ? msg.velocidad_actual : li.currentU.velocidad_actual;
                 li.currentU.angulo              = msg.angulo    != null ? msg.angulo : li.currentU.angulo;
@@ -1466,6 +1473,7 @@ function conectarSSE(coopId) {
             const uidFallback = normalizarUnidadId(data && (data._id || data.unidad_id));
             if (data && uidFallback && unidadPerteneceAFiltroRutaActual(uidFallback)) {
                 data._id = uidFallback;
+                if (fechaGpsTramaPresente(data.fecha_gps)) data._fechaGpsSource = 'sse';
                 actualizarUnidadRealtime(data);
                 updateUnidadInList(data);
             }
@@ -1536,23 +1544,30 @@ function fechaDesdeCualquierFormato(raw) {
 
 /**
  * Replica HistoricoController getUnidades (L727-L737):
- * - fecha_gps - 10h
+ * - fecha_gps - 10h (solo si _fechaGpsSource === 'sse'; desde ul_unidades no ajustar)
  * - diff con fecha actual
  * - minutos + ((horas - 5) * 60) + (dias * 24 * 60)
  */
-function calcularDiferenciaHistorico(fechaGpsRaw) {
+function calcularDiferenciaHistorico(fechaGpsRaw, aplicarAjusteHistorico, u) {
+  
     var fechaGps = fechaDesdeCualquierFormato(fechaGpsRaw);
     if (!fechaGps) return null;
 
-    var fechaGpsAjustada = new Date(fechaGps.getTime());
-    fechaGpsAjustada.setHours(fechaGpsAjustada.getHours() - 10);
-
-    var totalMin = Math.floor(Math.abs(Date.now() - fechaGpsAjustada.getTime()) / 60000);
+    var fechaGpsBase = new Date(fechaGps.getTime());
+    if (aplicarAjusteHistorico) {
+        fechaGpsBase.setHours(fechaGpsBase.getHours() - 10);
+    }
+    
+    var totalMin = Math.floor(Math.abs(Date.now() - fechaGpsBase.getTime()) / 60000);
     var dias = Math.floor(totalMin / (24 * 60));
     var rem = totalMin - (dias * 24 * 60);
     var horas = Math.floor(rem / 60);
     var minutos = rem % 60;
+    if(u.imei=='868789024273079'){
+        console.log("UFechaGPS: "+u.fechaGpsBase);
+        console.log("Minutos: "+minutos + ((horas - 5) * 60) + (dias * 24 * 60));
 
+    }
     return minutos + ((horas - 5) * 60) + (dias * 24 * 60);
 }
 
@@ -1568,7 +1583,9 @@ function estadoVistaListaUnidad(u) {
     }
     if (parseFloat(u.velocidad_actual) == 0) estado = 'D';
     else estado = 'M';
-    var diferencia = (u.diferencia != null) ? Number(u.diferencia) : calcularDiferenciaHistorico(u.fecha_gps);
+    var aplicarAjuste = !!(u && u._fechaGpsSource === 'sse');
+    var diferencia = (u.diferencia != null) ? Number(u.diferencia) : calcularDiferenciaHistorico(u.fecha_gps, aplicarAjuste, u);
+    
     if (u.diferencia == null && diferencia != null) u.diferencia = diferencia;
     if (!isNaN(diferencia) && diferencia > 30) return 'no_envia_trama';
     if (!fechaGpsTramaPresente(u.fecha_gps)) return 'no_envia_trama';
@@ -1584,9 +1601,6 @@ function obtenerCurrentUContador(row) {
 }
 
 function computeEstadoMovilParaContador(unidad) {
-    if(unidad.imei=='868789024273079'){
-        console.log("Unidad 2: "+unidad.fecha_gps);
-    }
     return estadoVistaListaUnidad(unidad);
 }
 
@@ -1646,7 +1660,10 @@ function updateUnidadInList(unidad) {
             // Preserve tiempo_power: igual que ruta_actual, se mantiene en currentU entre updates
             if ((unidad.tiempo_power == null || unidad.tiempo_power === 0) && prev.tiempo_power) unidad.tiempo_power = prev.tiempo_power;
             if (!unidad.tiempo_power_update && prev.tiempo_power_update) unidad.tiempo_power_update = prev.tiempo_power_update;
-            if ((unidad.fecha_gps == null || unidad.fecha_gps === '') && prev.fecha_gps) unidad.fecha_gps = prev.fecha_gps;
+            if ((unidad.fecha_gps == null || unidad.fecha_gps === '') && prev.fecha_gps) {
+                unidad.fecha_gps = prev.fecha_gps;
+                if (!unidad._fechaGpsSource && prev._fechaGpsSource) unidad._fechaGpsSource = prev._fechaGpsSource;
+            }
             if (unidad.diferencia == null && prev.diferencia != null) unidad.diferencia = prev.diferencia;
             
             // Preserve sentido (direction) if incoming payload lacks it
@@ -1655,12 +1672,17 @@ function updateUnidadInList(unidad) {
         var iconForMerge = document.getElementById('i' + uidList);
         if (iconForMerge && iconForMerge.currentU) {
             var pIcon = iconForMerge.currentU;
-            if ((unidad.fecha_gps == null || unidad.fecha_gps === '') && pIcon.fecha_gps) unidad.fecha_gps = pIcon.fecha_gps;
+            if ((unidad.fecha_gps == null || unidad.fecha_gps === '') && pIcon.fecha_gps) {
+                unidad.fecha_gps = pIcon.fecha_gps;
+                if (!unidad._fechaGpsSource && pIcon._fechaGpsSource) unidad._fechaGpsSource = pIcon._fechaGpsSource;
+            }
             if (unidad.diferencia == null && pIcon.diferencia != null) unidad.diferencia = pIcon.diferencia;
         }
     } catch (e) {
         console.warn('Merge existing meta failed', e);
     }
+
+    if (!unidad._fechaGpsSource) unidad._fechaGpsSource = 'ul';
 
     // Construir campos paralelos a los usados en appendUnidades
     var fecha_gps = unidad.fecha_gps || null;
@@ -4106,6 +4128,7 @@ $("#velocimetro").myfunc({divFact:10});
 
                 var currentLi = document.getElementById(iId);
                 var currentU = data.unidades[i];
+                currentU._fechaGpsSource = 'ul';
                 try {
                     var _afU = data.array_fechas[i];
                     if (_afU) {
