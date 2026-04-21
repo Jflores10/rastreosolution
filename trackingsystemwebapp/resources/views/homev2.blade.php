@@ -1546,11 +1546,15 @@ function fechaDesdeCualquierFormato(raw) {
 function calcularDiferenciaHistorico(fechaGpsRaw, data) {
     var fechaGps = fechaDesdeCualquierFormato(fechaGpsRaw);
     if (!fechaGps) return null;
+    const fecha_gpsDate = new Date(fechaGps);
+    if (isNaN(fecha_gpsDate.getTime())) return null;
+    fecha_gpsDate.setHours(fecha_gpsDate.getHours() + GPS_HOUR_OFFSET);
+
     if(data.imei=='868789024290792'){
-        console.log("Fecha GPS: "+fechaGps);
+        console.log("Fecha GPS: "+fecha_gpsDate);
         console.log("Fecha Now: "+Date.now());
     }           
-    var diffMs = Math.abs(Date.now() - fechaGps.getTime());
+    var diffMs = Math.abs(Date.now() - fecha_gpsDate.getTime());
     if(data.imei=='868789024290792'){
         console.log("Diff MS: "+diffMs);
     }
