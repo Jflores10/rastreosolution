@@ -1751,8 +1751,12 @@ function updateUnidadInList(unidad) {
     var voltaje = (unidad.voltaje != null) ? String(unidad.voltaje).substring(0,2) : '--';
     var velocidad_num = Number(unidad.velocidad_actual) || 0;
     if(unidad.imei=='868789024290792'){
-        console.log("Unidad 1: "+unidad.fecha_gps);
+        const fecha_gpsDate1 = new Date(unidad.fecha_gps);
+        if (isNaN(fecha_gpsDate1.getTime())) return null;
+        fecha_gpsDate1.setHours(fecha_gpsDate1.getHours() + GPS_HOUR_OFFSET);
+        console.log("Unidad 1: "+fecha_gpsDate1);
     }
+    
     var estado = estadoVistaListaUnidad(unidad);
 
     var iId = 'i' + unidad._id;
