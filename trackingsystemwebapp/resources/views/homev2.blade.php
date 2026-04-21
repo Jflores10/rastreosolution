@@ -1598,6 +1598,9 @@ function obtenerCurrentUContador(row) {
 }
 
 function computeEstadoMovilParaContador(unidad) {
+    if(unidad.imei=='868789024290792'){
+        console.log("Unidad 2: "+unidad.fecha_gps);
+    }
     return estadoVistaListaUnidad(unidad);
 }
 
@@ -1747,7 +1750,9 @@ function updateUnidadInList(unidad) {
 
     var voltaje = (unidad.voltaje != null) ? String(unidad.voltaje).substring(0,2) : '--';
     var velocidad_num = Number(unidad.velocidad_actual) || 0;
-
+    if(unidad.imei=='868789024290792'){
+        console.log("Unidad 1: "+unidad.fecha_gps);
+    }
     var estado = estadoVistaListaUnidad(unidad);
 
     var iId = 'i' + unidad._id;
