@@ -1568,7 +1568,7 @@ function estadoVistaListaUnidad(u) {
     else estado = 'M';
 
     var diferencia = (u.diferencia != null) ? Number(u.diferencia) : calcularDiferenciaHistorico(u.fecha_gps);
-    if(u.imei=='867162025954249'){
+    if(u.imei=='868789024290792'){
         console.log("Diferencia: "+diferencia);
     }
     if (u.diferencia == null && diferencia != null) {
