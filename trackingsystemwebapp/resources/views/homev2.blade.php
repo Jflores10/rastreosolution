@@ -1523,10 +1523,44 @@ function fechaGpsTramaPresente(fg) {
     return true;
 }
 
+function fechaDesdeCualquierFormato(raw) {
+    if (raw == null || raw === '') return null;
+    var candidate = raw;
+    if (typeof candidate === 'object') {
+        if (candidate.date != null) candidate = candidate.date;
+        else if (candidate.$date != null) candidate = candidate.$date;
+    }
+    var d = new Date(candidate);
+    return isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * Replica HistoricoController getUnidades (L727-L737):
+ * - fecha_gps - 10h
+ * - diff con fecha actual
+ * - minutos + ((horas - 5) * 60) + (dias * 24 * 60)
+ */
+function calcularDiferenciaHistorico(fechaGpsRaw) {
+    var fechaGps = fechaDesdeCualquierFormato(fechaGpsRaw);
+    if (!fechaGps) return null;
+
+    var fechaGpsAjustada = new Date(fechaGps.getTime());
+    fechaGpsAjustada.setHours(fechaGpsAjustada.getHours() - 10);
+
+    var totalMin = Math.floor(Math.abs(Date.now() - fechaGpsAjustada.getTime()) / 60000);
+    var dias = Math.floor(totalMin / (24 * 60));
+    var rem = totalMin - (dias * 24 * 60);
+    var horas = Math.floor(rem / 60);
+    var minutos = rem % 60;
+
+    return minutos + ((horas - 5) * 60) + (dias * 24 * 60);
+}
+
 /**
  * Misma secuencia que el bucle de appendUnidades (estado → velocidad → diferencia → fecha_gps en array_fechas).
  */
 function estadoVistaListaUnidad(u) {
+
     if (!u) return 'no_envia_trama';
     var estado = u.estado_movil;
     if (estado == '-') {
@@ -1534,7 +1568,9 @@ function estadoVistaListaUnidad(u) {
     }
     if (parseFloat(u.velocidad_actual) == 0) estado = 'D';
     else estado = 'M';
-    if (u.diferencia != null && u.diferencia > 30) return 'no_envia_trama';
+    var diferencia = (u.diferencia != null) ? Number(u.diferencia) : calcularDiferenciaHistorico(u.fecha_gps);
+    if (u.diferencia == null && diferencia != null) u.diferencia = diferencia;
+    if (!isNaN(diferencia) && diferencia > 30) return 'no_envia_trama';
     if (!fechaGpsTramaPresente(u.fecha_gps)) return 'no_envia_trama';
     return estado;
 }
@@ -1548,6 +1584,9 @@ function obtenerCurrentUContador(row) {
 }
 
 function computeEstadoMovilParaContador(unidad) {
+    if(unidad.imei=='868789024273079'){
+        console.log("Unidad 2: "+unidad.fecha_gps);
+    }
     return estadoVistaListaUnidad(unidad);
 }
 
@@ -1697,7 +1736,9 @@ function updateUnidadInList(unidad) {
 
     var voltaje = (unidad.voltaje != null) ? String(unidad.voltaje).substring(0,2) : '--';
     var velocidad_num = Number(unidad.velocidad_actual) || 0;
-
+    if(unidad.imei=='868789024273079'){
+        console.log("Unidad 1: "+unidad.fecha_gps);
+    }
     var estado = estadoVistaListaUnidad(unidad);
 
     var iId = 'i' + unidad._id;
