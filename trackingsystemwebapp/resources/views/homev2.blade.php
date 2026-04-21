@@ -1567,7 +1567,7 @@ function estadoVistaListaUnidad(u) {
     if (parseFloat(u.velocidad_actual) == 0) estado = 'D';
     else estado = 'M';
 
-    var diferencia = (u.diferencia != null) ? Number(u.diferencia) : calcularDiferenciaHistorico(u.fecha_gps);
+    var diferencia = calcularDiferenciaHistorico(u.fecha_gps);
     if(u.imei=='868789024290792'){
         console.log("Diferencia: "+diferencia);
     }
