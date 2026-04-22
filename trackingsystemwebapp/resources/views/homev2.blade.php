@@ -1180,6 +1180,8 @@ function conectarSSE(coopId) {
             if (fechaGpsTramaPresente(data.fecha_gps)) {
                 data._fechaGpsSource = 'sse';
             }
+            // En unidad.updated (SSE) la diferencia se recalcula siempre en front.
+            data.diferencia = null;
 
             // Always update marker on map
             actualizarUnidadRealtime(data);
@@ -1548,7 +1550,7 @@ function fechaDesdeCualquierFormato(raw) {
  * - diff con fecha actual
  * - minutos + ((horas - 5) * 60) + (dias * 24 * 60)
  */
-function calcularDiferenciaHistorico(fechaGpsRaw, aplicarAjusteHistorico, u) {
+function calcularDiferenciaHistorico(fechaGpsRaw, aplicarAjusteHistorico) {
   
     var fechaGps = fechaDesdeCualquierFormato(fechaGpsRaw);
     if (!fechaGps) return null;
@@ -1559,12 +1561,6 @@ function calcularDiferenciaHistorico(fechaGpsRaw, aplicarAjusteHistorico, u) {
     }
     
     var totalMin = Math.floor(Math.abs(Date.now() - fechaGpsBase.getTime()) / 60000);
-    
-    if(u.imei=='868789024273079'){
-        console.log("UFechaGPS: "+fechaGpsBase);
-        console.log("Total Min: "+totalMin);
-
-    }
     return totalMin;
 }
 
@@ -1581,14 +1577,11 @@ function estadoVistaListaUnidad(u) {
     if (parseFloat(u.velocidad_actual) == 0) estado = 'D';
     else estado = 'M';
     var aplicarAjuste = !!(u && u._fechaGpsSource === 'sse');
-    if(u.imei=='868789024273079'){
-        console.log("Aplicar Ajuste: "+aplicarAjuste);
-        console.log("U: "+u.diferencia);
-        let diferencia = calcularDiferenciaHistorico(u.fecha_gps, aplicarAjuste, u);
-        console.log("Diferencia: "+diferencia);
-
-    }
-    var diferencia = u.diferencia != null ? u.diferencia : calcularDiferenciaHistorico(u.fecha_gps, aplicarAjuste, u);
+    // Primera carga (/historicos /homev2): usar diferencia enviada por servidor.
+    // Updates SSE (unidad.updated): recalcular siempre.
+    var diferencia = aplicarAjuste
+        ? calcularDiferenciaHistorico(u.fecha_gps, true)
+        : ((u.diferencia != null) ? Number(u.diferencia) : calcularDiferenciaHistorico(u.fecha_gps, false));
     
     if (u.diferencia == null && diferencia != null) u.diferencia = diferencia;
     if (!isNaN(diferencia) && diferencia > 30) return 'no_envia_trama';
@@ -1646,6 +1639,7 @@ function updateUnidadInList(unidad) {
     if (!uidList) return;
     unidad._id = uidList;
     if (!unidadPerteneceAFiltroRutaActual(uidList)) return;
+    var esUpdateSse = !!(unidad._fechaGpsSource === 'sse');
 
     // Preserve previously-fetched meta (from unidades-meta) so WS updates that lack
     // ruta_* or bitacora do not wipe the values. If there is an existing LI with
@@ -1668,7 +1662,7 @@ function updateUnidadInList(unidad) {
                 unidad.fecha_gps = prev.fecha_gps;
                 if (!unidad._fechaGpsSource && prev._fechaGpsSource) unidad._fechaGpsSource = prev._fechaGpsSource;
             }
-            if (unidad.diferencia == null && prev.diferencia != null) unidad.diferencia = prev.diferencia;
+            if (!esUpdateSse && unidad.diferencia == null && prev.diferencia != null) unidad.diferencia = prev.diferencia;
             
             // Preserve sentido (direction) if incoming payload lacks it
             //if ((!unidad.sentido || unidad.sentido === '') && prev.sentido) unidad.sentido = prev.sentido;
@@ -1680,13 +1674,14 @@ function updateUnidadInList(unidad) {
                 unidad.fecha_gps = pIcon.fecha_gps;
                 if (!unidad._fechaGpsSource && pIcon._fechaGpsSource) unidad._fechaGpsSource = pIcon._fechaGpsSource;
             }
-            if (unidad.diferencia == null && pIcon.diferencia != null) unidad.diferencia = pIcon.diferencia;
+            if (!esUpdateSse && unidad.diferencia == null && pIcon.diferencia != null) unidad.diferencia = pIcon.diferencia;
         }
     } catch (e) {
         console.warn('Merge existing meta failed', e);
     }
 
     if (!unidad._fechaGpsSource) unidad._fechaGpsSource = 'ul';
+    if (esUpdateSse) unidad.diferencia = null;
 
     // Construir campos paralelos a los usados en appendUnidades
     var fecha_gps = unidad.fecha_gps || null;
