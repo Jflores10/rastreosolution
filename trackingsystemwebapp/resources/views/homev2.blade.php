@@ -1517,12 +1517,10 @@ function fechaGpsTramaPresente(fg) {
  * Misma secuencia que el bucle de appendUnidades (estado → velocidad → diferencia → fecha_gps en array_fechas).
  */
 function estadoVistaListaUnidad(u) {
-    if(u.imei=='868789020369434'){
-    var diferencia = (u.diferencia>2) ? "no cero "+u.diferencia : "cero"+u.diferencia;
+    var diferencia = (u.diferencia>30) ? "mayor 30 "+u.diferencia : "menor 30"+u.diferencia;
     console.log("Mensaje: "+diferencia);
     console.log("Unidad: "+u.imei+" - "+u.descripcion);
 
-    }
 
     if (!u) return 'no_envia_trama';
     var estado = u.estado_movil;
