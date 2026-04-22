@@ -1524,7 +1524,8 @@ function estadoVistaListaUnidad(u) {
     }
     if (parseFloat(u.velocidad_actual) == 0) estado = 'D';
     else estado = 'M';
-    console.log("Diferencia: "+(u.diferencia != null && u.diferencia > 30)?"no_envia_trama":"normal");
+    console.log("diferencia: "+u.diferencia);
+    console.log("Mensaje: "+(u.diferencia != null && u.diferencia > 30)?"no_envia_trama":"normal");
     console.log("Unidad: "+u.imei+" - "+u.descripcion);
 
     if (u.diferencia != null && u.diferencia > 30) return 'no_envia_trama';
