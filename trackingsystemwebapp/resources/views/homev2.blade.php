@@ -1679,6 +1679,9 @@ function updateUnidadInList(unidad) {
                 if (!unidad._fechaGpsSource && prev._fechaGpsSource) unidad._fechaGpsSource = prev._fechaGpsSource;
             }
             if (!forceRecalculateDiferencia && unidad.diferencia == null && prev.diferencia != null) {
+                console.log("Prev Diferencia: "+prev.diferencia);
+                console.log("No rep Diferencia: "+unidad.diferencia);
+
                 unidad.diferencia = prev.diferencia;
             }
             
@@ -1693,6 +1696,9 @@ function updateUnidadInList(unidad) {
                 if (!unidad._fechaGpsSource && pIcon._fechaGpsSource) unidad._fechaGpsSource = pIcon._fechaGpsSource;
             }
             if (!forceRecalculateDiferencia && unidad.diferencia == null && pIcon.diferencia != null) {
+                console.log("Prev Diferencia2: "+pIcon.diferencia);
+                console.log("No rep Diferencia2: "+unidad.diferencia);
+
                 unidad.diferencia = pIcon.diferencia;
             }
         }
