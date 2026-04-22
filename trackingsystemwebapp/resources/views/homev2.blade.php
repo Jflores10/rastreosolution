@@ -1181,8 +1181,8 @@ function conectarSSE(coopId) {
                 data._fechaGpsSource = 'sse';
             }
             // Desde unidad.updated, la diferencia siempre se recalcula en front.
-            data._forceRecalculateDiferencia = true;
-            //data._diferenciaFromInitial = false;
+            //data._forceRecalculateDiferencia = true;
+            data._diferenciaFromInitial = false;
            // data.diferencia = null;
 
             // Always update marker on map
