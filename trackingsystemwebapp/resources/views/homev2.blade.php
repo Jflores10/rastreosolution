@@ -1517,7 +1517,7 @@ function fechaGpsTramaPresente(fg) {
  * Misma secuencia que el bucle de appendUnidades (estado → velocidad → diferencia → fecha_gps en array_fechas).
  */
 function estadoVistaListaUnidad(u) {
-    if(u.imei=='868789022713431'){
+    if(u.imei=='868789024273079'){
     var diferencia = (u.diferencia!=0) ? "no cero " : "cero"+u.diferencia;
     console.log("Mensaje: "+diferencia);
     console.log("Unidad: "+u.imei+" - "+u.descripcion);
