@@ -1183,7 +1183,7 @@ function conectarSSE(coopId) {
             // Desde unidad.updated, la diferencia siempre se recalcula en front.
             data._forceRecalculateDiferencia = true;
             data._diferenciaFromInitial = false;
-            data.diferencia = null;
+           // data.diferencia = null;
 
             // Always update marker on map
             actualizarUnidadRealtime(data);
