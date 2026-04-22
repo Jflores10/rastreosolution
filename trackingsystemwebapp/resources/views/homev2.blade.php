@@ -1520,7 +1520,7 @@ function estadoVistaListaUnidad(u) {
     if(u.imei=='868789022713431'){
         console.log("diferencia: "+Number(u.diferencia));
     console.log("Number: "+ (u.diferencia!=null)?"true":"false");
-    if(u.diferencia>"100"){
+    if(u.diferencia>100){
         console.log("diferencia > 0");
     }
     else{
