@@ -1519,7 +1519,7 @@ function fechaGpsTramaPresente(fg) {
 function estadoVistaListaUnidad(u) {
     if(u.imei=='868789022713431'){
 
-    console.log("Mensaje: "+(u.diferencia != null && Number(u.diferencia) < 30)?u.diferencia+"no_envia_trama":"normal");
+    console.log("Mensaje: "+(u.diferencia !=undefined)?u.diferencia+"no_envia_trama":"normal");
     console.log("Unidad: "+u.imei+" - "+u.descripcion);
 
     }
