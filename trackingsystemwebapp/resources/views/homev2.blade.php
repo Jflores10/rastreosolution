@@ -1564,7 +1564,7 @@ function calcularDiferenciaHistorico(fechaGpsRaw, aplicarAjusteHistorico, u) {
     var horas = Math.floor(rem / 60);
     var minutos = rem % 60;
     if(u.imei=='868789024273079'){
-        console.log("UFechaGPS: "+u.fechaGpsBase);
+        console.log("UFechaGPS: "+fechaGpsRaw);
         console.log("Minutos: "+minutos + ((horas - 5) * 60) + (dias * 24 * 60));
 
     }
