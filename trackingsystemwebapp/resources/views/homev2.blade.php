@@ -1524,13 +1524,17 @@ function estadoVistaListaUnidad(u) {
     }
     if (parseFloat(u.velocidad_actual) == 0) estado = 'D';
     else estado = 'M';
-    console.log("diferencia: "+u.diferencia);
+    if(u.imei=='868789024273079'){
+        console.log("diferencia: "+u.diferencia);
     console.log("Number: "+ (u.diferencia!=null)?"true":"false");
     console.log("Number2: "+ (Number(u.diferencia) > 30)?"true":"false");
 
 
     console.log("Mensaje: "+(u.diferencia != null && Number(u.diferencia) > 30)?"no_envia_trama":"normal");
     console.log("Unidad: "+u.imei+" - "+u.descripcion);
+
+    }
+
 
     if (u.diferencia != null && u.diferencia > 30) return 'no_envia_trama';
     if (!fechaGpsTramaPresente(u.fecha_gps)) return 'no_envia_trama';
