@@ -1154,6 +1154,7 @@ function conectarSSE(coopId) {
         try {
             const data = JSON.parse(evt.data);
             console.log(data);   
+            console.log("Diferencia: "+data.imei);   
 
                 console.log("Diferencia: "+data.diferencia);   
                 console.log("raw: "+data._raw_message);
