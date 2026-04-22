@@ -1563,7 +1563,7 @@ function calcularDiferenciaHistorico(fechaGpsRaw, aplicarAjusteHistorico, u) {
     var rem = totalMin - (dias * 24 * 60);
     var horas = Math.floor(rem / 60);
     var minutos = rem % 60;
-    if(u.imei=='868789024273079'){
+    if(u.imei=='868789024290792'){
         console.log("UFechaGPS: "+u.fechaGpsBase);
         console.log("Minutos: "+minutos + ((horas - 5) * 60) + (dias * 24 * 60));
 
@@ -1758,9 +1758,7 @@ function updateUnidadInList(unidad) {
 
     var voltaje = (unidad.voltaje != null) ? String(unidad.voltaje).substring(0,2) : '--';
     var velocidad_num = Number(unidad.velocidad_actual) || 0;
-    if(unidad.imei=='868789024273079'){
-        console.log("Unidad 1: "+unidad.fecha_gps);
-    }
+   
     var estado = estadoVistaListaUnidad(unidad);
 
     var iId = 'i' + unidad._id;
