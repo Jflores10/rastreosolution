@@ -1588,7 +1588,7 @@ function estadoVistaListaUnidad(u) {
         console.log("Diferencia: "+diferencia);
 
     }
-    var diferencia =  calcularDiferenciaHistorico(u.fecha_gps, aplicarAjuste, u);
+    var diferencia = u.diferencia != null ? u.diferencia : calcularDiferenciaHistorico(u.fecha_gps, aplicarAjuste, u);
     
     if (u.diferencia == null && diferencia != null) u.diferencia = diferencia;
     if (!isNaN(diferencia) && diferencia > 30) return 'no_envia_trama';
