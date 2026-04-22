@@ -1518,15 +1518,6 @@ function fechaGpsTramaPresente(fg) {
  */
 function estadoVistaListaUnidad(u) {
     if(u.imei=='868789022713431'){
-        console.log("diferencia: "+Number(u.diferencia));
-    console.log("Number: "+ (u.diferencia!=null)?"true":"false");
-    if(u.diferencia>100){
-        console.log("diferencia > 0");
-    }
-    else{
-        console.log("diferencia <= 0");
-    }
-
 
     console.log("Mensaje: "+(u.diferencia != null && Number(u.diferencia) > 30)?"no_envia_trama":"normal");
     console.log("Unidad: "+u.imei+" - "+u.descripcion);
@@ -1556,7 +1547,7 @@ function obtenerCurrentUContador(row) {
 }
 
 function computeEstadoMovilParaContador(unidad) {
-    return estadoVistaListaUnidad(unidad);
+    //return estadoVistaListaUnidad(unidad);
 }
 
 /** Actualiza #cantidad y desglose (verde / rojo / naranja / violeta) según currentU de cada fila — usado tras SSE (no reemplaza el conteo inicial de appendUnidades). */
