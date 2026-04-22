@@ -1566,6 +1566,11 @@ function calcularDiferenciaHistorico(fechaGpsRaw, aplicarAjusteHistorico, u) {
     if(u.imei=='868789024273079'){
         console.log("UFechaGPS: "+fechaGpsBase);
         console.log("Minutos: "+minutos + ((horas - 5) * 60) + (dias * 24 * 60));
+        console.log("Total Min: "+totalMin);
+        console.log("Dias: "+dias);
+        console.log("Horas: "+horas);
+        console.log("Minutos: "+minutos);
+        console.log("Rem: "+rem);
 
     }
     return minutos + ((horas - 5) * 60) + (dias * 24 * 60);
