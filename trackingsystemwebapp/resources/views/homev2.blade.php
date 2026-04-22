@@ -1518,7 +1518,7 @@ function fechaGpsTramaPresente(fg) {
  */
 function estadoVistaListaUnidad(u) {
     if(u.imei=='868789022713431'){
-    var diferencia = (u.diferencia!=0) ? "no cero " : "cero";
+    var diferencia = (u.diferencia!=0) ? "no cero " : "cero"+u.diferencia;
     console.log("Mensaje: "+diferencia);
     console.log("Unidad: "+u.imei+" - "+u.descripcion);
 
