@@ -1153,6 +1153,7 @@ function conectarSSE(coopId) {
     sse.addEventListener('unidad.updated', (evt) => {
         try {
             const data = JSON.parse(evt.data);
+            console.log(data);
             const uid = normalizarUnidadId(data && data._id ? data._id : (data ? data.unidad_id : null));
             if (!uid) return;
             data._id = uid;
@@ -1517,10 +1518,6 @@ function fechaGpsTramaPresente(fg) {
  * Misma secuencia que el bucle de appendUnidades (estado → velocidad → diferencia → fecha_gps en array_fechas).
  */
 function estadoVistaListaUnidad(u) {
-    var diferencia = (u.diferencia>30) ? "mayor 30 "+u.diferencia : "menor 30"+u.diferencia;
-    console.log("Mensaje: "+diferencia);
-    console.log("Unidad: "+u.imei+" - "+u.descripcion);
-
 
     if (!u) return 'no_envia_trama';
     var estado = u.estado_movil;
