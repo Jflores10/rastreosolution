@@ -1518,8 +1518,8 @@ function fechaGpsTramaPresente(fg) {
  */
 function estadoVistaListaUnidad(u) {
     if(u.imei=='868789022713431'){
-
-    console.log("Mensaje: "+(u.diferencia===0)?"no_envia_trama":"normal");
+    var diferencia = (u.diferencia!=0) ? "no cero " : "cero";
+    console.log("Mensaje: "+diferencia);
     console.log("Unidad: "+u.imei+" - "+u.descripcion);
 
     }
