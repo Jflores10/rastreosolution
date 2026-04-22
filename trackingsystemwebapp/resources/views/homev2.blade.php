@@ -1559,21 +1559,13 @@ function calcularDiferenciaHistorico(fechaGpsRaw, aplicarAjusteHistorico, u) {
     }
     
     var totalMin = Math.floor(Math.abs(Date.now() - fechaGpsBase.getTime()) / 60000);
-    var dias = Math.floor(totalMin / (24 * 60));
-    var rem = totalMin - (dias * 24 * 60);
-    var horas = Math.floor(rem / 60);
-    var minutos = rem % 60;
+    
     if(u.imei=='868789024273079'){
         console.log("UFechaGPS: "+fechaGpsBase);
-        console.log("Minutos Return: "+minutos + ((horas - 5) * 60) + (dias * 24 * 60));
         console.log("Total Min: "+totalMin);
-        console.log("Dias: "+dias);
-        console.log("Horas: "+horas);
-        console.log("Minutos: "+minutos);
-        console.log("Rem: "+rem);
 
     }
-    return minutos + ((horas - 5) * 60) + (dias * 24 * 60);
+    return totalMin;
 }
 
 /**
