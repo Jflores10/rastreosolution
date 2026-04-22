@@ -1517,7 +1517,7 @@ function fechaGpsTramaPresente(fg) {
  * Misma secuencia que el bucle de appendUnidades (estado → velocidad → diferencia → fecha_gps en array_fechas).
  */
 function estadoVistaListaUnidad(u) {
-    if(u.imei=='868789024273079'){
+    if(u.imei=='868789020369434'){
     var diferencia = (u.diferencia!=0) ? "no cero " : "cero"+u.diferencia;
     console.log("Mensaje: "+diferencia);
     console.log("Unidad: "+u.imei+" - "+u.descripcion);
@@ -1547,7 +1547,7 @@ function obtenerCurrentUContador(row) {
 }
 
 function computeEstadoMovilParaContador(unidad) {
-    //return estadoVistaListaUnidad(unidad);
+    return estadoVistaListaUnidad(unidad);
 }
 
 /** Actualiza #cantidad y desglose (verde / rojo / naranja / violeta) según currentU de cada fila — usado tras SSE (no reemplaza el conteo inicial de appendUnidades). */
