@@ -1153,7 +1153,7 @@ function conectarSSE(coopId) {
     sse.addEventListener('unidad.updated', (evt) => {
         try {
             const data = JSON.parse(evt.data);
-            console.log("Data: "+data);   
+            console.log(data);   
 
                 console.log("Diferencia: "+data.diferencia);   
                 console.log("raw: "+data._raw_message);
