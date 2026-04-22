@@ -1565,7 +1565,7 @@ function calcularDiferenciaHistorico(fechaGpsRaw, aplicarAjusteHistorico, u) {
     var minutos = rem % 60;
     if(u.imei=='868789024273079'){
         console.log("UFechaGPS: "+fechaGpsBase);
-        console.log("Minutos: "+minutos + ((horas - 5) * 60) + (dias * 24 * 60));
+        console.log("Minutos Return: "+minutos + ((horas - 5) * 60) + (dias * 24 * 60));
         console.log("Total Min: "+totalMin);
         console.log("Dias: "+dias);
         console.log("Horas: "+horas);
@@ -1596,7 +1596,7 @@ function estadoVistaListaUnidad(u) {
         console.log("Diferencia: "+diferencia);
 
     }
-    var diferencia = (u.diferencia != null) ? Number(u.diferencia) : calcularDiferenciaHistorico(u.fecha_gps, aplicarAjuste, u);
+    var diferencia =  calcularDiferenciaHistorico(u.fecha_gps, aplicarAjuste, u);
     
     if (u.diferencia == null && diferencia != null) u.diferencia = diferencia;
     if (!isNaN(diferencia) && diferencia > 30) return 'no_envia_trama';
