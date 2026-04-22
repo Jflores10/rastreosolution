@@ -1517,13 +1517,6 @@ function fechaGpsTramaPresente(fg) {
  * Misma secuencia que el bucle de appendUnidades (estado → velocidad → diferencia → fecha_gps en array_fechas).
  */
 function estadoVistaListaUnidad(u) {
-    if (!u) return 'no_envia_trama';
-    var estado = u.estado_movil;
-    if (estado == '-') {
-        estado = (parseFloat(u.velocidad_actual) == 0) ? 'D' : 'M';
-    }
-    if (parseFloat(u.velocidad_actual) == 0) estado = 'D';
-    else estado = 'M';
     if(u.imei=='868789022713431'){
         console.log("diferencia: "+Number(u.diferencia));
     console.log("Number: "+ (u.diferencia!=null)?"true":"false");
@@ -1534,6 +1527,14 @@ function estadoVistaListaUnidad(u) {
     console.log("Unidad: "+u.imei+" - "+u.descripcion);
 
     }
+
+    if (!u) return 'no_envia_trama';
+    var estado = u.estado_movil;
+    if (estado == '-') {
+        estado = (parseFloat(u.velocidad_actual) == 0) ? 'D' : 'M';
+    }
+    if (parseFloat(u.velocidad_actual) == 0) estado = 'D';
+    else estado = 'M';
 
 
     if (u.diferencia != null && u.diferencia > 30) return 'no_envia_trama';
