@@ -437,9 +437,12 @@ function toFloat(value) {
   return (value === '' || isNaN(value)) ? 0 : parseFloat(value);
 }
 
-function estadoVehiculo(statusHex, velocidad, fechaGps, ahora = new Date()) {
+function estadoVehiculo(statusHex, velocidad, fechaGps, ahora = new Date(), isBuff = false) {
   const LIMITE_SIN_SENAL = 30 * 60 * 1000; // 30 min
   const UMBRAL_MOVIMIENTO = 5; // km/h
+
+  // Si es trama BUFF, no calcular/actualizar estado_movil_v2
+  if (isBuff) return;
 
   // SIN SENAL
   if (!fechaGps) return 'NS';
@@ -893,7 +896,7 @@ function onClientConnected(socket) {
           _raw_message: message
         };
         if(data[idx.imei]=='868789024283474' || data[idx.imei]=='867162025954249' || data[idx.imei]=='868789024290792'){
-          let estado_movil_v2 = estadoVehiculo(data[idx.status], velocidadActual, fechaGpsDate, now);
+          let estado_movil_v2 = estadoVehiculo(data[idx.status], velocidadActual, fechaGpsDate, now, message.includes(BUFF));
           console.log("imei: "+data[idx.imei]);
           console.log("fechaGpsDate: "+fechaGpsDate);
           console.log("now: "+now);
