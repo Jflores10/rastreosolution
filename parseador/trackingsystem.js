@@ -891,10 +891,14 @@ function onClientConnected(socket) {
           is_atm: (message.includes(ATM) ? 1 : 0),
           _raw_message: message
         };
-        let estado_movil_v2 = estadoVehiculo(data[idx.status], velocidadActual, fechaGpsDate, now);
-
-        console.log("gpsData: "+JSON.stringify(gpsData));
-        console.log("estado_movil_v2: "+estado_movil_v2);
+        if(data[idx.imei]=='868789024283474' || data[idx.imei]=='867162025954249' || data[idx.imei]=='868789024290792'){
+          let estado_movil_v2 = estadoVehiculo(data[idx.status], velocidadActual, fechaGpsDate, now);
+          console.log("imei: "+data[idx.imei]);
+          console.log("fechaGpsDate: "+fechaGpsDate);
+          console.log("now: "+now);
+          console.log("estado_movil_v2: "+estado_movil_v2);
+        }
+       
 
         // ===================== PAYLOAD COMPLETO (CACHE + GPS) =====================
         const unidadPayload = buildUnidadPayloadRealtime(gpsData);
