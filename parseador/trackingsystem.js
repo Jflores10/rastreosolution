@@ -437,12 +437,12 @@ function toFloat(value) {
   return (value === '' || isNaN(value)) ? 0 : parseFloat(value);
 }
 
-function estadoVehiculo(statusHex, velocidad, fechaGps, ahora = new Date(), isBuff = false) {
+function estadoVehiculo(statusHex, velocidad, fechaGps, ahora = new Date(), isBuff = false, estadoMovilActual = null) {
   const LIMITE_SIN_SENAL = 30 * 60 * 1000; // 30 min
   const UMBRAL_MOVIMIENTO = 5; // km/h
 
-  // Si es trama BUFF, no calcular/actualizar estado_movil_v2
-  if (isBuff) return;
+  // Si es trama BUFF, conservar estado_movil actual de la unidad
+  if (isBuff) return estadoMovilActual;
 
   // SIN SENAL
   if (!fechaGps) return 'NS';
@@ -896,10 +896,19 @@ function onClientConnected(socket) {
           _raw_message: message
         };
         if(data[idx.imei]=='868789024283474' || data[idx.imei]=='867162025954249' || data[idx.imei]=='868789024290792'){
-          let estado_movil_v2 = estadoVehiculo(data[idx.status], velocidadActual, fechaGpsDate, now, message.includes(BUFF));
+          const cachedUnidad = unidadStateCache.get(String(data[idx.imei] || '').trim()) || {};
+          const estadoMovilActual = (cachedUnidad && cachedUnidad.estado_movil != null)
+            ? cachedUnidad.estado_movil
+            : gpsData.estado_movil;
+          let estado_movil_v2 = estadoVehiculo(
+            data[idx.status],
+            velocidadActual,
+            fechaGpsDate,
+            now,
+            message.includes(BUFF),
+            estadoMovilActual
+          );
           console.log("imei: "+data[idx.imei]);
-          console.log("fechaGpsDate: "+fechaGpsDate);
-          console.log("now: "+now);
           console.log("estado_movil_v2: "+estado_movil_v2);
         }
        
