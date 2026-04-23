@@ -90,7 +90,6 @@ function pushDebugLog() {
   const args = Array.prototype.slice.call(arguments);
   console.log.apply(console, ['[push-debug]'].concat(args));
 }
-
 /** URL completa del endpoint Laravel, ej: http://127.0.0.1/api/internal/push-by-unidad */
 const LARAVEL_PUSH_URL = (process.env.LARAVEL_PUSH_URL || '').trim();
 /** Mismo valor que PARSER_PUSH_SECRET en .env de Laravel */
@@ -436,6 +435,49 @@ function toInteger(value) {
 
 function toFloat(value) {
   return (value === '' || isNaN(value)) ? 0 : parseFloat(value);
+}
+
+function estadoVehiculo(statusHex, velocidad, fechaGps, ahora = new Date()) {
+  const LIMITE_SIN_SENAL = 30 * 60 * 1000; // 30 min
+  const UMBRAL_MOVIMIENTO = 5; // km/h
+
+  // SIN SENAL
+  if (!fechaGps) return 'NS';
+
+  const fechaUtc = new Date(fechaGps);
+  if (isNaN(fechaUtc.getTime())) return 'NS';
+
+  // Igual que HistoricoController:
+  // date_sub($f_gps, date_interval_create_from_date_string('10 hours'));
+  const fecha = new Date(fechaUtc.getTime() - (10 * 60 * 60 * 1000));
+
+  const diff = ahora - fecha;
+  console.log("diff: "+diff);
+  if (diff > LIMITE_SIN_SENAL) return 'NS';
+
+  // Validacion basica
+  if (!statusHex || String(statusHex).length < 2) return 'NS';
+
+  const motion = String(statusHex).substring(0, 2).toUpperCase();
+
+  const estadosMovimiento = ['16', '1A', '12', '22', '42'];
+  const estadosDetenido = ['11', '21', '41'];
+
+  // MOVIMIENTO REAL
+  if (estadosMovimiento.includes(motion)) {
+    if (velocidad && velocidad > UMBRAL_MOVIMIENTO) {
+      return 'M';
+    } else {
+      return 'D'; // vibracion o falso movimiento
+    }
+  }
+
+  // DETENIDO
+  if (estadosDetenido.includes(motion)) {
+    return 'D';
+  }
+
+  return 'D';
 }
 
 function toDecimalHex(value) {
@@ -828,24 +870,31 @@ function onClientConnected(socket) {
         const fechaGPS = toInteger(data[idx.datetime]);
 
         // ===================== DATOS NUEVOS (GPS) =====================
+        const fechaGpsDate = (fechaGPS !== 0)
+          ? moment(data[idx.datetime], DEVICE_DATE_FORMAT).toDate()
+          : now;
+        const velocidadActual = toFloat(data[idx.speed]);
+
         const gpsData = {
           type: 'unidad.updated',
           imei: data[idx.imei],
           latitud: toFloat(data[idx.latitude]),
           longitud: toFloat(data[idx.longitude]),
           voltaje: toFloat(data[idx.voltage]),
-          velocidad_actual: toFloat(data[idx.speed]),
+          velocidad_actual: velocidadActual,
           bateria: toFloat(data[idx.battery]),
           mileage: toDecimalHex(data[idx.mileage]),
           angulo: toInteger(data[idx.angle]),
           estado_movil: (toInteger(data[idx.status]) >= 420000) ? 'M' : 'D',
-          fecha_gps: (fechaGPS !== 0)
-            ? moment(data[idx.datetime], DEVICE_DATE_FORMAT).toDate()
-            : now,
+          fecha_gps: fechaGpsDate,
           fecha: now,
           is_atm: (message.includes(ATM) ? 1 : 0),
           _raw_message: message
         };
+        let estado_movil_v2 = estadoVehiculo(data[idx.status], velocidadActual, fechaGpsDate, now);
+
+        console.log("gpsData: "+JSON.stringify(gpsData));
+        console.log("estado_movil_v2: "+estado_movil_v2);
 
         // ===================== PAYLOAD COMPLETO (CACHE + GPS) =====================
         const unidadPayload = buildUnidadPayloadRealtime(gpsData);
