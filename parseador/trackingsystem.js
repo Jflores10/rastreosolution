@@ -18,6 +18,7 @@ const net = require('net');
 const moment = require('moment');
 const nodemailer = require('nodemailer');
 const schedule = require('node-schedule');
+const fs = require('fs');
 const ObjectID = require('mongodb').ObjectID;
 const { ObjectId } = require('mongodb');
 const MongoClient = require('mongodb').MongoClient;
@@ -61,6 +62,8 @@ const GTGOT = 'GTGOT';
 const GTGIN = 'GTGIN';
 const GTRTL = 'GTRTL';
 const GTSPD = 'GTSPD';
+const GTPHD = 'GTPHD';
+const GTPHL = 'GTPHL';
 
 
 const ACK = 'ACK';
@@ -161,6 +164,12 @@ const MIN_SEND_MS = 2000; // recomendado 1500-3000. Tú pediste 2000.
 const TRAMAS_BUFFER = [];
 const TRAMAS_FLUSH_MS = 250;  // cada 250ms
 const TRAMAS_BATCH_MAX = 300; // o por tamaño
+const PHOTO_EVENTS_DIR = path.resolve(__dirname, '../trackingsystemwebapp/storage/app/images');
+const PHOTO_PARTIALS_MAX_AGE_MS = 60000; // 1 minuto
+const photoAssemblies = new Map();
+const lastPhotoLocationByImei = new Map();
+/** Evita picos de RAM si muchas fotos multipart llegan a la vez (cada una acumula frames en memoria). */
+const MAX_ACTIVE_PHOTO_ASSEMBLIES = 100;
 
 function flushTramas() {
   try {
@@ -176,6 +185,31 @@ function flushTramas() {
   }
 }
 setInterval(flushTramas, TRAMAS_FLUSH_MS);
+
+function limpiarBufferFotosParciales() {
+  try {
+    const now = Date.now();
+    for (const [key, state] of photoAssemblies.entries()) {
+      const lastUpdate = state.updatedAt || state.createdAt || now;
+      const age = now - lastUpdate;
+      if (age > PHOTO_PARTIALS_MAX_AGE_MS) {
+        const locKey = state.imei && state.photoTime ? (state.imei + '_' + state.photoTime) : null;
+        photoAssemblies.delete(key);
+        if (locKey) lastPhotoLocationByImei.delete(locKey);
+      }
+    }
+    for (const [locKey, payload] of lastPhotoLocationByImei.entries()) {
+      const storedAt = Number(payload && payload.storedAt) || 0;
+      const ageLoc = storedAt ? (now - storedAt) : PHOTO_PARTIALS_MAX_AGE_MS + 1;
+      if (ageLoc > PHOTO_PARTIALS_MAX_AGE_MS) {
+        lastPhotoLocationByImei.delete(locKey);
+      }
+    }
+  } catch (e) {
+    if (debug) console.log('limpiarBufferFotosParciales ex:', e.message || e);
+  }
+}
+setInterval(limpiarBufferFotosParciales, 30000);
 
 // ===================== HELPERS =====================
 function enviarALaravelPorWS(data, opts = {}) {
@@ -437,12 +471,22 @@ function toFloat(value) {
   return (value === '' || isNaN(value)) ? 0 : parseFloat(value);
 }
 
-function estadoVehiculo(statusHex, velocidad, fechaGps, ahora = new Date(), isBuff = false, estadoMovilActual = null) {
+function estadoVehiculo(statusHex, velocidad, fechaGps, ahora = new Date(), isBuff = false, fechaGpsUnidadActual = null) {
   const LIMITE_SIN_SENAL = 30 * 60 * 1000; // 30 min
   const UMBRAL_MOVIMIENTO = 5; // km/h
 
-  // Si es trama BUFF, conservar estado_movil actual de la unidad
-  if (isBuff) return estadoMovilActual;
+  // Si es trama BUFF, validar antiguedad por fecha_gps:
+  // si supera 30 min, marcar NS; si no, conservar estado actual.
+  if (isBuff) {
+    const fechaBaseBuff = fechaGpsUnidadActual;
+    if (!fechaBaseBuff) return 'NS';
+    const fechaBuff = new Date(fechaBaseBuff);
+    if (isNaN(fechaBuff.getTime())) return 'NS';
+    const fechagpsUA = new Date(fechaBuff.getTime() - (5 * 60 * 60 * 1000));
+    const diffBuff = ahora - fechagpsUA;
+    if (diffBuff > LIMITE_SIN_SENAL) return 'NS';
+    return null;
+  }
 
   // SIN SENAL
   if (!fechaGps) return 'NS';
@@ -897,17 +941,19 @@ function onClientConnected(socket) {
         };
         if(data[idx.imei]=='868789024283474' || data[idx.imei]=='867162025954249' || data[idx.imei]=='868789024290792'){
           const cachedUnidad = unidadStateCache.get(String(data[idx.imei] || '').trim()) || {};
-          const estadoMovilActual = (cachedUnidad && cachedUnidad.estado_movil != null)
-            ? cachedUnidad.estado_movil
-            : gpsData.estado_movil;
+         
+          const fechaGpsUnidadActual = (cachedUnidad && cachedUnidad.fecha_gps != null)
+            ? cachedUnidad.fecha_gps
+            : null;
           let estado_movil_v2 = estadoVehiculo(
             data[idx.status],
             velocidadActual,
             fechaGpsDate,
             now,
             message.includes(BUFF),
-            estadoMovilActual
+            fechaGpsUnidadActual
           );
+         
           console.log("imei: "+data[idx.imei]);
           console.log("estado_movil_v2: "+estado_movil_v2);
         }
@@ -1098,6 +1144,262 @@ function onClientConnected(socket) {
         }
       }
 
+      // ================== GTPHL (PHOTO LOCATION PRE-REPORT) ==================
+      else if (message.includes(GTPHL) && !message.includes(ACK)) {
+        let imei = 2;
+        let cameraId = 4;
+        let photoTime = 6;
+        let longitude = 11;
+        let latitude = 12;
+        let gpsUtcTime = 13;
+        let sendTime = 19;
+        let count = 20;
+        let data = message.split(',');
+
+        if (!data[imei]) return;
+
+        const fecha_gps = (toInteger(data[gpsUtcTime]) != 0)
+          ? moment(data[gpsUtcTime], DEVICE_DATE_FORMAT).toDate()
+          : ((toInteger(data[photoTime]) != 0) ? moment(data[photoTime], DEVICE_DATE_FORMAT).toDate() : new Date());
+
+        const locationPayload = {
+          imei: String(data[imei] || '').trim(),
+          cameraId: String(data[cameraId] || '').trim(),
+          photoTime: String(data[photoTime] || '').trim(),
+          latitud: toFloat(data[latitude]),
+          longitud: toFloat(data[longitude]),
+          fecha_gps: fecha_gps,
+          send_time: String(data[sendTime] || '').trim(),
+          count: String(data[count] || '').replace('$', '').trim(),
+          storedAt: Date.now()
+        };
+
+        const locationCacheKey = locationPayload.imei + '_' + locationPayload.photoTime;
+
+        function persistLocationCache() {
+          lastPhotoLocationByImei.set(locationCacheKey, locationPayload);
+        }
+
+        // Si no viene coordenada valida, usar ultima posicion de la unidad.
+        if (locationPayload.latitud === 0 || locationPayload.longitud === 0) {
+          if (!dbTrackingSystem) {
+            locationPayload.storedAt = Date.now();
+            persistLocationCache();
+            return;
+          }
+          dbTrackingSystem.collection('unidads').findOne({ imei: locationPayload.imei, estado: 'A' }, function (err, document) {
+            if (err) console.log(err);
+            else if (document) {
+              locationPayload.latitud = toFloat(document.latitud);
+              locationPayload.longitud = toFloat(document.longitud);
+              if (!locationPayload.fecha_gps || Number.isNaN(locationPayload.fecha_gps.getTime())) {
+                locationPayload.fecha_gps = document.fecha_gps || new Date();
+              }
+            }
+            locationPayload.storedAt = Date.now();
+            persistLocationCache();
+          });
+        } else {
+          persistLocationCache();
+        }
+      }
+
+      // ================== GTPHD (PHOTO DATA FRAMES) ==================
+      else if (message.includes(GTPHD) && !message.includes(ACK)) {
+        let imei = 2;
+        let cameraId = 4;
+        let photoTime = 6;
+        let totalFramesIdx = 7;
+        let currentFrameIdx = 8;
+        let photoDataLengthIdx = 9;
+        let photoDataStartIdx = 10;
+        let data = message.split(',');
+
+        let imeiValue = String(data[imei] || '').trim();
+        let cameraIdValue = String(data[cameraId] || '').trim();
+        let photoTimeValue = String(data[photoTime] || '').trim();
+        let totalFramesValue = toInteger(data[totalFramesIdx]);
+        let currentFrameValue = toInteger(data[currentFrameIdx]);
+        let photoDataLengthValue = toInteger(data[photoDataLengthIdx]);
+
+        let base64Payload = data.slice(photoDataStartIdx, data.length - 2).join(',');
+        let sendTimeValue = data[data.length - 2];
+        let countTail = String(data[data.length - 1] || '').replace('$', '').trim();
+
+        if (!imeiValue || !photoTimeValue || !base64Payload) return;
+        if (data.length < 13) return;
+        if (base64Payload.length < 50) return;
+        if (totalFramesValue <= 0 || currentFrameValue <= 0) return;
+
+        if (photoDataLengthValue > 0 && base64Payload.length !== photoDataLengthValue && debug) {
+          console.log('GTPHD length mismatch', {
+            imei: imeiValue,
+            expected: photoDataLengthValue,
+            actual: base64Payload.length,
+            sendTime: sendTimeValue,
+            count: countTail
+          });
+        }
+
+        const key = imeiValue + '_' + photoTimeValue + '_' + cameraIdValue;
+        const locationCacheKey = imeiValue + '_' + photoTimeValue;
+
+        let state = photoAssemblies.get(key);
+
+        if (!state) {
+          if (photoAssemblies.size >= MAX_ACTIVE_PHOTO_ASSEMBLIES) {
+            console.warn('⚠️ demasiadas fotos en proceso (max ' + MAX_ACTIVE_PHOTO_ASSEMBLIES + '), se ignora trama GTPHD imei=' + imeiValue);
+            return;
+          }
+          state = {
+            imei: imeiValue,
+            photoTime: photoTimeValue,
+            cameraId: cameraIdValue,
+            totalFrames: totalFramesValue,
+            frames: new Map(),
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            latitud: 0,
+            longitud: 0,
+            fechaGps: null
+          };
+          photoAssemblies.set(key, state);
+        }
+
+        state.updatedAt = Date.now();
+
+        if (totalFramesValue > 0) {
+          state.totalFrames = totalFramesValue;
+        }
+
+        if (state.frames.has(currentFrameValue)) {
+          return;
+        }
+        state.frames.set(currentFrameValue, base64Payload);
+
+        const locationInfo = lastPhotoLocationByImei.get(locationCacheKey);
+        if (locationInfo) {
+          state.latitud = toFloat(locationInfo.latitud);
+          state.longitud = toFloat(locationInfo.longitud);
+          state.fechaGps = locationInfo.fecha_gps;
+        }
+
+        function gtpHdCleanupAssembly() {
+          lastPhotoLocationByImei.delete(locationCacheKey);
+          photoAssemblies.delete(key);
+        }
+
+        function gtpHdFramesComplete(st) {
+          if (!st.totalFrames || st.totalFrames <= 0) return false;
+          if (st.frames.size < st.totalFrames) return false;
+          for (let i = 1; i <= st.totalFrames; i++) {
+            if (!st.frames.has(i)) return false;
+          }
+          return true;
+        }
+
+        function gtpHdNeedCoords(st) {
+          return toFloat(st.latitud) === 0 && toFloat(st.longitud) === 0;
+        }
+
+        function tryPersistGtpHdPhoto() {
+          const st = photoAssemblies.get(key);
+          if (!st) return;
+          if (!gtpHdFramesComplete(st)) return;
+
+          if (gtpHdNeedCoords(st)) {
+            if (dbTrackingSystem) {
+              if (st._resolviendoCoords) return;
+              if (!st._gtpHdUnidadFetchAttempted) {
+                st._gtpHdUnidadFetchAttempted = true;
+                st._resolviendoCoords = true;
+                dbTrackingSystem.collection('unidads').findOne({ imei: imeiValue, estado: 'A' }, function (err, doc) {
+                  const st2 = photoAssemblies.get(key);
+                  if (st2) st2._resolviendoCoords = false;
+                  if (!st2) return;
+                  if (!err && doc) {
+                    st2.latitud = toFloat(doc.latitud);
+                    st2.longitud = toFloat(doc.longitud);
+                    st2.fechaGps = doc.fecha_gps || new Date();
+                  }
+                  tryPersistGtpHdPhoto();
+                });
+                return;
+              }
+              if (debug) console.log('GTPHD sin coordenadas tras lookup unidad', { key: key, imei: imeiValue });
+              gtpHdCleanupAssembly();
+              return;
+            }
+            if (debug) console.log('GTPHD sin coordenadas y sin DB', { key: key, imei: imeiValue });
+            gtpHdCleanupAssembly();
+            return;
+          }
+
+          const buffers = [];
+          for (let i = 1; i <= st.totalFrames; i++) {
+            try {
+              buffers.push(Buffer.from(st.frames.get(i), 'base64'));
+            } catch (e) {
+              console.error('❌ Error base64 GTPHD (chunk):', e);
+              gtpHdCleanupAssembly();
+              return;
+            }
+          }
+          const buffer = Buffer.concat(buffers);
+
+          if (!buffer || buffer.length < 1000 || buffer[0] !== 0xFF || buffer[1] !== 0xD8) {
+            if (debug) {
+              console.log('GTPHD buffer invalido, pequeño o no JPEG', {
+                key: key,
+                len: buffer ? buffer.length : 0,
+                soi: buffer && buffer.length >= 2 ? [buffer[0], buffer[1]] : null
+              });
+            }
+            gtpHdCleanupAssembly();
+            return;
+          }
+
+          let imeiSafe = imeiValue.replace(/[^0-9A-Za-z_-]/g, '');
+          let fileName = photoTimeValue + '_' + Date.now() + '.jpg';
+
+          let dir = path.join(PHOTO_EVENTS_DIR, imeiSafe);
+          let filePath = path.join(dir, fileName);
+
+          try {
+            fs.mkdirSync(dir, { recursive: true });
+            fs.writeFileSync(filePath, buffer);
+          } catch (e) {
+            console.error('❌ Error guardando imagen GTPHD:', e);
+            gtpHdCleanupAssembly();
+            return;
+          }
+
+          let storagePath = 'images/' + imeiSafe + '/' + fileName;
+
+          if (!dbTrackingSystem) {
+            gtpHdCleanupAssembly();
+            return;
+          }
+
+          dbTrackingSystem.collection('photos_unidad').insertOne({
+            imei: imeiValue,
+            tipo: GTPHD,
+            tipo_evento: 'foto',
+            fecha_gps: st.fechaGps || new Date(),
+            latitud: st.latitud,
+            longitud: st.longitud,
+            imagen: storagePath,
+            fecha: new Date(),
+            js: true
+          }, { writeConcern: { w: 0 } });
+
+          console.log('📸 Imagen guardada:', storagePath);
+
+          gtpHdCleanupAssembly();
+        }
+
+        tryPersistGtpHdPhoto();
+      }
       // ================== GTGOT / GTGIN ==================
       else if (!message.includes(ADMIN) && (message.includes(GTGOT) || message.includes(GTGIN)) && !message.includes(ACK)) {
         let imei = 2;
