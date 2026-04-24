@@ -19,6 +19,7 @@ const moment = require('moment');
 const nodemailer = require('nodemailer');
 const schedule = require('node-schedule');
 const fs = require('fs');
+const { execSync } = require('child_process');
 const ObjectID = require('mongodb').ObjectID;
 const { ObjectId } = require('mongodb');
 const MongoClient = require('mongodb').MongoClient;
@@ -1366,7 +1367,18 @@ function onClientConnected(socket) {
           let filePath = path.join(dir, fileName);
 
           try {
-            fs.mkdirSync(dir, { recursive: true });
+            fs.mkdirSync(dir, { recursive: true, mode: 0o775 });
+            if (process.platform === 'linux') {
+              try {
+                const uid = Number(String(execSync('id -u www-data')).trim());
+                const gid = Number(String(execSync('id -g www-data')).trim());
+                if (!Number.isNaN(uid) && !Number.isNaN(gid)) {
+                  fs.chownSync(dir, uid, gid);
+                }
+              } catch (ownerErr) {
+                if (debug) console.log('No se pudo asignar owner www-data:www-data:', ownerErr.message || ownerErr);
+              }
+            }
             fs.writeFileSync(filePath, buffer);
           } catch (e) {
             console.error('❌ Error guardando imagen GTPHD:', e);
