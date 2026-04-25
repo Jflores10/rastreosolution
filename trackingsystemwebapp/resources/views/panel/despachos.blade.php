@@ -1017,6 +1017,8 @@
                 let recorrido_puntos = data.puntos_control.length;
                 var anteriorBusAT = 0;
                 var anteriorBusAD = 0;
+                var descuentoTotalPuntos = 0;
+                var rutaPuntosControl = (data.ruta && data.ruta.puntos_control) ? data.ruta.puntos_control : [];
 
                 for (var i = 0; i < recorrido_puntos; i++) {
                     tabla.push('<tr style="line-height : 0.7;">');
@@ -1063,6 +1065,23 @@
                                     desc = intervalo * adelanto;
                                 }
 
+                                var cfgPunto = null;
+                                for (var rp = 0; rp < rutaPuntosControl.length; rp++) {
+                                    if (String(rutaPuntosControl[rp].id) === String(data.puntos_control[i].id)) {
+                                        cfgPunto = rutaPuntosControl[rp];
+                                        break;
+                                    }
+                                }
+                                if (cfgPunto) {
+                                    var aplicarDesc = (cfgPunto.aplicar_descuento === 1 || cfgPunto.aplicar_descuento === '1' || cfgPunto.aplicar_descuento === true);
+                                    if (aplicarDesc) {
+                                        var pctDesc = toFloat(cfgPunto.descuento);
+                                        if (pctDesc > 0) {
+                                            descuentoTotalPuntos += (toFloat(desc) * (pctDesc / 100));
+                                        }
+                                    }
+                                }
+
                                 if (rutaId == ruta44) {
                                     if(i<4)
                                         desc1+=toFloat(desc);
@@ -1101,8 +1120,16 @@
                     let descuentoTotal = desc1 + desc2;
                     tabla.push('<b>Total: $ ' + descuentoTotal.toFixed(2) + '</b><br/>'); 
                 }
-                tabla.push('<b>Cobro Total: $ ' + ((data.multa == null) ? '-' : data.multa.toFixed(2)) + '</b><br/>');
-                //tabla.push('<b>Descuento: $ ' + ((data.multa == null)?'-':data.multa.toFixed(2)) + '</b><br/>');
+                if (data.multa == null) {
+                    tabla.push('<b>Cobro Total: $ -</b><br/>');
+                } else {
+                    var cobroTotal = toFloat(data.multa);
+                    var totalConDescuento = cobroTotal - descuentoTotalPuntos;
+                    if (totalConDescuento < 0) totalConDescuento = 0;
+                    tabla.push('<b>Cobro Total: $ ' + cobroTotal.toFixed(2) + '</b><br/>');
+                    tabla.push('<b>Descuento Total: $ ' + descuentoTotalPuntos.toFixed(2) + '</b><br/>');
+                    tabla.push('<b>Total: $ ' + totalConDescuento.toFixed(2) + '</b><br/>');
+                }
                 tabla.push('<b>Corte de tubo:' + ((data == null) ? '-' : data.corte_tubo) + '</b><br/>');
                 tabla.push('<b>Total AD ant.:' + anteriorBusAD + '</b>&nbsp&nbsp&nbsp&nbsp');
                 tabla.push('<b>Total AT ant.:' + anteriorBusAT + '</b><br/>');

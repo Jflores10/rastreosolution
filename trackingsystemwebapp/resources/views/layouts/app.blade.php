@@ -159,6 +159,7 @@
                         @if(Auth::user()->tipo_usuario->valor=='1' || (Auth::user()->tipo_usuario->valor=='2') || (Auth::user()->tipo_usuario->valor=='3') 
                         || (Auth::user()->tipo_usuario->valor=='4')  || Auth::user()->tipo_usuario->valor=='5')
                           <li><a href="{{ url('/sorteos') }}">Sorteos</a></li>
+                          <li><a href="{{ route('fotos.index') }}">Fotos</a></li>
                         @endif
 
                       @endif

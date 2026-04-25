@@ -291,6 +291,19 @@ Crear ruta
                                 </label>
                             </div>
                         </div>
+                        <div class="form-group">
+                            <div class="checkbox">
+                                <label>
+                                    <input type="checkbox" name="aplicar_descuento" id="aplicar_descuento" onchange="toggleDescuentoPunto();" />
+                                    Aplicar descuento
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-group" id="div-descuento-modificacion">
+                            <label for="descuento-modificacion">Descuento</label>
+                            <input type="number" name="descuento-modificacion" id="descuento-modificacion" class="form-control" value="0" disabled />
+                            <span class="help-block" id="span_descuento_modificacion"></span>
+                        </div>
                     </div>
 
                     <!-- Columna derecha -->
@@ -539,6 +552,8 @@ Crear ruta
                                 calculo:'{{$punto_control["calculo"]}}',
                                 redondeo:'{{$punto_control["redondeo"]}}',
                                 retorno:'{{$punto_control["retorno"]}}',
+                                aplicar_descuento:'{{ isset($punto_control["aplicar_descuento"]) ? $punto_control["aplicar_descuento"] : 0 }}',
+                                descuento:'{{ isset($punto_control["descuento"]) ? $punto_control["descuento"] : 0 }}',
                                 poligono:`{!! isset($punto["poligono"]) ? json_encode($punto["poligono"]) : '' !!}`
                             });
                     @endforeach
@@ -758,7 +773,16 @@ Crear ruta
         // ============================
         // Edición del punto (sin cambios)
         // ============================
-        function setDataPuntoControl(adelanto,atraso,puntoControlId,id,tiempo_llegada, calculo="E", redondeo="min",retorno="0"){
+        function toggleDescuentoPunto(){
+            var aplicar = $('#aplicar_descuento').is(':checked');
+            var input = $('#descuento-modificacion');
+            input.prop('disabled', !aplicar);
+            if(!aplicar){
+                input.val('0');
+            }
+        }
+
+        function setDataPuntoControl(adelanto,atraso,puntoControlId,id,tiempo_llegada, calculo="E", redondeo="min",retorno="0", aplicar_descuento="0", descuento="0"){
             document.getElementById('adelanto-modificacion').value=adelanto;
             document.getElementById('atraso-modificacion').value=atraso;
             document.getElementById('tiempo-llegada-modificacion').value=tiempo_llegada;
@@ -766,6 +790,9 @@ Crear ruta
             $('input[name="cal_ptocontrol"][value="' + calculo + '"]').prop('checked', true);
             $('input[name="redondeo"][value="' + redondeo + '"]').prop('checked', true);
             $('#retorno').prop('checked', retorno === '1');
+            $('#aplicar_descuento').prop('checked', aplicar_descuento === '1');
+            $('#descuento-modificacion').val(descuento);
+            toggleDescuentoPunto();
 
 
             actualPuntoControliD=id;
@@ -780,13 +807,16 @@ Crear ruta
             var calculo=document.querySelector('input[name="cal_ptocontrol"]:checked').value;
             var redondeo=document.querySelector('input[name="redondeo"]:checked').value;
             var retorno = $('#retorno').is(':checked') ? 1 : 0;
+            var aplicar_descuento = $('#aplicar_descuento').is(':checked') ? 1 : 0;
+            var descuento = $('#descuento-modificacion').val();
 
 
             if(adelanto==''||adelanto==null)adelanto='0';
             if(atraso==''||atraso==null)atraso='0';
             if(tiempo_llegada ==''||tiempo_llegada==null)tiempo_llegada='0';
+            if(descuento == '' || descuento == null)descuento='0';
 
-            if(parseFloat(tiempo_llegada)>=0  && parseFloat(adelanto)>=0 && parseFloat(atraso)>=0){
+            if(parseFloat(tiempo_llegada)>=0  && parseFloat(adelanto)>=0 && parseFloat(atraso)>=0 && parseFloat(descuento)>=0){
                 var value= JSON.stringify({
                     id: actualPuntoControliD,
                     adelanto: adelanto,
@@ -795,14 +825,16 @@ Crear ruta
                     secuencia: '',
                     calculo:calculo,
                     redondeo:redondeo,
-                    retorno:retorno
+                    retorno:retorno,
+                    aplicar_descuento:aplicar_descuento,
+                    descuento:descuento
                 });
                 $('#'+actualPuntoControlLiId).find('input[id="puntos_control"]').val(value);
                 let texto = $('#'+actualPuntoControlLiId).find('span').text();
                 let values = texto.split('|');
                 $('#'+actualPuntoControlLiId).find('span').text('AT: ' + atraso + '|AD: + ' + adelanto + '|T: ' + tiempo_llegada + '|' + values[3]);
                 $('#'+actualPuntoControlLiId).find('button[id="set_data_punto"]').attr('onclick',
-                "setDataPuntoControl('"+adelanto+"','"+atraso+"','"+actualPuntoControlLiId+"','"+actualPuntoControliD+"','"+tiempo_llegada+"','"+calculo+"','"+redondeo+"','"+retorno+"');");
+                "setDataPuntoControl('"+adelanto+"','"+atraso+"','"+actualPuntoControlLiId+"','"+actualPuntoControliD+"','"+tiempo_llegada+"','"+calculo+"','"+redondeo+"','"+retorno+"','"+aplicar_descuento+"','"+descuento+"');");
             } else {
                 alert("Error: Todos los datos ingresados deben ser mayores o iguales a cero.");
             }
@@ -1108,7 +1140,9 @@ Crear ruta
                 secuencia: '',
                 calculo:'E',
                 redondeo:'min',
-                retorno:0
+                retorno:0,
+                aplicar_descuento:0,
+                descuento:0
                 });
 
                 if (id_punto_aux.length != 0) {
@@ -1137,7 +1171,7 @@ Crear ruta
 
                     '<button onclick="removePuntoControl(\'' + puntoControlId + '\', \'' + indice_puntos + '\');" type="button" class="btn btn-danger btn-sm"><i class="fa fa-power-off"></i></button>' +
                     '<button id="set_data_punto" data-toggle="modal" data-target="#modificar_punto" ' +
-                    'onclick="setDataPuntoControl(\'' + adelanto + '\', \'' + atraso + '\', \'' + puntoControlId + '\', \'' + id + '\', \'' + tiempo_llegada + '\');" ' +
+                    'onclick="setDataPuntoControl(\'' + adelanto + '\', \'' + atraso + '\', \'' + puntoControlId + '\', \'' + id + '\', \'' + tiempo_llegada + '\', \'E\', \'min\', \'0\', \'0\', \'0\');" ' +
                     'type="button" class="btn btn-default btn-sm"><i class="fa fa-edit"></i></button>' +
                 '</div>' +
                 '</li>';
@@ -1177,6 +1211,8 @@ Crear ruta
                 calculo:param_punto.calculo,
                 redondeo:param_punto.redondeo,
                 retorno:param_punto.retorno,
+                aplicar_descuento:(typeof param_punto.aplicar_descuento !== 'undefined' ? param_punto.aplicar_descuento : 0),
+                descuento:(typeof param_punto.descuento !== 'undefined' ? param_punto.descuento : 0),
 
                 }) + '\' />' +
                 '<span>AT: ' + param_punto.atraso + '|AD: ' + param_punto.adelanto + '|T: ' + param_punto.tiempo_llegada + '|' + param_punto.descripcion + '</span><br/>' +
@@ -1200,7 +1236,7 @@ Crear ruta
 
                 '<button onclick="removePuntoControl(\'' + puntoControlId + '\', \'' + indice_puntos + '\');" type="button" class="btn btn-danger btn-sm"><i class="fa fa-power-off"></i></button>' +
                 '<button id="set_data_punto" data-toggle="modal" data-target="#modificar_punto" ' +
-                'onclick="setDataPuntoControl(\'' + param_punto.adelanto + '\', \'' + param_punto.atraso + '\', \'' + puntoControlId + '\', \'' + param_punto.id + '\', \'' + param_punto.tiempo_llegada + '\', \'' + param_punto.calculo + '\', \'' + param_punto.redondeo + '\', \'' + param_punto.retorno + '\');" ' +
+                'onclick="setDataPuntoControl(\'' + param_punto.adelanto + '\', \'' + param_punto.atraso + '\', \'' + puntoControlId + '\', \'' + param_punto.id + '\', \'' + param_punto.tiempo_llegada + '\', \'' + param_punto.calculo + '\', \'' + param_punto.redondeo + '\', \'' + param_punto.retorno + '\', \'' + (typeof param_punto.aplicar_descuento !== 'undefined' ? param_punto.aplicar_descuento : 0) + '\', \'' + (typeof param_punto.descuento !== 'undefined' ? param_punto.descuento : 0) + '\');" ' +
                 'type="button" class="btn btn-default btn-sm"><i class="fa fa-edit"></i></button>' +
             '</div>' +
             '</li>';
