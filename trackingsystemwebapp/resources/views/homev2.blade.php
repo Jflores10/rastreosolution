@@ -1153,6 +1153,9 @@ function conectarSSE(coopId) {
     sse.addEventListener('unidad.updated', (evt) => {
         try {
             const data = JSON.parse(evt.data);
+            if(data.imei=='863457050082674'){
+                console.log(data)
+            }
             console.log(data)
             const uid = normalizarUnidadId(data && data._id ? data._id : (data ? data.unidad_id : null));
             if (!uid) return;
