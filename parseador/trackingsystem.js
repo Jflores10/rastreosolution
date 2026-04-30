@@ -498,10 +498,8 @@ function estadoVehiculo(statusHex, velocidad, fechaGps, ahora = new Date(), isBu
   // Igual que HistoricoController:
   // date_sub($f_gps, date_interval_create_from_date_string('10 hours'));
   const fecha = new Date(fechaUtc.getTime() - (5 * 60 * 60 * 1000));
-  console.log("fechaParseada: "+fecha);
 
   const diff = ahora - fecha;
-  console.log("diff: "+diff);
   if (diff > LIMITE_SIN_SENAL) return 'NS';
 
   // Validacion basica
