@@ -940,7 +940,7 @@ function onClientConnected(socket) {
           is_atm: (message.includes(ATM) ? 1 : 0),
           _raw_message: message
         };
-        if(data[idx.imei]=='868789024283474' || data[idx.imei]=='867162025954249' || data[idx.imei]=='868789024290792'){
+        if(data[idx.imei]=='868789024283474' || data[idx.imei]=='867162025954249' || data[idx.imei]=='868789024290792' || data[idx.imei]=='863457050082674'){
           const cachedUnidad = unidadStateCache.get(String(data[idx.imei] || '').trim()) || {};
          
           const fechaGpsUnidadActual = (cachedUnidad && cachedUnidad.fecha_gps != null)
