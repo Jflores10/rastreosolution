@@ -924,6 +924,22 @@ function onClientConnected(socket) {
           : now;
         const velocidadActual = toFloat(data[idx.speed]);
 
+        const cachedUnidad = unidadStateCache.get(String(data[idx.imei] || '').trim()) || {};
+        const fechaGpsUnidadActual = (cachedUnidad && cachedUnidad.fecha_gps != null)
+          ? cachedUnidad.fecha_gps
+          : null;
+        const estadoMovilCalculado = estadoVehiculo(
+          data[idx.status],
+          velocidadActual,
+          fechaGpsDate,
+          now,
+          message.includes(BUFF),
+          fechaGpsUnidadActual
+        );
+        const estadoMovilFinal = (estadoMovilCalculado === null)
+          ? (cachedUnidad.estado_movil || 'D')
+          : estadoMovilCalculado;
+
         const gpsData = {
           type: 'unidad.updated',
           imei: data[idx.imei],
@@ -934,29 +950,15 @@ function onClientConnected(socket) {
           bateria: toFloat(data[idx.battery]),
           mileage: toDecimalHex(data[idx.mileage]),
           angulo: toInteger(data[idx.angle]),
-          estado_movil: (toInteger(data[idx.status]) >= 420000) ? 'M' : 'D',
+          estado_movil: estadoMovilFinal,
           fecha_gps: fechaGpsDate,
           fecha: now,
           is_atm: (message.includes(ATM) ? 1 : 0),
           _raw_message: message
         };
         if(data[idx.imei]=='868789024283474' || data[idx.imei]=='867162025954249' || data[idx.imei]=='868789024290792' || data[idx.imei]=='863457050082674'){
-          const cachedUnidad = unidadStateCache.get(String(data[idx.imei] || '').trim()) || {};
-         
-          const fechaGpsUnidadActual = (cachedUnidad && cachedUnidad.fecha_gps != null)
-            ? cachedUnidad.fecha_gps
-            : null;
-          let estado_movil_v2 = estadoVehiculo(
-            data[idx.status],
-            velocidadActual,
-            fechaGpsDate,
-            now,
-            message.includes(BUFF),
-            fechaGpsUnidadActual
-          );
-         
           console.log("imei: "+data[idx.imei]);
-          console.log("estado_movil_v2: "+estado_movil_v2);
+          console.log("estado_movil_v2: "+estadoMovilFinal);
         }
        
 
