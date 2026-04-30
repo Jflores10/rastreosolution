@@ -1519,17 +1519,10 @@ function fechaGpsTramaPresente(fg) {
 function estadoVistaListaUnidad(u) {
 
     if (!u) return 'no_envia_trama';
-    var estado = u.estado_movil;
-    if (estado == '-') {
-        estado = (parseFloat(u.velocidad_actual) == 0) ? 'D' : 'M';
-    }
-    if (parseFloat(u.velocidad_actual) == 0) estado = 'D';
-    else estado = 'M';
-
-
-    if (u.diferencia != null && u.diferencia > 30) return 'no_envia_trama';
-    if (!fechaGpsTramaPresente(u.fecha_gps)) return 'no_envia_trama';
-    return estado;
+    var estado = String(u.estado_movil || '').trim().toUpperCase();
+    if (estado === 'NS' || estado === 'NO_ENVIA_TRAMA') return 'no_envia_trama';
+    if (estado === 'M' || estado === 'D' || estado === 'E') return estado;
+    return 'no_envia_trama';
 }
 
 /** currentU del bus: en carga vive en #i{id}; el <li> puede no tenerlo o tener un modelo sin fecha tras SSE. */
@@ -3733,7 +3726,10 @@ $("#velocimetro").myfunc({divFact:10});
             {
                 fecha_gps=' - ';
                 voltaje=' - ';
-                estado=data.unidades[i].estado_movil;
+                estado = data.unidades[i].estado_movil;
+                if (estado === 'NS' || estado === 'NO_ENVIA_TRAMA') {
+                    estado = 'no_envia_trama';
+                }
 
                 if(data.array_fechas[i].fecha_gps!=null){
                     fecha_gps =new Date(data.array_fechas[i].fecha_gps.date).format('H:i:s');
@@ -3878,28 +3874,7 @@ $("#velocimetro").myfunc({divFact:10});
 
                     voltaje=voltaje.toString().substring(0,2);
 
-                if(estado=='-')
-                {
-                    if(parseFloat(data.unidades[i].velocidad_actual)==0)
-                        estado="D";
-                    else
-                        estado="M";
-                }
-                
-                if(parseFloat(data.unidades[i].velocidad_actual)==0)
-                    estado="D";
-                else
-                    estado="M";
-
-                if(data.array_fechas[i].diferencia!=null) {
-                    if (data.array_fechas[i].diferencia > 30)
-                    {
-                        estado = 'no_envia_trama';
-                    }
-                }
-
-                if(data.array_fechas[i].fecha_gps==null)
-                    estado = 'no_envia_trama';
+                if (estado == null || estado === '') estado = 'no_envia_trama';
                     
                 var iId = 'i' + data.unidades[i]._id; 
                 var gId = 'g' + data.unidades[i]._id; 
