@@ -1153,9 +1153,6 @@ function conectarSSE(coopId) {
     sse.addEventListener('unidad.updated', (evt) => {
         try {
             const data = JSON.parse(evt.data);
-            if(data.imei=='863457050082674'){
-                console.log(data)
-            }
             const uid = normalizarUnidadId(data && data._id ? data._id : (data ? data.unidad_id : null));
             if (!uid) return;
             data._id = uid;
@@ -1505,15 +1502,25 @@ function actualizarUnidadRealtime(unidad) {
     setMarcadorUnidad(unidad, fakeFecha, fakeFecha, 0);
 }
 
-/** True si hay fecha GPS utilizable (misma idea que array_fechas[i].fecha_gps != null en append). */
-function fechaGpsTramaPresente(fg) {
-    if (fg == null || fg === '') return false;
+function fechaGpsComparableDate(fg) {
+    if (fg == null || fg === '') return null;
+    var raw = fg;
     if (typeof fg === 'object') {
-        if (fg.$date != null) return true;
-        if (fg.date != null) return true;
-        return Object.keys(fg).length > 0;
+        if (fg.$date != null) raw = fg.$date;
+        else if (fg.date != null) raw = fg.date;
+        else return null;
     }
-    return true;
+    var d = new Date(raw);
+    if (isNaN(d.getTime())) return null;
+    // Mantener la misma logica del backend (estadoVehiculo): restar 5 horas
+    return new Date(d.getTime() - (5 * 60 * 60 * 1000));
+}
+
+function excedeLimiteSinTrama30Min(unidad) {
+    if (!unidad) return true;
+    var fg = fechaGpsComparableDate(unidad.fecha_gps);
+    if (!fg) return true;
+    return (Date.now() - fg.getTime()) > (30 * 60 * 1000);
 }
 
 /**
@@ -1522,6 +1529,7 @@ function fechaGpsTramaPresente(fg) {
 function estadoVistaListaUnidad(u) {
 
     if (!u) return 'no_envia_trama';
+    if (excedeLimiteSinTrama30Min(u)) return 'no_envia_trama';
     var estado = String(u.estado_movil || '').trim().toUpperCase();
     if (estado === 'NS' || estado === 'NO_ENVIA_TRAMA') return 'no_envia_trama';
     if (estado === 'M' || estado === 'D' || estado === 'E') return estado;
@@ -1572,7 +1580,8 @@ function refreshContadoresEstadoUnidades() {
 }
 
 // Buscar el <li> de la unidad en la lista lateral y actualizar sus campos.
-function updateUnidadInList(unidad) {
+// opts.skipContadores: true evita recalcular contadores (útil en lotes periódicos).
+function updateUnidadInList(unidad, opts) {
     if (!unidad) return;
     var uidList = normalizarUnidadId(unidad._id || unidad.unidad_id);
     if (!uidList) return;
@@ -1910,6 +1919,7 @@ function updateUnidadInList(unidad) {
     li.currentFechagpsC = fecha_gps_marker_c;
 
     li.currentFecha = fecha_servidor;
+    li._estado_vista = estado;
 
     // Aplicar filtro de búsqueda activo: si hay texto en #consulta,
     // mostrar sólo las unidades cuyo imei o descripcion coincidan.
@@ -1929,7 +1939,67 @@ function updateUnidadInList(unidad) {
         selectUnidad(this.currentU,this.currentFechagpsC,this.currentFecha,1); 
     };
 
-    try { refreshContadoresEstadoUnidades(); } catch (e) {}
+    if (!opts || !opts.skipContadores) {
+        try { refreshContadoresEstadoUnidades(); } catch (e) {}
+    }
+}
+
+var _timerNoEnviaTrama = null;
+var _noEnviaTramaTickRunning = false;
+var NO_ENVIA_TRAMA_CHECK_MS = 120000;
+var NO_ENVIA_TRAMA_BATCH = 12;
+
+function _aplicarColaNoEnviaTrama(cola, idx) {
+    var end = Math.min(idx + NO_ENVIA_TRAMA_BATCH, cola.length);
+    for (var j = idx; j < end; j++) {
+        try {
+            updateUnidadInList(cola[j], { skipContadores: true });
+        } catch (e) {}
+    }
+    if (end < cola.length) {
+        requestAnimationFrame(function () { _aplicarColaNoEnviaTrama(cola, end); });
+    } else {
+        try { refreshContadoresEstadoUnidades(); } catch (e) {}
+        _noEnviaTramaTickRunning = false;
+    }
+}
+
+function ejecutarTickVerificadorNoEnviaTrama() {
+    if (document.hidden) return;
+    if (_noEnviaTramaTickRunning) return;
+    var ul = document.getElementById('ul_unidades');
+    if (!ul) return;
+    var children = ul.children;
+    var cola = [];
+    for (var i = 0; i < children.length; i++) {
+        var row = children[i];
+        if (!row || !row.id) continue;
+        if (row.style && row.style.display === 'none') continue;
+        var unidad = obtenerCurrentUContador(row);
+        if (!unidad) continue;
+        var estadoNuevo = estadoVistaListaUnidad(unidad);
+        var estadoActual = row._estado_vista != null ? row._estado_vista : null;
+        if (estadoActual === estadoNuevo) continue;
+        cola.push(unidad);
+    }
+    if (cola.length === 0) {
+        try { refreshContadoresEstadoUnidades(); } catch (e) {}
+        return;
+    }
+    _noEnviaTramaTickRunning = true;
+    _aplicarColaNoEnviaTrama(cola, 0);
+}
+
+function iniciarVerificadorNoEnviaTrama() {
+    if (_timerNoEnviaTrama) return;
+    _timerNoEnviaTrama = setInterval(function () {
+        try { ejecutarTickVerificadorNoEnviaTrama(); } catch (e) {}
+    }, NO_ENVIA_TRAMA_CHECK_MS);
+    document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) {
+            try { ejecutarTickVerificadorNoEnviaTrama(); } catch (e) {}
+        }
+    });
 }
 
 </script>
@@ -1938,6 +2008,7 @@ function updateUnidadInList(unidad) {
 <script>
 
     $(document).ready(function() {
+        iniciarVerificadorNoEnviaTrama();
         $('#ruta_general').select2({
             width: '100%',
         });
@@ -2651,8 +2722,6 @@ $("#velocimetro").myfunc({divFact:10});
                 console.warn("No hay puntos imaginarios.");
                 return;
             }
-            console.log(data)
-
             data.data.forEach(p => {
                 const name = p.descripcion || "Punto Imaginario";
                 const lat = parseFloat(p.latitud);
@@ -3729,17 +3798,20 @@ $("#velocimetro").myfunc({divFact:10});
             {
                 fecha_gps=' - ';
                 voltaje=' - ';
-                estado = data.unidades[i].estado_movil;
-                if (estado === 'NS' || estado === 'NO_ENVIA_TRAMA') {
-                    estado = 'no_envia_trama';
-                }
+                var fechaGpsRawUnidad = null;
 
                 if(data.array_fechas[i].fecha_gps!=null){
-                    fecha_gps =new Date(data.array_fechas[i].fecha_gps.date).format('H:i:s');
-                    fecha_gps_marker=new Date(data.array_fechas[i].fecha_gps.date).format('d-m-Y H:i:s');;
+                    fechaGpsRawUnidad = data.array_fechas[i].fecha_gps.date;
+                    fecha_gps =new Date(fechaGpsRawUnidad).format('H:i:s');
+                    fecha_gps_marker=new Date(fechaGpsRawUnidad).format('d-m-Y H:i:s');;
                 }else{
                     fecha_gps_marker='-';
                 }
+
+                estado = estadoVistaListaUnidad({
+                    estado_movil: data.unidades[i].estado_movil,
+                    fecha_gps: fechaGpsRawUnidad
+                });
 
                 if(data.array_fechas[i].fecha_servidor!=null){
                     fecha_servidor =new Date(data.array_fechas[i].fecha_servidor.date).format('d-m-Y H:i:s');
@@ -3877,8 +3949,6 @@ $("#velocimetro").myfunc({divFact:10});
 
                     voltaje=voltaje.toString().substring(0,2);
 
-                if (estado == null || estado === '') estado = 'no_envia_trama';
-                    
                 var iId = 'i' + data.unidades[i]._id; 
                 var gId = 'g' + data.unidades[i]._id; 
                 var bId = 'i' + data.unidades[i]._id; 
@@ -4048,6 +4118,7 @@ $("#velocimetro").myfunc({divFact:10});
                         }
                     }
                 } catch (eUaf) {}
+                currentU.estado_movil = (estado === 'no_envia_trama') ? 'NS' : estado;
                 var currentFechagps = fecha_gps_marker;
                 var currentFecha = fecha_servidor;
                 if (currentLi != null && currentLi != undefined)
@@ -4084,6 +4155,10 @@ $("#velocimetro").myfunc({divFact:10});
                             if (_boltElI) _boltElI.classList.add('bolt-power-blink');
                         }
                     }
+                }
+                var _rowEstadoVista = document.getElementById(data.unidades[i]._id);
+                if (_rowEstadoVista) {
+                    _rowEstadoVista._estado_vista = (estado === 'no_envia_trama') ? 'no_envia_trama' : estado;
                 }
             }
 
