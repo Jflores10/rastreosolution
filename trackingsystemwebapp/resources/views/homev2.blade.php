@@ -1502,7 +1502,8 @@ function actualizarUnidadRealtime(unidad) {
     setMarcadorUnidad(unidad, fakeFecha, fakeFecha, 0);
 }
 
-function fechaGpsComparableDate(fg) {
+/** Instantáneo real de fecha_gps (sin restar horas): para antigüedad vs ahora. */
+function fechaGpsInstante(fg) {
     if (fg == null || fg === '') return null;
     var raw = fg;
     if (typeof fg === 'object') {
@@ -1512,15 +1513,33 @@ function fechaGpsComparableDate(fg) {
     }
     var d = new Date(raw);
     if (isNaN(d.getTime())) return null;
-    // Mantener la misma logica del backend (estadoVehiculo): restar 5 horas
-    return new Date(d.getTime() - (5 * 60 * 60 * 1000));
+    return d;
 }
+
+var _DEBUG_NS_IMEI = '867162025719444';
 
 function excedeLimiteSinTrama30Min(unidad) {
     if (!unidad) return true;
-    var fg = fechaGpsComparableDate(unidad.fecha_gps);
-    if (!fg) return true;
-    return (Date.now() - fg.getTime()) > (30 * 60 * 1000);
+    var d = fechaGpsInstante(unidad.fecha_gps);
+    if (!d) return true;
+    var ahora = Date.now();
+    var AJUSTE_HORAS_DEBUG = 5 * 60 * 60 * 1000;
+    var fechaGpsAjustada = new Date(d.getTime() - AJUSTE_HORAS_DEBUG);
+    var fechaActualAjustada = new Date(ahora - AJUSTE_HORAS_DEBUG);
+    var diffMs = ahora - d.getTime();
+    if (String(unidad.imei) === _DEBUG_NS_IMEI) {
+        console.log('[NS-debug imei ' + _DEBUG_NS_IMEI + ']', {
+            fecha_gps_raw: unidad.fecha_gps,
+            fecha_gps_parseada_iso: d.toISOString(),
+            fecha_gps_menos_5h_iso: fechaGpsAjustada.toISOString(),
+            fecha_actual_ms: ahora,
+            fecha_actual_iso: new Date(ahora).toISOString(),
+            fecha_actual_menos_5h_iso: fechaActualAjustada.toISOString(),
+            diferencia_ms: diffMs,
+            diferencia_min: (diffMs / 60000).toFixed(3)
+        });
+    }
+    return diffMs > (30 * 60 * 1000);
 }
 
 /**
