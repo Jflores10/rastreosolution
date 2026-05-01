@@ -914,6 +914,7 @@ function onClientConnected(socket) {
 
         const data = message.split(',');
         const now = new Date();
+        const isBuffMessage = message.includes(BUFF);
         const fechaGPS = toInteger(data[idx.datetime]);
 
         // ===================== DATOS NUEVOS (GPS) =====================
@@ -931,7 +932,7 @@ function onClientConnected(socket) {
           velocidadActual,
           fechaGpsDate,
           now,
-          message.includes(BUFF),
+          isBuffMessage,
           fechaGpsUnidadActual
         );
         const estadoMovilFinal = (estadoMovilCalculado === null)
@@ -959,68 +960,70 @@ function onClientConnected(socket) {
           console.log("estado_movil_v2: "+estadoMovilFinal);
         }
        
+        // Solo tramas NO-BUFF actualizan unidads y se publican por SSE/WS.
+        if (!isBuffMessage) {
+          // ===================== PAYLOAD COMPLETO (CACHE + GPS) =====================
+          const unidadPayload = buildUnidadPayloadRealtime(gpsData);
 
-        // ===================== PAYLOAD COMPLETO (CACHE + GPS) =====================
-        const unidadPayload = buildUnidadPayloadRealtime(gpsData);
+          // 🔥🔥🔥 ENVIAR AL FRONT INMEDIATO
+          // Si es +RESP (no BUFF), forzar envío saltando throttle.
+          // skipThrottleUpdate: no consume el slot de throttle aquí;
+          // el post-BD (con datos completos) lo hace.
+          const isRespMessage = !isBuffMessage;
+          enviarALaravelPorWS(unidadPayload, { force: isRespMessage, skipThrottleUpdate: isRespMessage });
+          // ===================== ACTUALIZAR BD (NO BLOQUEA) =====================
+          dbTrackingSystem.collection('unidads').findOneAndUpdate(
+            { imei: data[idx.imei], estado: 'A' },
+            {
+              $set: {
+                estado_movil: gpsData.estado_movil,
+                latitud: gpsData.latitud,
+                longitud: gpsData.longitud,
+                voltaje: gpsData.voltaje,
+                velocidad_actual: gpsData.velocidad_actual,
+                mileage: gpsData.mileage,
+                bateria: gpsData.bateria,
+                is_atm: gpsData.is_atm,
+                angulo: gpsData.angulo,
+                fecha_gps: gpsData.fecha_gps,
+                fecha: now
+              }
+            },
+            { returnDocument: 'after', writeConcern: { w: 0 } },
+            function (err, result) {
 
-        // 🔥🔥🔥 ENVIAR AL FRONT INMEDIATO
-        // Si es +RESP (no BUFF), forzar envío saltando throttle.
-        // skipThrottleUpdate: no consume el slot de throttle aquí;
-        // el post-BD (con datos completos) lo hace.
-        const isRespMessage = !message.includes(BUFF);
-        enviarALaravelPorWS(unidadPayload, { force: isRespMessage, skipThrottleUpdate: isRespMessage });
-        // ===================== ACTUALIZAR BD (NO BLOQUEA) =====================
-        dbTrackingSystem.collection('unidads').findOneAndUpdate(
-          { imei: data[idx.imei], estado: 'A' },
-          {
-            $set: {
-              estado_movil: gpsData.estado_movil,
-              latitud: gpsData.latitud,
-              longitud: gpsData.longitud,
-              voltaje: gpsData.voltaje,
-              velocidad_actual: gpsData.velocidad_actual,
-              mileage: gpsData.mileage,
-              bateria: gpsData.bateria,
-              is_atm: gpsData.is_atm,
-              angulo: gpsData.angulo,
-              fecha_gps: gpsData.fecha_gps,
-              fecha: now
-            }
-          },
-          { returnDocument: 'after', writeConcern: { w: 0 } },
-          function (err, result) {
+              if (err || !result || !result.value) return;
 
-            if (err || !result || !result.value) return;
+              const unidad = result.value; // 🔥 unidad ya actualizada
 
-            const unidad = result.value; // 🔥 unidad ya actualizada
-
-            // Enviar una publicación autorizada basada en la unidad en BD
-            // Esto garantiza que el campo `sentido` viene desde la tabla `unidads`
-            // y fuerza el envío sin pasar por el throttle (opts.force = true).
-            try {
-              const unidadFromDbPayload = buildUnidadPayloadRealtime(Object.assign({ type: 'unidad.updated', _raw_message: gpsData._raw_message }, unidad));
-              // Si es +RESP (no BUFF), forzar envío siempre (saltamos throttle)
-              enviarALaravelPorWS(unidadFromDbPayload, { force: isRespMessage });
-            } catch (e) {
-              if (debug) console.error('Error publicando unidad desde BD:', e);
-            }
-
-            // ===================== TRABAJO PESADO =====================
-            setImmediate(() => {
+              // Enviar una publicación autorizada basada en la unidad en BD
+              // Esto garantiza que el campo `sentido` viene desde la tabla `unidads`
+              // y fuerza el envío sin pasar por el throttle (opts.force = true).
               try {
+                const unidadFromDbPayload = buildUnidadPayloadRealtime(Object.assign({ type: 'unidad.updated', _raw_message: gpsData._raw_message }, unidad));
+                // Si es +RESP (no BUFF), forzar envío siempre (saltamos throttle)
+                enviarALaravelPorWS(unidadFromDbPayload, { force: isRespMessage });
+              } catch (e) {
+                if (debug) console.error('Error publicando unidad desde BD:', e);
+              }
 
-                procesarRecorridosYAlertas_GTFRI(
-                  unidad,
-                  data,
-                  message,
-                  idx
-                );
+              // ===================== TRABAJO PESADO =====================
+              setImmediate(() => {
+                try {
 
-              } catch (e) { }
-            });
+                  procesarRecorridosYAlertas_GTFRI(
+                    unidad,
+                    data,
+                    message,
+                    idx
+                  );
 
-          }
-        );
+                } catch (e) { }
+              });
+
+            }
+          );
+        }
       }
 
       // ================== GTDAT ==================
