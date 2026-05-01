@@ -960,17 +960,18 @@ function onClientConnected(socket) {
           console.log("estado_movil_v2: "+estadoMovilFinal);
         }
        
-        // Solo tramas NO-BUFF actualizan unidads y se publican por SSE/WS.
-        if (!isBuffMessage) {
-          // ===================== PAYLOAD COMPLETO (CACHE + GPS) =====================
-          const unidadPayload = buildUnidadPayloadRealtime(gpsData);
+        // ===================== PAYLOAD COMPLETO (CACHE + GPS) =====================
+        const unidadPayload = buildUnidadPayloadRealtime(gpsData);
 
-          // 🔥🔥🔥 ENVIAR AL FRONT INMEDIATO
-          // Si es +RESP (no BUFF), forzar envío saltando throttle.
-          // skipThrottleUpdate: no consume el slot de throttle aquí;
-          // el post-BD (con datos completos) lo hace.
-          const isRespMessage = !isBuffMessage;
-          enviarALaravelPorWS(unidadPayload, { force: isRespMessage, skipThrottleUpdate: isRespMessage });
+        // 🔥🔥🔥 ENVIAR AL FRONT INMEDIATO
+        // Si es +RESP (no BUFF), forzar envío saltando throttle.
+        // skipThrottleUpdate: no consume el slot de throttle aquí;
+        // el post-BD (con datos completos) lo hace.
+        const isRespMessage = !isBuffMessage;
+        enviarALaravelPorWS(unidadPayload, { force: isRespMessage, skipThrottleUpdate: isRespMessage });
+
+        // Solo tramas NO-BUFF actualizan unidads.
+        if (!isBuffMessage) {
           // ===================== ACTUALIZAR BD (NO BLOQUEA) =====================
           dbTrackingSystem.collection('unidads').findOneAndUpdate(
             { imei: data[idx.imei], estado: 'A' },
