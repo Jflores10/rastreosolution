@@ -1248,14 +1248,14 @@ function conectarSSE(coopId) {
             if (!uidPuerta || !unidadPerteneceAFiltroRutaActual(uidPuerta)) return;
             msg.unidad_id = uidPuerta;
 
-            const li = document.getElementById(msg.unidad_id);
-            if (!li || !li.currentU) return;
-
-            // Si es BUFF: solo parpadear, NO actualizar estado de puertas ni lista
+            // BUFF: solo parpadear (igual que unidad.updated), sin exigir currentU
             if (msg.is_buff) {
                 setBuffBlink(msg.unidad_id, true);
                 return;
             }
+
+            const li = document.getElementById(msg.unidad_id);
+            if (!li || !li.currentU) return;
 
             setBuffBlink(msg.unidad_id, false);
 
@@ -1361,6 +1361,14 @@ function conectarSSE(coopId) {
             if (!uid) return;
             if (!unidadPerteneceAFiltroRutaActual(uid)) return;
             msg._id = uid;
+
+            // BUFF: solo parpadear el marcador (como unidad.updated)
+            if (msg.is_buff) {
+                setBuffBlink(uid, true);
+                return;
+            }
+            setBuffBlink(uid, false);
+
             const li = document.getElementById(uid);
             if (!li) return;
 
@@ -1456,6 +1464,11 @@ function conectarSSE(coopId) {
             const uidFallback = normalizarUnidadId(data && (data._id || data.unidad_id));
             if (data && uidFallback && unidadPerteneceAFiltroRutaActual(uidFallback)) {
                 data._id = uidFallback;
+                if (data.is_buff) {
+                    setBuffBlink(uidFallback, true);
+                    return;
+                }
+                setBuffBlink(uidFallback, false);
                 actualizarUnidadRealtime(data);
                 updateUnidadInList(data);
             }
