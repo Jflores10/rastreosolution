@@ -139,6 +139,26 @@ function buildUnidadPayloadRealtime(base, extra = {}) {
 
   return payload;
 }
+
+/**
+ * Publica tracking por Redis como GTFRI (`type: 'unidad.updated'`).
+ * No sustituye otros envíos con type propio (ignición, power, puerta, etc.).
+ */
+function enviarUnidadUpdatedEstiloGTFRI(partial, rawMessage) {
+  try {
+    const msg = rawMessage != null ? String(rawMessage) : '';
+    const isBuffMessage = msg.includes(BUFF);
+    const isRespMessage = !isBuffMessage;
+    const payload = buildUnidadPayloadRealtime(Object.assign(
+      { type: 'unidad.updated', _raw_message: rawMessage, fecha: new Date() },
+      partial
+    ));
+    enviarALaravelPorWS(payload, { force: isRespMessage, skipThrottleUpdate: isRespMessage });
+  } catch (e) {
+    if (debug) console.error('enviarUnidadUpdatedEstiloGTFRI:', e);
+  }
+}
+
 function connectWebSocketClient() {
   try {
     wsClient = new WebSocket("ws://127.0.0.1:6001");
@@ -1029,6 +1049,7 @@ function onClientConnected(socket) {
 
       // ================== GTDAT ==================
       else if (message.includes(GTDAT) && !message.includes(ACK)) {
+        const isBuffMessage = message.includes(BUFF);
         // --- TU LÓGICA ORIGINAL (sin cambios funcionales) ---
         let imei = 2;
         let flag = 4;
@@ -1069,7 +1090,7 @@ function onClientConnected(socket) {
                   } else contador_inicial = toInteger(data[count]);
                 } else contador_inicial = toInteger(data[count]);
 
-                if (contador_diario >= contador_diario_anterior) {
+                if (contador_diario >= contador_diario_anterior && !isBuffMessage) {
                   if (data[deviceName] === 'P1') {
                     dbTrackingSystem.collection('unidads').updateOne({ _id: document._id }, {
                       $set: { contador_total: toInteger(data[count]), contador_diario: contador_diario, contador_inicial: contador_inicial, is_atm: (message.includes(ATM) ? 1 : 0), evento: data[status] }
@@ -1137,7 +1158,7 @@ function onClientConnected(socket) {
                     } else contador_inicial = toInteger(data[count]);
                   } else contador_inicial = toInteger(data[count]);
 
-                  if (contador_diario >= document.contador_diario) {
+                  if (contador_diario >= document.contador_diario && !isBuffMessage) {
                     dbTrackingSystem.collection('unidads').updateOne({ _id: document._id }, {
                       $set: { contador_total: toInteger(data[count]), contador_diario: contador_diario, contador_inicial: contador_inicial, is_atm: (message.includes(ATM) ? 1 : 0), evento: data[status] }
                     }, { writeConcern: { w: 0 } });
@@ -1418,6 +1439,7 @@ function onClientConnected(socket) {
       }
       // ================== GTGOT / GTGIN ==================
       else if (!message.includes(ADMIN) && (message.includes(GTGOT) || message.includes(GTGIN)) && !message.includes(ACK)) {
+        const isBuffMessage = message.includes(BUFF);
         let imei = 2;
         let speed = 14;
         let angle = 15;
@@ -1448,9 +1470,25 @@ function onClientConnected(socket) {
               longitudV = document.longitud;
             }
 
-            dbTrackingSystem.collection('unidads').updateOne({ _id: document._id }, {
-              $set: { latitud: latitud, longitud: longitudV, estado_movil, velocidad_actual: toFloat(data[speed]), angulo: toInteger(data[angle]), fecha_gps, is_atm: (message.includes(ATM) ? 1 : 0), fecha: fecha_servidor }
-            }, { writeConcern: { w: 0 } });
+            enviarUnidadUpdatedEstiloGTFRI({
+              imei: data[imei],
+              unidad_id: document._id,
+              _id: document._id,
+              latitud,
+              longitud: longitudV,
+              velocidad_actual: toFloat(data[speed]),
+              angulo: toInteger(data[angle]),
+              estado_movil,
+              fecha_gps,
+              is_atm: (message.includes(ATM) ? 1 : 0),
+              cooperativa_id: document.cooperativa_id ? String(document.cooperativa_id).trim() : null
+            }, message);
+
+            if (!isBuffMessage) {
+              dbTrackingSystem.collection('unidads').updateOne({ _id: document._id }, {
+                $set: { latitud: latitud, longitud: longitudV, estado_movil, velocidad_actual: toFloat(data[speed]), angulo: toInteger(data[angle]), fecha_gps, is_atm: (message.includes(ATM) ? 1 : 0), fecha: fecha_servidor }
+              }, { writeConcern: { w: 0 } });
+            }
 
             let entrada = message.includes("GTGIN") ? 1 : 0;
             let origen = message.includes("GTGIN") ? "GTGIN" : "GTGOT";
@@ -1474,7 +1512,7 @@ function onClientConnected(socket) {
               contador_total: document.contador_total,
               js: true
             }, { writeConcern: { w: 0 } }, function (err) {
-              if (!err) actualizarSentidoUnidad(dbTrackingSystem, document, pdi, entrada, message);  // ✅
+              if (!err && !isBuffMessage) actualizarSentidoUnidad(dbTrackingSystem, document, pdi, entrada, message);  // ✅
               if (!err) {
                 dbTrackingSystem.collection('punto_controls').findOne({ pdi: String(pdi), cooperativa_id: String(document.cooperativa_id) }, function (errPuntoControl, puntoControl) {
                   if (errPuntoControl) console.error('❌ Error buscando punto_controls (GTGIN/GTGOT):', errPuntoControl);
@@ -1519,6 +1557,7 @@ function onClientConnected(socket) {
 
       // ================== GTGEO ==================
       else if (!message.includes(ADMIN) && message.includes(GTGEO) && !message.includes(ACK)) {
+        const isBuffMessage = message.includes(BUFF);
         let imei = 2;
         let infoControlPoint = 5;
         let speed = 8;
@@ -1554,9 +1593,25 @@ function onClientConnected(socket) {
               longitudV = document.longitud;
             }
 
-            dbTrackingSystem.collection('unidads').updateOne({ _id: document._id }, {
-              $set: { latitud, longitud: longitudV, estado_movil, velocidad_actual: toFloat(data[speed]), angulo: toInteger(data[angle]), fecha_gps, is_atm: (message.includes(ATM) ? 1 : 0), fecha: fecha_servidor }
-            }, { writeConcern: { w: 0 } });
+            enviarUnidadUpdatedEstiloGTFRI({
+              imei: data[imei],
+              unidad_id: document._id,
+              _id: document._id,
+              latitud,
+              longitud: longitudV,
+              velocidad_actual: toFloat(data[speed]),
+              angulo: toInteger(data[angle]),
+              estado_movil,
+              fecha_gps,
+              is_atm: (message.includes(ATM) ? 1 : 0),
+              cooperativa_id: document.cooperativa_id ? String(document.cooperativa_id).trim() : null
+            }, message);
+
+            if (!isBuffMessage) {
+              dbTrackingSystem.collection('unidads').updateOne({ _id: document._id }, {
+                $set: { latitud, longitud: longitudV, estado_movil, velocidad_actual: toFloat(data[speed]), angulo: toInteger(data[angle]), fecha_gps, is_atm: (message.includes(ATM) ? 1 : 0), fecha: fecha_servidor }
+              }, { writeConcern: { w: 0 } });
+            }
 
             dbTrackingSystem.collection('recorridos').insertOne({
               imei: data[imei],
@@ -1576,7 +1631,7 @@ function onClientConnected(socket) {
               contador_total: document.contador_total,
               js: true
             }, { writeConcern: { w: 0 } }, function (err) {
-              if (!err) actualizarSentidoUnidad(dbTrackingSystem, document, pdi, inout, message);  // ✅
+              if (!err && !isBuffMessage) actualizarSentidoUnidad(dbTrackingSystem, document, pdi, inout, message);  // ✅
               if (!err) {
 
                 dbTrackingSystem.collection('punto_controls').findOne({ pdi: String(pdi), cooperativa_id: String(document.cooperativa_id) }, function (errPuntoControl, puntoControl) {
@@ -1620,6 +1675,7 @@ function onClientConnected(socket) {
 
       // ================== GPRMC ==================
       else if (message.includes(GPRMC) && !message.includes(ACK)) {
+        const isBuffMessage = message.includes(BUFF);
         let arrayFromEmpty = message.split(' ');
         let arrayGPRMC = message.split('$');
         let deviceEvent = parseInt(arrayFromEmpty[8]);
@@ -1667,18 +1723,20 @@ function onClientConnected(socket) {
               angulo: toFloat(mainArray[direction]),
               estado: mainArray[navigationReceiver]
             }, { writeConcern: { w: 0 } }, function () {
-              dbTrackingSystem.collection('unidads').updateOne({ _id: document._id }, {
-                $set: {
-                  latitud: getCoordinates(mainArray[latitude], mainArray[cLatitude], true),
-                  longitud: getCoordinates(mainArray[longitude], mainArray[cLongitude], false),
-                  velocidad_actual: getSpeed(mainArray[speed]),
-                  angulo: toFloat(mainArray[direction]),
-                  fecha_gps: moment(deviceDatetime, GPRMC_DATE_FORMAT).toDate(),
-                  fecha: serverDate,
-                  is_atm: (message.includes(ATM) ? 1 : 0),
-                  estado_movil: (getSpeed(mainArray[speed]) > 0) ? 'M' : 'D'
-                }
-              }, { writeConcern: { w: 0 } });
+              if (!isBuffMessage) {
+                dbTrackingSystem.collection('unidads').updateOne({ _id: document._id }, {
+                  $set: {
+                    latitud: getCoordinates(mainArray[latitude], mainArray[cLatitude], true),
+                    longitud: getCoordinates(mainArray[longitude], mainArray[cLongitude], false),
+                    velocidad_actual: getSpeed(mainArray[speed]),
+                    angulo: toFloat(mainArray[direction]),
+                    fecha_gps: moment(deviceDatetime, GPRMC_DATE_FORMAT).toDate(),
+                    fecha: serverDate,
+                    is_atm: (message.includes(ATM) ? 1 : 0),
+                    estado_movil: (getSpeed(mainArray[speed]) > 0) ? 'M' : 'D'
+                  }
+                }, { writeConcern: { w: 0 } });
+              }
             });
           }
         });
@@ -1702,6 +1760,7 @@ function onClientConnected(socket) {
 
       // ================== GTDIS (PUERTAS) ==================
       else if (message.includes(GTDIS) && !message.includes(ACK)) {
+        const isBuffMessage = message.includes(BUFF);
 
         let imei = 2;
         let speed = 8;
@@ -1773,20 +1832,22 @@ function onClientConnected(socket) {
                 fechaPuertaCerrada = document.fecha_puerta_cerrada;
               }
 
-              dbTrackingSystem.collection('unidads').updateOne(
-                { _id: document._id },
-                {
-                  $set: {
-                    puerta: puerta,
-                    alerta_puerta_message: puerta,
-                    alerta_puerta_fecha: fecha_gps,
-                    fecha_puerta_abierta: fechaPuertaAbierta,
-                    fecha_puerta_cerrada: fechaPuertaCerrada,
-                    is_atm: 0
-                  }
-                },
-                { writeConcern: { w: 0 } }
-              );
+              if (!isBuffMessage) {
+                dbTrackingSystem.collection('unidads').updateOne(
+                  { _id: document._id },
+                  {
+                    $set: {
+                      puerta: puerta,
+                      alerta_puerta_message: puerta,
+                      alerta_puerta_fecha: fecha_gps,
+                      fecha_puerta_abierta: fechaPuertaAbierta,
+                      fecha_puerta_cerrada: fechaPuertaCerrada,
+                      is_atm: 0
+                    }
+                  },
+                  { writeConcern: { w: 0 } }
+                );
+              }
 
               enviarALaravelPorWS({
                 type: 'unidad.alerta.puerta',
@@ -1820,20 +1881,22 @@ function onClientConnected(socket) {
                 fechaPuertaCerradaT = document.fecha_puerta_cerrada_trasera;
               }
 
-              dbTrackingSystem.collection('unidads').updateOne(
-                { _id: document._id },
-                {
-                  $set: {
-                    puerta_trasera: puerta,
-                    alerta_puerta_message_trasera: puerta,
-                    alerta_puerta_fecha_trasera: fecha_gps,
-                    fecha_puerta_abierta_trasera: fechaPuertaAbiertaT,
-                    fecha_puerta_cerrada_trasera: fechaPuertaCerradaT,
-                    is_atm: 0
-                  }
-                },
-                { writeConcern: { w: 0 } }
-              );
+              if (!isBuffMessage) {
+                dbTrackingSystem.collection('unidads').updateOne(
+                  { _id: document._id },
+                  {
+                    $set: {
+                      puerta_trasera: puerta,
+                      alerta_puerta_message_trasera: puerta,
+                      alerta_puerta_fecha_trasera: fecha_gps,
+                      fecha_puerta_abierta_trasera: fechaPuertaAbiertaT,
+                      fecha_puerta_cerrada_trasera: fechaPuertaCerradaT,
+                      is_atm: 0
+                    }
+                  },
+                  { writeConcern: { w: 0 } }
+                );
+              }
 
               enviarALaravelPorWS({
                 type: 'unidad.alerta.puerta',
@@ -1854,6 +1917,7 @@ function onClientConnected(socket) {
       // ================== GTIGN / GTIGF ==================
 
       else if (message.includes(GTIGN) && !message.includes(ACK)) {
+        const isBuffMessage = message.includes(BUFF);
         let imei = 2;
         let data = message.split(',');
         let speed = 6;
@@ -1869,26 +1933,28 @@ function onClientConnected(socket) {
           function (err, unidad) {
             if (err || !unidad) return;
 
-            dbTrackingSystem.collection('unidads').updateOne(
-              { _id: unidad._id },
-              {
-                $set: {
-                  ignicionf: 'on',
-                  fecha_gps: (fechaGPS != 0) ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate() : new Date(),
-                  latitud: toFloat(data[latitude]),
-                  longitud: toFloat(data[longitude]),
-                  velocidad_actual: toFloat(data[speed]),
-                  altura: toFloat(data[height]),
-                  angulo: toInteger(data[angle]),
-                  fecha: new Date()
-                }
-              },
-              { writeConcern: { w: 0 } },
-              function (uErr) { if (uErr) console.log(uErr); }
-            );
+            if (!isBuffMessage) {
+              dbTrackingSystem.collection('unidads').updateOne(
+                { _id: unidad._id },
+                {
+                  $set: {
+                    ignicionf: 'on',
+                    fecha_gps: (fechaGPS != 0) ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate() : new Date(),
+                    latitud: toFloat(data[latitude]),
+                    longitud: toFloat(data[longitude]),
+                    velocidad_actual: toFloat(data[speed]),
+                    altura: toFloat(data[height]),
+                    angulo: toInteger(data[angle]),
+                    fecha: new Date()
+                  }
+                },
+                { writeConcern: { w: 0 } },
+                function (uErr) { if (uErr) console.log(uErr); }
+              );
 
-            // Persistir ignicionf='on' en el cache para que los GTFRI posteriores lo incluyan
-            buildUnidadPayloadRealtime({ imei: unidad.imei, _id: unidad._id, ignicionf: 'on' });
+              // Persistir ignicionf='on' en el cache para que los GTFRI posteriores lo incluyan
+              buildUnidadPayloadRealtime({ imei: unidad.imei, _id: unidad._id, ignicionf: 'on' });
+            }
 
             enviarALaravelPorWS({
               type: 'unidad.ignicion',
@@ -1925,6 +1991,7 @@ function onClientConnected(socket) {
       }
 
       else if (message.includes(GTIGF) && !message.includes(ACK)) {
+        const isBuffMessage = message.includes(BUFF);
         let imei = 2;
         let data = message.split(',');
         let speed = 6;
@@ -1940,26 +2007,28 @@ function onClientConnected(socket) {
           function (err, unidad) {
             if (err || !unidad) return;
 
-            dbTrackingSystem.collection('unidads').updateOne(
-              { _id: unidad._id },
-              {
-                $set: {
-                  ignicionf: 'off',
-                  fecha_gps: (fechaGPS != 0) ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate() : new Date(),
-                  latitud: toFloat(data[latitude]),
-                  longitud: toFloat(data[longitude]),
-                  velocidad_actual: toFloat(data[speed]),
-                  altura: toFloat(data[height]),
-                  angulo: toInteger(data[angle]),
-                  fecha: new Date()
-                }
-              },
-              { writeConcern: { w: 0 } },
-              function (uErr) { if (uErr) console.log(uErr); }
-            );
+            if (!isBuffMessage) {
+              dbTrackingSystem.collection('unidads').updateOne(
+                { _id: unidad._id },
+                {
+                  $set: {
+                    ignicionf: 'off',
+                    fecha_gps: (fechaGPS != 0) ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate() : new Date(),
+                    latitud: toFloat(data[latitude]),
+                    longitud: toFloat(data[longitude]),
+                    velocidad_actual: toFloat(data[speed]),
+                    altura: toFloat(data[height]),
+                    angulo: toInteger(data[angle]),
+                    fecha: new Date()
+                  }
+                },
+                { writeConcern: { w: 0 } },
+                function (uErr) { if (uErr) console.log(uErr); }
+              );
 
-            // Persistir ignicionf='off' en el cache para que los GTFRI posteriores lo incluyan
-            buildUnidadPayloadRealtime({ imei: unidad.imei, _id: unidad._id, ignicionf: 'off' });
+              // Persistir ignicionf='off' en el cache para que los GTFRI posteriores lo incluyan
+              buildUnidadPayloadRealtime({ imei: unidad.imei, _id: unidad._id, ignicionf: 'off' });
+            }
 
             enviarALaravelPorWS({
               type: 'unidad.ignicion',
@@ -1998,6 +2067,7 @@ function onClientConnected(socket) {
 
       // ================== GTMPF / GTMPN ==================
       else if (message.includes(GTMPF) && !message.includes(ACK)) {
+        const isBuffMessage = message.includes(BUFF);
         let imei = 2;
         let data = message.split(',');
         let speed = 5;
@@ -2035,24 +2105,26 @@ function onClientConnected(socket) {
             }, { writeConcern: { w: 0 } });
 
             // Actualizar coordenadas, fechas y alerta en la unidad
-            dbTrackingSystem.collection('unidads').updateOne({ _id: document._id }, {
-              $set: {
-                latitud: lat,
-                longitud: lng,
-                velocidad_actual: toFloat(data[speed]),
-                angulo: toInteger(data[angle]),
-                fecha_gps: fecha_gps,
-                fecha: now,
-                power: 'off',
-                tiempo_power: nuevoTiempoPower,
-                tiempo_power_update: now,
-                alerta_desconx_message: 'Dispositivo GPS apagado',
-                alerta_desconx_fecha: fecha_gps
-              }
-            }, { writeConcern: { w: 0 } });
+            if (!isBuffMessage) {
+              dbTrackingSystem.collection('unidads').updateOne({ _id: document._id }, {
+                $set: {
+                  latitud: lat,
+                  longitud: lng,
+                  velocidad_actual: toFloat(data[speed]),
+                  angulo: toInteger(data[angle]),
+                  fecha_gps: fecha_gps,
+                  fecha: now,
+                  power: 'off',
+                  tiempo_power: nuevoTiempoPower,
+                  tiempo_power_update: now,
+                  alerta_desconx_message: 'Dispositivo GPS apagado',
+                  alerta_desconx_fecha: fecha_gps
+                }
+              }, { writeConcern: { w: 0 } });
 
-            // Persistir en el cache
-            buildUnidadPayloadRealtime({ imei: document.imei, _id: document._id, power: 'off', tiempo_power: nuevoTiempoPower, tiempo_power_update: now });
+              // Persistir en el cache
+              buildUnidadPayloadRealtime({ imei: document.imei, _id: document._id, power: 'off', tiempo_power: nuevoTiempoPower, tiempo_power_update: now });
+            }
 
             // Publicar evento SSE
             enviarALaravelPorWS({
@@ -2088,6 +2160,7 @@ function onClientConnected(socket) {
       }
 
       else if (message.includes(GTMPN) && !message.includes(ACK)) {
+        const isBuffMessage = message.includes(BUFF);
         let imei = 2;
         let data = message.split(',');
         let speed = 5;
@@ -2125,24 +2198,26 @@ function onClientConnected(socket) {
             }, { writeConcern: { w: 0 } });
 
             // Actualizar coordenadas, fechas y alerta en la unidad
-            dbTrackingSystem.collection('unidads').updateOne({ _id: document._id }, {
-              $set: {
-                latitud: lat,
-                longitud: lng,
-                velocidad_actual: toFloat(data[speed]),
-                angulo: toInteger(data[angle]),
-                fecha_gps: fecha_gps,
-                fecha: now,
-                power: 'on',
-                tiempo_power: nuevoTiempoPower,
-                tiempo_power_update: now,
-                alerta_desconx_message: 'Dispositivo GPS encendido',
-                alerta_desconx_fecha: fecha_gps
-              }
-            }, { writeConcern: { w: 0 } });
+            if (!isBuffMessage) {
+              dbTrackingSystem.collection('unidads').updateOne({ _id: document._id }, {
+                $set: {
+                  latitud: lat,
+                  longitud: lng,
+                  velocidad_actual: toFloat(data[speed]),
+                  angulo: toInteger(data[angle]),
+                  fecha_gps: fecha_gps,
+                  fecha: now,
+                  power: 'on',
+                  tiempo_power: nuevoTiempoPower,
+                  tiempo_power_update: now,
+                  alerta_desconx_message: 'Dispositivo GPS encendido',
+                  alerta_desconx_fecha: fecha_gps
+                }
+              }, { writeConcern: { w: 0 } });
 
-            // Persistir en el cache
-            buildUnidadPayloadRealtime({ imei: document.imei, _id: document._id, power: 'on', tiempo_power: nuevoTiempoPower, tiempo_power_update: now });
+              // Persistir en el cache
+              buildUnidadPayloadRealtime({ imei: document.imei, _id: document._id, power: 'on', tiempo_power: nuevoTiempoPower, tiempo_power_update: now });
+            }
 
             // Publicar evento SSE
             enviarALaravelPorWS({
@@ -2180,6 +2255,7 @@ function onClientConnected(socket) {
 
       // ================== GTDTT (contadores) ==================
       else if (message.includes(GTDTT) && !message.includes(ACK)) {
+        const isBuffMessage = message.includes(BUFF);
         // Mantengo tu lógica, solo w:0 en writes (ya ayuda bastante)
         let imei = 2;
         let count = 8;
@@ -2244,20 +2320,22 @@ function onClientConnected(socket) {
               if (contador_diario_sensor_2 < document.contador_diario_sensor_2) contador_diario_sensor_2 = document.contador_diario_sensor_2;
               if (contador_diario_sensor_3 < document.contador_diario_sensor_3) contador_diario_sensor_3 = document.contador_diario_sensor_3;
 
-              dbTrackingSystem.collection('unidads').updateOne({ _id: document._id }, {
-                $set: {
-                  contador_total: count_sensor_1,
-                  contador_diario: contador_diario,
-                  contador_inicial: contador_inicial,
-                  contador_total_sensor_2: count_sensor_2,
-                  contador_diario_sensor_2: contador_diario_sensor_2,
-                  contador_inicial_sensor_2: contador_inicial_sensor_2,
-                  contador_total_sensor_3: count_sensor_3,
-                  contador_diario_sensor_3: contador_diario_sensor_3,
-                  contador_inicial_sensor_3: contador_inicial_sensor_3,
-                  is_atm: (message.includes(ATM) ? 1 : 0)
-                }
-              }, { writeConcern: { w: 0 } });
+              if (!isBuffMessage) {
+                dbTrackingSystem.collection('unidads').updateOne({ _id: document._id }, {
+                  $set: {
+                    contador_total: count_sensor_1,
+                    contador_diario: contador_diario,
+                    contador_inicial: contador_inicial,
+                    contador_total_sensor_2: count_sensor_2,
+                    contador_diario_sensor_2: contador_diario_sensor_2,
+                    contador_inicial_sensor_2: contador_inicial_sensor_2,
+                    contador_total_sensor_3: count_sensor_3,
+                    contador_diario_sensor_3: contador_diario_sensor_3,
+                    contador_inicial_sensor_3: contador_inicial_sensor_3,
+                    is_atm: (message.includes(ATM) ? 1 : 0)
+                  }
+                }, { writeConcern: { w: 0 } });
+              }
 
               dbTrackingSystem.collection('recorridos').insertOne({
                 imei: data[imei],
@@ -2355,6 +2433,20 @@ function onClientConnected(socket) {
           function (err, unidad) {
 
             if (err || !unidad) return;
+
+            enviarUnidadUpdatedEstiloGTFRI({
+              imei: data[imei],
+              unidad_id: unidad._id,
+              _id: unidad._id,
+              latitud: lat,
+              longitud: lng,
+              velocidad_actual: toFloat(data[speed]),
+              angulo: toInteger(data[angle]),
+              estado_movil: unidad.estado_movil,
+              fecha_gps,
+              is_atm: (message.includes(ATM) ? 1 : 0),
+              cooperativa_id: unidad.cooperativa_id ? String(unidad.cooperativa_id).trim() : null
+            }, message);
 
             const fechaHoraTxtEV = formatFechaGpsParaPush(fecha_gps);
             const fechaPartesEV = fechaHoraTxtEV.split(' ');
