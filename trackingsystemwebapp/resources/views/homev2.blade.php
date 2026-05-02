@@ -1540,6 +1540,7 @@ function excedeLimiteSinTrama30Min(unidad) {
     var fechaGpsAjustada = new Date(d.getTime() - AJUSTE_HORAS_DEBUG);
     var fechaActualAjustada = new Date(ahora - AJUSTE_HORAS_DEBUG);
     var diffMs = ahora - d.getTime();
+    /*
     if (String(unidad.imei) === _DEBUG_NS_IMEI) {
         console.log('[NS-debug imei ' + _DEBUG_NS_IMEI + ']', {
             fecha_gps_raw: unidad.fecha_gps,
@@ -1552,6 +1553,7 @@ function excedeLimiteSinTrama30Min(unidad) {
             diferencia_min: (diffMs / 60000).toFixed(3)
         });
     }
+        */
     return diffMs > (30 * 60 * 1000);
 }
 
