@@ -1537,7 +1537,7 @@ function excedeLimiteSinTrama30Min(unidad) {
     var ahora = Date.now();
     var diffMs = ahora - d.getTime();
 
-    return diffMs > (10 * 60 * 1000);
+    return diffMs > (2 * 60 * 1000);
 }
 
 /**
