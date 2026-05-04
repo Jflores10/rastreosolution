@@ -1197,7 +1197,6 @@ function conectarSSE(coopId) {
                     unidadesMetaCache[uid] = { data: meta, ts: Date.now() };
                     applyMetaToLi(uid, meta, 'sse');
                 }
-                console.log(data)
                 updateUnidadInList(data);
 
                 if (!unidadesMetaFetchedOnce[uid]) {
@@ -1568,6 +1567,7 @@ function computeEstadoMovilParaContador(unidad) {
 /** Actualiza #cantidad y desglose (verde / rojo / naranja / violeta) según currentU de cada fila — usado tras SSE (no reemplaza el conteo inicial de appendUnidades). */
 function refreshContadoresEstadoUnidades() {
     var ul = document.getElementById('ul_unidades');
+
     if (!ul) return;
     var children = ul.children;
     var nM = 0, nD = 0, nE = 0, nNo = 0;
@@ -2037,6 +2037,7 @@ function ejecutarTickVerificadorNoEnviaTrama() {
         if (!row || !row.id) continue;
         if (row.style && row.style.display === 'none') continue;
         var unidad = obtenerCurrentUContador(row);
+        console.log(unidad);
         if (!unidad) continue;
         var estadoNuevo = estadoVistaListaUnidad(unidad);
         var estadoActual = row._estado_vista != null ? row._estado_vista : null;
