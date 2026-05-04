@@ -926,7 +926,7 @@ function applyMetaToLi(uid, meta, source) {
                 li._is_power_blink      = !!meta.bolt_activo;
             }
         }
-
+        console.log(li.currentU);
         updateUnidadInList(li.currentU);
     } catch (e) {
         console.warn('applyMetaToLi failed', e);
@@ -1197,7 +1197,6 @@ function conectarSSE(coopId) {
                     unidadesMetaCache[uid] = { data: meta, ts: Date.now() };
                     applyMetaToLi(uid, meta, 'sse');
                 }
-                console.log(data)
                 updateUnidadInList(data);
 
                 if (!unidadesMetaFetchedOnce[uid]) {
