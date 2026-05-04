@@ -1554,7 +1554,7 @@ function excedeLimiteSinTrama30Min(unidad) {
         });
     }
         */
-    return diffMs > (30 * 60 * 1000);
+    return diffMs > (5 * 60 * 1000);
 }
 
 /**
@@ -1985,8 +1985,10 @@ var NO_ENVIA_TRAMA_BATCH = 12;
 
 function _aplicarColaNoEnviaTrama(cola, idx) {
     var end = Math.min(idx + NO_ENVIA_TRAMA_BATCH, cola.length);
+
     for (var j = idx; j < end; j++) {
         try {
+            console.log(cola[j]);
             updateUnidadInList(cola[j], { skipContadores: true });
         } catch (e) {}
     }
@@ -2013,9 +2015,7 @@ function ejecutarTickVerificadorNoEnviaTrama() {
         if (!unidad) continue;
         var estadoNuevo = estadoVistaListaUnidad(unidad);
         var estadoActual = row._estado_vista != null ? row._estado_vista : null;
-        console.log(unidad);
         if (estadoActual === estadoNuevo) continue;
-        console.log("paso");
         cola.push(unidad);
     }
     if (cola.length === 0) {
