@@ -1197,7 +1197,7 @@ function conectarSSE(coopId) {
                     unidadesMetaCache[uid] = { data: meta, ts: Date.now() };
                     applyMetaToLi(uid, meta, 'sse');
                 }
-
+                console.log(data)
                 updateUnidadInList(data);
 
                 if (!unidadesMetaFetchedOnce[uid]) {
