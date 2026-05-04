@@ -1661,35 +1661,44 @@ function updateUnidadInList(unidad, opts) {
     var fecha_gps_marker_c = '-';
 
 
-    // Igual que appendUnidades: sin GPS_HOUR_OFFSET (solo ahí se restaban 5h y al pasar a violeta/SSE la hora cambiaba).
+    // Preferir la marca de tiempo de recepción (_ts_sent) si está disponible
     try {
         if (fecha_gps) {
-            var fecha_gpsDate = new Date(fecha_gps);
+            const fecha_gpsDate = new Date(fecha_gps);
             if (!isNaN(fecha_gpsDate.getTime())) {
-                if (typeof fecha_gpsDate.format === 'function') {
-                    fecha_gps_marker = fecha_gpsDate.format('H:i:s');
-                    fecha_gps_marker_c = fecha_gpsDate.format('d-m-Y H:i:s');
-                } else {
-                    fecha_gps_marker = fecha_gpsDate.toLocaleTimeString('es-EC', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        second: '2-digit',
-                        hour12: false
-                    });
-                    fecha_gps_marker_c = fecha_gpsDate.toLocaleString('es-EC', {
-                        year: 'numeric',
-                        month: '2-digit',
-                        day: '2-digit',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        second: '2-digit',
-                        hour12: false
-                    });
-                }
+                fecha_gpsDate.setHours(fecha_gpsDate.getHours() + GPS_HOUR_OFFSET);
+                fecha_gps_marker = fecha_gpsDate.toLocaleTimeString('es-EC', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false
+                });
+                
             }
         }
     } catch (e) {
         fecha_gps_marker = '-';
+    }
+
+     try {
+        if (fecha_gps) {
+            const fecha_gpsDatec = new Date(fecha_gps);
+            if (!isNaN(fecha_gpsDatec.getTime())) {
+                fecha_gpsDatec.setHours(fecha_gpsDatec.getHours() + GPS_HOUR_OFFSET);
+                fecha_gps_marker_c = fecha_gpsDatec.toLocaleString('es-EC', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false
+                });
+
+                
+            }
+        }
+    } catch (e) {
         fecha_gps_marker_c = '-';
     }
     
