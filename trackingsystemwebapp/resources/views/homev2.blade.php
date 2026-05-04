@@ -2010,6 +2010,7 @@ function ejecutarTickVerificadorNoEnviaTrama() {
         if (!row || !row.id) continue;
         if (row.style && row.style.display === 'none') continue;
         var unidad = obtenerCurrentUContador(row);
+        console.log(unidad);
         if (!unidad) continue;
         var estadoNuevo = estadoVistaListaUnidad(unidad);
         var estadoActual = row._estado_vista != null ? row._estado_vista : null;
