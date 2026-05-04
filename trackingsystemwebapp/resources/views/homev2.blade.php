@@ -1554,7 +1554,7 @@ function excedeLimiteSinTrama30Min(unidad) {
         });
     }
         */
-    return diffMs > (5 * 60 * 1000);
+    return diffMs > (1 * 60 * 1000);
 }
 
 /**
