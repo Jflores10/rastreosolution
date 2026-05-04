@@ -1598,7 +1598,6 @@ function refreshContadoresEstadoUnidades() {
 
 // Buscar el <li> de la unidad en la lista lateral y actualizar sus campos.
 // opts.skipContadores: true evita recalcular contadores (útil en lotes periódicos).
-// opts.omitirOffsetGps: true no aplica GPS_HOUR_OFFSET al formatear fecha_gps (solo _aplicarColaNoEnviaTrama).
 function updateUnidadInList(unidad, opts) {
     if (!unidad) return;
     var uidList = normalizarUnidadId(unidad._id || unidad.unidad_id);
@@ -1643,17 +1642,18 @@ function updateUnidadInList(unidad, opts) {
     var fecha_gps = unidad.fecha_gps || null;
     var fecha_gps_marker = '-';
     var fecha_gps_marker_c = '-';
-
-    var aplicarOffsetGps = !(opts && opts.omitirOffsetGps);
+    var fechaServidorOverride = unidad._fecha_servidor_override || null;
+    var fechaGpsMarkerOverride = unidad._fecha_gps_marker_override || null;
+    var fechaGpsMarkerCOverride = unidad._fecha_gps_marker_c_override || null;
 
     // Preferir la marca de tiempo de recepción (_ts_sent) si está disponible
     try {
-        if (fecha_gps) {
+        if (fechaGpsMarkerOverride) {
+            fecha_gps_marker = fechaGpsMarkerOverride;
+        } else if (fecha_gps) {
             const fecha_gpsDate = new Date(fecha_gps);
             if (!isNaN(fecha_gpsDate.getTime())) {
-                if (aplicarOffsetGps) {
-                    fecha_gpsDate.setHours(fecha_gpsDate.getHours() + GPS_HOUR_OFFSET);
-                }
+                fecha_gpsDate.setHours(fecha_gpsDate.getHours() + GPS_HOUR_OFFSET);
                 fecha_gps_marker = fecha_gpsDate.toLocaleTimeString('es-EC', {
                     hour: '2-digit',
                     minute: '2-digit',
@@ -1668,12 +1668,12 @@ function updateUnidadInList(unidad, opts) {
     }
 
      try {
-        if (fecha_gps) {
+        if (fechaGpsMarkerCOverride) {
+            fecha_gps_marker_c = fechaGpsMarkerCOverride;
+        } else if (fecha_gps) {
             const fecha_gpsDatec = new Date(fecha_gps);
             if (!isNaN(fecha_gpsDatec.getTime())) {
-                if (aplicarOffsetGps) {
-                    fecha_gpsDatec.setHours(fecha_gpsDatec.getHours() + GPS_HOUR_OFFSET);
-                }
+                fecha_gpsDatec.setHours(fecha_gpsDatec.getHours() + GPS_HOUR_OFFSET);
                 fecha_gps_marker_c = fecha_gpsDatec.toLocaleString('es-EC', {
                     year: 'numeric',
                     month: '2-digit',
@@ -1693,6 +1693,10 @@ function updateUnidadInList(unidad, opts) {
     
     var fecha_srv = unidad.fecha || null;
     var fecha_servidor = '-';
+    if (fechaServidorOverride) {
+        fecha_servidor = fechaServidorOverride;
+        fecha_srv = null;
+    }
     try {
     if (fecha_srv) {
         const d2 = new Date(fecha_srv);
@@ -1972,11 +1976,45 @@ var _noEnviaTramaTickRunning = false;
 var NO_ENVIA_TRAMA_CHECK_MS = 120000;
 var NO_ENVIA_TRAMA_BATCH = 12;
 
+function extraerFechaGpsDesdeTexto(raw) {
+    if (raw == null || raw === '') return null;
+    if (typeof raw !== 'string') return null;
+    var s = raw.trim();
+    // Soporta:
+    // 1) YYYY-MM-DD HH:mm:ss(.uuuuuu)
+    // 2) DD-MM-YYYY HH:mm(:ss)
+    var m = s.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?$/);
+    var yyyy, mm, dd, hh, mi, ss;
+    if (m) {
+        yyyy = m[1]; mm = m[2]; dd = m[3];
+        hh = m[4]; mi = m[5]; ss = m[6] || '00';
+    } else {
+        m = s.match(/^(\d{2})-(\d{2})-(\d{4})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/);
+        if (!m) return null;
+        dd = m[1]; mm = m[2]; yyyy = m[3];
+        hh = m[4]; mi = m[5]; ss = m[6] || '00';
+    }
+    return {
+        hhmmss: hh + ':' + mi + ':' + ss,
+        ddmmyyyy_hhmmss: dd + '-' + mm + '-' + yyyy + ' ' + hh + ':' + mi + ':' + ss
+    };
+}
+
 function _aplicarColaNoEnviaTrama(cola, idx) {
     var end = Math.min(idx + NO_ENVIA_TRAMA_BATCH, cola.length);
     for (var j = idx; j < end; j++) {
         try {
-            updateUnidadInList(cola[j], { skipContadores: true, omitirOffsetGps: true });
+            var unidadTick = Object.assign({}, cola[j]);
+            var fgTxt = extraerFechaGpsDesdeTexto(unidadTick.fecha_gps);
+            if (fgTxt) {
+                unidadTick._fecha_gps_marker_override = fgTxt.hhmmss;
+                unidadTick._fecha_gps_marker_c_override = fgTxt.ddmmyyyy_hhmmss;
+            }
+            var fsTxt = extraerFechaGpsDesdeTexto(unidadTick.fecha);
+            if (fsTxt) {
+                unidadTick._fecha_servidor_override = fsTxt.ddmmyyyy_hhmmss;
+            }
+            updateUnidadInList(unidadTick, { skipContadores: true });
         } catch (e) {}
     }
     if (end < cola.length) {
