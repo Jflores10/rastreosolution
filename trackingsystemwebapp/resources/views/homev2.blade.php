@@ -926,7 +926,7 @@ function applyMetaToLi(uid, meta, source) {
                 li._is_power_blink      = !!meta.bolt_activo;
             }
         }
-        console.log(li.currentU);
+
         updateUnidadInList(li.currentU);
     } catch (e) {
         console.warn('applyMetaToLi failed', e);
@@ -1197,6 +1197,7 @@ function conectarSSE(coopId) {
                     unidadesMetaCache[uid] = { data: meta, ts: Date.now() };
                     applyMetaToLi(uid, meta, 'sse');
                 }
+
                 updateUnidadInList(data);
 
                 if (!unidadesMetaFetchedOnce[uid]) {
@@ -1528,7 +1529,7 @@ function fechaGpsInstante(fg) {
     return d;
 }
 
-var _DEBUG_NS_IMEI = '868789023172876';
+var _DEBUG_NS_IMEI = '867162025719444';
 
 function excedeLimiteSinTrama30Min(unidad) {
     if (!unidad) return true;
@@ -1539,6 +1540,7 @@ function excedeLimiteSinTrama30Min(unidad) {
     var fechaGpsAjustada = new Date(d.getTime() - AJUSTE_HORAS_DEBUG);
     var fechaActualAjustada = new Date(ahora - AJUSTE_HORAS_DEBUG);
     var diffMs = ahora - d.getTime();
+    /*
     if (String(unidad.imei) === _DEBUG_NS_IMEI) {
         console.log('[NS-debug imei ' + _DEBUG_NS_IMEI + ']', {
             fecha_gps_raw: unidad.fecha_gps,
@@ -1551,7 +1553,8 @@ function excedeLimiteSinTrama30Min(unidad) {
             diferencia_min: (diffMs / 60000).toFixed(3)
         });
     }
-    return diffMs > (1 * 60 * 1000);
+        */
+    return diffMs > (30 * 60 * 1000);
 }
 
 /**
@@ -1612,6 +1615,7 @@ function refreshContadoresEstadoUnidades() {
 
 // Buscar el <li> de la unidad en la lista lateral y actualizar sus campos.
 // opts.skipContadores: true evita recalcular contadores (útil en lotes periódicos).
+// opts.omitirOffsetGps: true no aplica GPS_HOUR_OFFSET al formatear fecha_gps (solo _aplicarColaNoEnviaTrama).
 function updateUnidadInList(unidad, opts) {
     if (!unidad) return;
     var uidList = normalizarUnidadId(unidad._id || unidad.unidad_id);
@@ -1657,13 +1661,16 @@ function updateUnidadInList(unidad, opts) {
     var fecha_gps_marker = '-';
     var fecha_gps_marker_c = '-';
 
+    var aplicarOffsetGps = !(opts && opts.omitirOffsetGps);
 
     // Preferir la marca de tiempo de recepción (_ts_sent) si está disponible
     try {
         if (fecha_gps) {
             const fecha_gpsDate = new Date(fecha_gps);
             if (!isNaN(fecha_gpsDate.getTime())) {
-                fecha_gpsDate.setHours(fecha_gpsDate.getHours() + GPS_HOUR_OFFSET);
+                if (aplicarOffsetGps) {
+                    fecha_gpsDate.setHours(fecha_gpsDate.getHours() + GPS_HOUR_OFFSET);
+                }
                 fecha_gps_marker = fecha_gpsDate.toLocaleTimeString('es-EC', {
                     hour: '2-digit',
                     minute: '2-digit',
@@ -1681,7 +1688,9 @@ function updateUnidadInList(unidad, opts) {
         if (fecha_gps) {
             const fecha_gpsDatec = new Date(fecha_gps);
             if (!isNaN(fecha_gpsDatec.getTime())) {
-                fecha_gpsDatec.setHours(fecha_gpsDatec.getHours() + GPS_HOUR_OFFSET);
+                if (aplicarOffsetGps) {
+                    fecha_gpsDatec.setHours(fecha_gpsDatec.getHours() + GPS_HOUR_OFFSET);
+                }
                 fecha_gps_marker_c = fecha_gpsDatec.toLocaleString('es-EC', {
                     year: 'numeric',
                     month: '2-digit',
@@ -1982,11 +1991,9 @@ var NO_ENVIA_TRAMA_BATCH = 12;
 
 function _aplicarColaNoEnviaTrama(cola, idx) {
     var end = Math.min(idx + NO_ENVIA_TRAMA_BATCH, cola.length);
-
     for (var j = idx; j < end; j++) {
         try {
-            console.log(cola[j]);
-            updateUnidadInList(cola[j], { skipContadores: true });
+            updateUnidadInList(cola[j], { skipContadores: true, omitirOffsetGps: true });
         } catch (e) {}
     }
     if (end < cola.length) {
