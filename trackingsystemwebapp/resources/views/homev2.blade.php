@@ -1529,32 +1529,15 @@ function fechaGpsInstante(fg) {
     return d;
 }
 
-var _DEBUG_NS_IMEI = '867162025719444';
 
 function excedeLimiteSinTrama30Min(unidad) {
     if (!unidad) return true;
     var d = fechaGpsInstante(unidad.fecha_gps);
     if (!d) return true;
     var ahora = Date.now();
-    var AJUSTE_HORAS_DEBUG = 5 * 60 * 60 * 1000;
-    var fechaGpsAjustada = new Date(d.getTime() - AJUSTE_HORAS_DEBUG);
-    var fechaActualAjustada = new Date(ahora - AJUSTE_HORAS_DEBUG);
     var diffMs = ahora - d.getTime();
-    /*
-    if (String(unidad.imei) === _DEBUG_NS_IMEI) {
-        console.log('[NS-debug imei ' + _DEBUG_NS_IMEI + ']', {
-            fecha_gps_raw: unidad.fecha_gps,
-            fecha_gps_parseada_iso: d.toISOString(),
-            fecha_gps_menos_5h_iso: fechaGpsAjustada.toISOString(),
-            fecha_actual_ms: ahora,
-            fecha_actual_iso: new Date(ahora).toISOString(),
-            fecha_actual_menos_5h_iso: fechaActualAjustada.toISOString(),
-            diferencia_ms: diffMs,
-            diferencia_min: (diffMs / 60000).toFixed(3)
-        });
-    }
-        */
-    return diffMs > (30 * 60 * 1000);
+
+    return diffMs > (10 * 60 * 1000);
 }
 
 /**
