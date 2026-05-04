@@ -1536,7 +1536,7 @@ function excedeLimiteSinTrama30Min(unidad) {
     var ahora = Date.now();
     var diffMs = ahora - d.getTime();
 
-    return diffMs > (2 * 60 * 1000);
+    return diffMs > (30 * 60 * 1000);
 }
 
 /**
@@ -2037,7 +2037,6 @@ function ejecutarTickVerificadorNoEnviaTrama() {
         if (!row || !row.id) continue;
         if (row.style && row.style.display === 'none') continue;
         var unidad = obtenerCurrentUContador(row);
-        console.log(unidad);
         if (!unidad) continue;
         var estadoNuevo = estadoVistaListaUnidad(unidad);
         var estadoActual = row._estado_vista != null ? row._estado_vista : null;
@@ -2049,6 +2048,7 @@ function ejecutarTickVerificadorNoEnviaTrama() {
         return;
     }
     _noEnviaTramaTickRunning = true;
+    console.log(cola);
     _aplicarColaNoEnviaTrama(cola, 0);
 }
 
