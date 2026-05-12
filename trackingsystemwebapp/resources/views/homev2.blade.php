@@ -1134,6 +1134,14 @@ function setBuffBlink(uid, isBuff) {
     } catch (e) { /* silencioso */ }
 }
 
+/**
+ * Durante play del reproductor (playing=true), el SSE no debe mover/actualizar marcadores en el mapa.
+ * El listado lateral sigue actualizándose con updateUnidadInList en cada handler.
+ */
+function puedeActualizarMarcadorMapaPorSSE() {
+    return typeof playing === 'undefined' || !playing;
+}
+
 function conectarSSE(coopId) {
 
     if (sse && sse.readyState === EventSource.OPEN) {
@@ -1167,8 +1175,10 @@ function conectarSSE(coopId) {
             // RESP: detener parpadeo (si estaba activo) y procesar normalmente
             setBuffBlink(uid, false);
 
-            // Always update marker on map
-            actualizarUnidadRealtime(data);
+            // Mapa: solo si no hay reproducción activa (lista se actualiza después igualmente).
+            if (puedeActualizarMarcadorMapaPorSSE()) {
+                actualizarUnidadRealtime(data);
+            }
 
             // If the LI has an active temp lock (set by unidad.location), defer the list update
             const li = document.getElementById(uid);
@@ -1276,14 +1286,16 @@ function conectarSSE(coopId) {
             msg._id = _uidLoc;
             msg.unidad_id = _uidLoc;
 
-            zoomUnidad=true;
-            zoomUnidadID=msg._id || msg.unidad_id;
-            map.setZoom(30);
-            // 1) Place marker on map using existing helper
-            try {
-                // actualizarUnidadRealtime already validates lat/lng and calls setMarcadorUnidad
-                actualizarUnidadRealtime(msg);
-            } catch (e) { console.warn('failed to place marker from unidad.location', e); }
+            if (puedeActualizarMarcadorMapaPorSSE()) {
+                zoomUnidad=true;
+                zoomUnidadID=msg._id || msg.unidad_id;
+                map.setZoom(30);
+                // 1) Place marker on map using existing helper
+                try {
+                    // actualizarUnidadRealtime already validates lat/lng and calls setMarcadorUnidad
+                    actualizarUnidadRealtime(msg);
+                } catch (e) { console.warn('failed to place marker from unidad.location', e); }
+            }
 
             // 1b) Also update the LI so its displayed time (and other transient fields)
             // reflect the newest location immediately.
@@ -1448,8 +1460,10 @@ function conectarSSE(coopId) {
                 if (boltEl) boltEl.classList.remove('bolt-power-blink');
             }
 
-            // Actualizar mapa y LI con nuevas coords/fecha
-            try { actualizarUnidadRealtime(msg); } catch(e) {}
+            // Mapa: respetar reproducción; LI siempre se refresca abajo.
+            if (puedeActualizarMarcadorMapaPorSSE()) {
+                try { actualizarUnidadRealtime(msg); } catch(e) {}
+            }
             try { updateUnidadInList(li.currentU); } catch(e) {}
 
         } catch (e) { console.warn('parse unidad.power', e); }
@@ -1468,7 +1482,9 @@ function conectarSSE(coopId) {
                     return;
                 }
                 setBuffBlink(uidFallback, false);
-                actualizarUnidadRealtime(data);
+                if (puedeActualizarMarcadorMapaPorSSE()) {
+                    actualizarUnidadRealtime(data);
+                }
                 updateUnidadInList(data);
             }
         } catch (e) {}
@@ -1503,6 +1519,12 @@ function actualizarUnidadRealtime(unidad) {
         return;
     }
     unidad._id = uidRt;
+
+    // Durante reproducción (play del recorrido), no mover/actualizar marcadores en el mapa por SSE;
+    // también validado explícitamente en unidad.updated, unidad.location, unidad.power y onmessage.
+    if (!puedeActualizarMarcadorMapaPorSSE()) {
+        return;
+    }
 
     const fakeFecha = {
         fecha_gps: unidad.fecha_gps ?? null,
@@ -2276,7 +2298,7 @@ $("#velocimetro").myfunc({divFact:10});
             unidadesIdsRutaActual = null;
         }
     }
-    var playing = true;
+    var playing = false;
     var currentIndex = 0;
     var processes = [];
     var estaReproduciendo=false;
@@ -2385,8 +2407,10 @@ $("#velocimetro").myfunc({divFact:10});
                 sortJsonArrayByProperty(data.recorrido,'fecha');
                 reproducir_recorrido(data.recorrido,autocentrado,velocidad_reproductor);
             }
-            else
+            else {
                 alert('Error al reproducir recorrido. Verifique que las fechas esten ingresadas correctamente.');
+                playing = false;
+            }
             $('#progress').modal('hide');  
         }, "json");
     }
@@ -2452,8 +2476,10 @@ $("#velocimetro").myfunc({divFact:10});
             }
             
         }
-        else
+        else {
             alert("No se encontró ningún recorrido.");
+            playing = false;
+        }
     }
 
     function addMarkerWithTimeout(posicion, timeout, angulo, autocentrado, velocidad, index, fecha, recorrido)
@@ -2609,6 +2635,7 @@ $("#velocimetro").myfunc({divFact:10});
             }else{
                 $('#progress').modal('hide');  
                 alert('Configure la consulta de recorrido a buscar');
+                playing = false;
             }
         }else{
             if(unidad_id != '')
@@ -2617,6 +2644,7 @@ $("#velocimetro").myfunc({divFact:10});
             }else{
                 $('#progress').modal('hide');  
                 alert('Configure la consulta de recorrido a buscar');
+                playing = false;
             }
         }   
     }
