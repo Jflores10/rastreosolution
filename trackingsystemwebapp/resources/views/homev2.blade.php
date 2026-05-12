@@ -1624,6 +1624,8 @@ function updateUnidadInList(unidad, opts) {
             if (!unidad.tiempo_power_update && prev.tiempo_power_update) unidad.tiempo_power_update = prev.tiempo_power_update;
             if ((unidad.fecha_gps == null || unidad.fecha_gps === '') && prev.fecha_gps) unidad.fecha_gps = prev.fecha_gps;
             if (unidad.diferencia == null && prev.diferencia != null) unidad.diferencia = prev.diferencia;
+            if (unidad.contador_total === undefined && prev.contador_total != null) unidad.contador_total = prev.contador_total;
+            if (unidad.contador_diario === undefined && prev.contador_diario != null) unidad.contador_diario = prev.contador_diario;
             
             // Preserve sentido (direction) if incoming payload lacks it
             //if ((!unidad.sentido || unidad.sentido === '') && prev.sentido) unidad.sentido = prev.sentido;
@@ -1633,6 +1635,8 @@ function updateUnidadInList(unidad, opts) {
             var pIcon = iconForMerge.currentU;
             if ((unidad.fecha_gps == null || unidad.fecha_gps === '') && pIcon.fecha_gps) unidad.fecha_gps = pIcon.fecha_gps;
             if (unidad.diferencia == null && pIcon.diferencia != null) unidad.diferencia = pIcon.diferencia;
+            if (unidad.contador_total === undefined && pIcon.contador_total != null) unidad.contador_total = pIcon.contador_total;
+            if (unidad.contador_diario === undefined && pIcon.contador_diario != null) unidad.contador_diario = pIcon.contador_diario;
         }
     } catch (e) {
         console.warn('Merge existing meta failed', e);
@@ -1722,6 +1726,12 @@ function updateUnidadInList(unidad, opts) {
 
     var voltaje = (unidad.voltaje != null) ? String(unidad.voltaje).substring(0,2) : '--';
     var velocidad_num = Number(unidad.velocidad_actual) || 0;
+    var contador_total_disp = Number(unidad.contador_total);
+    if (isNaN(contador_total_disp)) contador_total_disp = 0;
+    var contador_diario_disp = Number(unidad.contador_diario);
+    if (isNaN(contador_diario_disp)) contador_diario_disp = 0;
+    unidad.contador_total = contador_total_disp;
+    unidad.contador_diario = contador_diario_disp;
 
     var estado = estadoVistaListaUnidad(unidad);
 
@@ -1810,7 +1820,7 @@ function updateUnidadInList(unidad, opts) {
                 ((unidad.rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                 sentido + ignicionHtml + '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#F44336"></i>&nbsp' +
                 (unidad.descripcion || '') + '&nbsp&nbsp <i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ (unidad.latitud||'') +'\',\''+ (unidad.longitud||'') +'\');" class="fa fa-map-marker" style="color:#F44336"></i>&nbsp' + (fecha_gps_marker || '-') + '  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(velocidad_num) + '' +
-                '&nbsp&nbsp&nbsp<i id="bolt_' + unidad._id + '"' + boltTitleAttr + ' style="color:#F44336"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#F44336"></i>&nbsp' + (unidad.contador_total||'') + " | " + (unidad.contador_diario||'') +
+                '&nbsp&nbsp&nbsp<i id="bolt_' + unidad._id + '"' + boltTitleAttr + ' style="color:#F44336"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#F44336"></i>&nbsp' + contador_total_disp + " | " + contador_diario_disp +
                 '&nbsp&nbsp&nbsp' + ((unidad.is_atm !== undefined && unidad.is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'') +
                 '&nbsp&nbsp&nbsp|&nbsp&nbsp';
 
@@ -1834,7 +1844,7 @@ function updateUnidadInList(unidad, opts) {
                 ((unidad.rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                 ignicionHtml + '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#f49a16"></i>&nbsp' + (unidad.descripcion||'') +
                 '&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ (unidad.latitud||'') +'\',\''+ (unidad.longitud||'') +'\');" class="fa fa-map-marker" style="color:#f49a16"></i>&nbsp' + (fecha_gps_marker || '-') + '  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(velocidad_num) + '' +
-                '&nbsp&nbsp&nbsp<i id="bolt_' + unidad._id + '"' + boltTitleAttr + ' style="color:#f49a16"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#f49a16"></i>&nbsp' + (unidad.contador_total||'') + " | " + (unidad.contador_diario||'') +
+                '&nbsp&nbsp&nbsp<i id="bolt_' + unidad._id + '"' + boltTitleAttr + ' style="color:#f49a16"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#f49a16"></i>&nbsp' + contador_total_disp + " | " + contador_diario_disp +
                 '&nbsp&nbsp&nbsp|&nbsp&nbsp';
 
             html += (unidad.puerta ? ((unidad.puerta==='PUERTA ABIERTA (DELANTERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta:
@@ -1857,7 +1867,7 @@ function updateUnidadInList(unidad, opts) {
                 ((unidad.rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                 sentido + ignicionHtml + '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#00AA88"></i>&nbsp' + (unidad.descripcion||'') +
                 '&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ (unidad.latitud||'') +'\',\''+ (unidad.longitud||'') +'\');" class="fa fa-map-marker" style="color:#00AA88"></i>&nbsp' + (fecha_gps_marker || '-') + '  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(velocidad_num) + '' +
-                '&nbsp&nbsp&nbsp<i id="bolt_' + unidad._id + '"' + boltTitleAttr + ' style="color:#00AA88"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#00AA88"></i>&nbsp' + (unidad.contador_total||'') + " | " + (unidad.contador_diario||'') +
+                '&nbsp&nbsp&nbsp<i id="bolt_' + unidad._id + '"' + boltTitleAttr + ' style="color:#00AA88"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#00AA88"></i>&nbsp' + contador_total_disp + " | " + contador_diario_disp +
                 '&nbsp&nbsp&nbsp|&nbsp&nbsp';
 
             html += (unidad.puerta ? ((unidad.puerta==='PUERTA ABIERTA (DELANTERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta:
@@ -1880,7 +1890,7 @@ function updateUnidadInList(unidad, opts) {
                 ((unidad.rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                 ignicionHtml + '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#990073"></i>&nbsp' + (unidad.descripcion||'') +
                 '&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ (unidad.latitud||'') +'\',\''+ (unidad.longitud||'') +'\');" class="fa fa-map-marker" style="color:#990073"></i>&nbsp' + (fecha_gps_marker || '-') + '  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(velocidad_num) + '' +
-                '&nbsp&nbsp&nbsp<i id="bolt_' + unidad._id + '"' + boltTitleAttr + ' style="color:#990073"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#990073"></i>&nbsp' + (unidad.contador_total||'') + " | " + (unidad.contador_diario||'') +
+                '&nbsp&nbsp&nbsp<i id="bolt_' + unidad._id + '"' + boltTitleAttr + ' style="color:#990073"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#990073"></i>&nbsp' + contador_total_disp + " | " + contador_diario_disp +
                 '&nbsp&nbsp&nbsp|&nbsp&nbsp';
 
             html += (unidad.puerta ? ((unidad.puerta==='PUERTA ABIERTA (DELANTERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta:
