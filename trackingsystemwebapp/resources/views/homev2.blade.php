@@ -3338,11 +3338,15 @@ $("#velocimetro").myfunc({divFact:10});
                 `<li><strong>Velocidad:</strong> ${unidad.velocidad_actual || 0} km/h</li>` +
                 `<li><strong>Voltaje:</strong> ${unidad.voltaje || '-'} v</li>` +
                 `<li><strong>Mileage:</strong> ${unidad.mileage || '-'} km</li>` +
-                `<li><strong>C. Total:</strong> ${unidad.contador_total || 0}</li>` +
-                `<li><strong>C. Diario:</strong> ${unidad.contador_diario || 0}</li>` +
+                `<li><strong>C. Total:</strong> ${unidad.contador_total != null ? unidad.contador_total : 0}</li>` +
+                `<li><strong>C. Diario:</strong> ${unidad.contador_diario != null ? unidad.contador_diario : 0}</li>` +
+                '<li><strong>C. Total 2:</strong>&nbsp' + ((unidad.contador_total_sensor_2 != undefined) ? unidad.contador_total_sensor_2 : '-') + '</li>' +
+                '<li><strong>C. Diario 2:</strong>&nbsp' + ((unidad.contador_diario_sensor_2 != undefined) ? unidad.contador_diario_sensor_2 : '-') + '</li>' +
+                '<li><strong>C. Total 3:</strong>&nbsp' + ((unidad.contador_total_sensor_3 != undefined) ? unidad.contador_total_sensor_3 : '-') + '</li>' +
+                '<li><strong>C. Diario 3:</strong>&nbsp' + ((unidad.contador_diario_sensor_3 != undefined) ? unidad.contador_diario_sensor_3 : '-') + '</li>' +
                 `<li><strong>Estado:</strong> ${estado}</li>` +
-                `<li><strong>Fecha servidor:</strong><br>${fecha}</li>` +
-                `<li><strong>Fecha GPS:</strong><br>${fecha_gps}</li>` +
+                `<li><strong>Fecha de servidor:</strong><br>${fecha}</li>` +
+                `<li><strong>Fecha de GPS:</strong><br>${fecha_gps}</li>` +
                 '<li id="li_dir_actual" style="display:none"><strong>Dirección Actual:</strong><br>' +
                 '<span class="dir-wrap" id="dir_actual_marca"></span></li>' +
                 '</ul>' +
