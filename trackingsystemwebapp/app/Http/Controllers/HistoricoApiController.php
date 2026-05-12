@@ -31,9 +31,19 @@ class HistoricoApiController extends Controller
     
     public function getUnidadesMeta(Request $request)
     {
-        $this->validate($request, [
+        $validator = Validator::make($request->all(), [
             'unidad_ids' => 'required'
+        ], [
+            'unidad_ids.required' => 'Debe enviar al menos una unidad para consultar su metadata.'
         ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'error' => true,
+                'api_version' => 'v2',
+                'messages' => $validator->errors(),
+            ], 422);
+        }
 
         $ids = $request->input('unidad_ids');
         if (!is_array($ids)) $ids = [$ids];
@@ -207,6 +217,121 @@ class HistoricoApiController extends Controller
 
         return response()->json($result);
     }
-   
+
+    /**
+     * Misma lógica que HistoricoController@store con opcion getHistoricoReproductor
+     * (recorrido para el reproductor de mapa).
+     */
+    public function getHistoricoReproductor(Request $request)
+    {
+        if ($request->input('opcion_fecha') != 'P') {
+            $validator = Validator::make($request->all(), [
+                'unidad_id' => 'required',
+            ], [
+                'unidad_id.required' => 'Debe indicar la unidad.',
+            ]);
+        } else {
+            $validator = Validator::make($request->all(), [
+                'fecha_inicio' => 'required|date',
+                'fecha_fin' => 'required|date',
+                'unidad_id' => 'required',
+            ], [
+                'fecha_inicio.required' => 'Debe indicar fecha de inicio.',
+                'fecha_fin.required' => 'Debe indicar fecha de fin.',
+                'unidad_id.required' => 'Debe indicar la unidad.',
+            ]);
+        }
+
+        if ($validator->fails()) {
+            return response()->json([
+                'error' => true,
+                'api_version' => 'v2',
+                'messages' => $validator->errors(),
+            ], 422);
+        }
+
+        try {
+            if ($request->input('opcion_fecha') == 'P') {
+                $ini = new Carbon($request->input('fecha_inicio'));
+                $fin = new Carbon($request->input('fecha_fin'));
+            } else {
+                if ($request->input('opcion_fecha') == 'H') {
+                    $ini = Carbon::today();
+                    $fin = Carbon::createFromFormat('Y-m-d H:i:s', date('Y-m-d 23:59:59'));
+                } else {
+                    $ini = Carbon::yesterday();
+                    $fin = Carbon::today();
+                    date_sub($fin, date_interval_create_from_date_string('1 minutes'));
+                }
+            }
+
+            date_add($ini, date_interval_create_from_date_string('5 hours'));
+            date_add($fin, date_interval_create_from_date_string('5 hours'));
+            $ini = new UTCDateTime(($ini->getTimestamp()) * 1000);
+            $fin = new UTCDateTime(($fin->getTimestamp()) * 1000);
+
+            $despacho_id = $request->input('despacho_id');
+            if ($request->filled('despacho_id')) {
+                $despacho = Despacho::where('_id', new ObjectID($despacho_id))->first();
+                if ($despacho) {
+                    $puntos = $despacho->puntos_control ?? [];
+                    if (!empty($puntos)) {
+                        $ultimo = end($puntos);
+                        if (!empty($ultimo['marca'])) {
+                            $marca = $ultimo['marca'];
+                            $fin = new Carbon($marca);
+                            date_add($fin, date_interval_create_from_date_string('5 hours'));
+                            $fin = new UTCDateTime(($fin->getTimestamp()) * 1000);
+                        }
+                    }
+                }
+            }
+
+            $cursor = Recorrido::where('unidad_id', new ObjectID($request->input('unidad_id')))
+                ->where('fecha_gps', '>=', $ini)
+                ->where('fecha_gps', '<=', $fin);
+
+            $ev = $request->input('evento', 'T');
+            if ($ev != 'T') {
+                $cursor->where('tipo', $ev);
+            }
+            $cursor = $cursor->get();
+
+            $unidad = Unidad::findOrFail($request->input('unidad_id'));
+
+            $recorrido = [];
+
+            foreach ($cursor as $documento) {
+                $fecha_gps = $documento['fecha_gps']->toDateTime();
+                $fecha = $documento['fecha']->toDateTime();
+                date_sub($fecha_gps, date_interval_create_from_date_string('10 hours'));
+                date_sub($fecha, date_interval_create_from_date_string('5 hours'));
+                $recorrido[] = (object) [
+                    'fecha' => $fecha_gps->format('Y-m-d H:i:s'),
+                    'lat' => $documento['latitud'],
+                    'lng' => $documento['longitud'],
+                    'angulo' => ($documento['angulo'] != null) ? $documento['angulo'] : '-',
+                    'velocidad' => ($documento['velocidad'] != null) ? $documento['velocidad'] : '-',
+                    'fecha_servidor' => $fecha->format('Y-m-d H:i:s'),
+                    'placa' => $unidad->placa,
+                    'disco' => $unidad->descripcion,
+                    'tipo' => $documento['tipo'],
+                    'entrada' => $documento['entrada'],
+                    'voltaje' => $documento['voltaje'],
+                    'contador_diario' => $documento['contador_diario'],
+                    'contador_total' => $documento['contador_total'],
+                    'estado_movil' => $documento['estado_movil'],
+                ];
+            }
+
+            return response()->json(['error' => false, 'recorrido' => $recorrido]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => true,
+                'api_version' => 'v2',
+                'message' => $e->getMessage(),
+            ], 500);
+        }
+    }
 
 }

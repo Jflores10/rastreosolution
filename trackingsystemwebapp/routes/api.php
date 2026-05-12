@@ -46,6 +46,7 @@ Route::group(['prefix' => 'v2'], function () {
 		Route::post('despachos/socios', 'DespachoApiController@getDespachosSocios_v2');
 		Route::post('despachos/punto', 'DespachoApiController@getPuntoControl_v2');
 		Route::post('historico/unidades-meta', 'HistoricoApiController@getUnidadesMeta');
+		Route::post('historico/reproductor', 'HistoricoApiController@getHistoricoReproductor');
 		Route::post('device-token', 'DeviceTokenApiController@register_v2');
 		Route::get('notification-types', 'UserNotificationSettingsApiController@types_v2');
 		Route::get('user-notification-settings', 'UserNotificationSettingsApiController@index_v2');
