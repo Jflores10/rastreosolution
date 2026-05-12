@@ -208,7 +208,7 @@ class HistoricoApiController extends Controller
                 // return object ({} in JSON) when there are no keys rather than fields with empty strings
                 $result[$uid] = (object)$meta;
             }
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
             // on error, ensure all toFetch keys exist
             foreach ($toFetch as $uid) {
                 $result[$uid] = (object)[];
@@ -220,11 +220,13 @@ class HistoricoApiController extends Controller
 
     /**
      * Misma lógica que HistoricoController@store con opcion getHistoricoReproductor
-     * (recorrido para el reproductor de mapa).
+     * (recorrido para el reproductor de mapa). Compatible con Laravel 5.3 (sin Request::filled()).
      */
     public function getHistoricoReproductor(Request $request)
     {
-        if ($request->input('opcion_fecha') != 'P') {
+        $opcionFecha = $request->input('opcion_fecha');
+
+        if ($opcionFecha != 'P') {
             $validator = Validator::make($request->all(), [
                 'unidad_id' => 'required',
             ], [
@@ -251,14 +253,15 @@ class HistoricoApiController extends Controller
         }
 
         try {
-            if ($request->input('opcion_fecha') == 'P') {
+            if ($opcionFecha == 'P') {
                 $ini = new Carbon($request->input('fecha_inicio'));
                 $fin = new Carbon($request->input('fecha_fin'));
             } else {
-                if ($request->input('opcion_fecha') == 'H') {
+                if ($opcionFecha == 'H') {
                     $ini = Carbon::today();
                     $fin = Carbon::createFromFormat('Y-m-d H:i:s', date('Y-m-d 23:59:59'));
                 } else {
+                    // Ayer (igual que HistoricoController cuando opcion_fecha no es P ni H)
                     $ini = Carbon::yesterday();
                     $fin = Carbon::today();
                     date_sub($fin, date_interval_create_from_date_string('1 minutes'));
@@ -270,11 +273,12 @@ class HistoricoApiController extends Controller
             $ini = new UTCDateTime(($ini->getTimestamp()) * 1000);
             $fin = new UTCDateTime(($fin->getTimestamp()) * 1000);
 
+            // Laravel 5.3: usar has() en lugar de filled() (disponible desde 5.4)
             $despacho_id = $request->input('despacho_id');
-            if ($request->filled('despacho_id')) {
+            if ($request->has('despacho_id') && $despacho_id !== null && $despacho_id !== '') {
                 $despacho = Despacho::where('_id', new ObjectID($despacho_id))->first();
                 if ($despacho) {
-                    $puntos = $despacho->puntos_control ?? [];
+                    $puntos = isset($despacho->puntos_control) ? $despacho->puntos_control : [];
                     if (!empty($puntos)) {
                         $ultimo = end($puntos);
                         if (!empty($ultimo['marca'])) {
@@ -291,8 +295,9 @@ class HistoricoApiController extends Controller
                 ->where('fecha_gps', '>=', $ini)
                 ->where('fecha_gps', '<=', $fin);
 
-            $ev = $request->input('evento', 'T');
-            if ($ev != 'T') {
+            // Igual que HistoricoController: solo filtra por tipo si evento está definido y no es 'T'
+            $ev = $request->input('evento');
+            if ($ev != null && $ev !== '' && $ev != 'T') {
                 $cursor->where('tipo', $ev);
             }
             $cursor = $cursor->get();
