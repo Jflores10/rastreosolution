@@ -492,6 +492,108 @@ function toFloat(value) {
   return (value === '' || isNaN(value)) ? 0 : parseFloat(value);
 }
 
+/**
+ * GTDAT (+RESP:GTDAT): contadores en payload transparente.
+ * P1 = 16 bits (0..0xFFFF = 65535) según manual Queclink (Count Number FFFF).
+ * P2/P3 = rango práctico 0..999999 (ajustar si el hardware documenta otro módulo).
+ */
+function gtdatSafeInt(value, defaultValue) {
+  const d = defaultValue === undefined ? 0 : defaultValue;
+  if (value === undefined || value === null) return d;
+  const s = String(value).trim();
+  if (s === '') return d;
+  const num = parseInt(s, 10);
+  return isNaN(num) ? d : num;
+}
+
+/**
+ * @param {object} opts
+ * @param {number} opts.actual - lectura actual del contador
+ * @param {number} opts.inicial - contador_inicial persistido
+ * @param {number} opts.diarioAnterior - contador_diario persistido
+ * @param {number} opts.maxInclusive - máximo válido inclusivo (65535 o 999999)
+ */
+function gtdatCalcularContadorDiario(opts) {
+  let actual = gtdatSafeInt(opts.actual, 0);
+  let inicial = gtdatSafeInt(opts.inicial, 0);
+  const diarioAnterior = gtdatSafeInt(opts.diarioAnterior, 0);
+  const maxInclusive = gtdatSafeInt(opts.maxInclusive, 65535);
+  const mod = maxInclusive + 1;
+
+  if (actual < 0 || actual > maxInclusive) {
+    return { inicial: inicial, diario: diarioAnterior, valid: false };
+  }
+
+  if (actual === 0) {
+    return { inicial: inicial, diario: diarioAnterior, valid: false };
+  }
+
+  if (inicial <= 0) {
+    return { inicial: actual, diario: diarioAnterior, valid: true };
+  }
+
+  let diario = 0;
+  if (actual >= inicial) {
+    diario = actual - inicial;
+  } else {
+    diario = (mod - inicial) + actual;
+    if (diario < 0 || diario > maxInclusive) {
+      diario = diarioAnterior;
+    }
+  }
+
+  if (diario < diarioAnterior) {
+    diario = diarioAnterior;
+  }
+
+  return { inicial: inicial, diario: diario, valid: true };
+}
+
+/** Máximo 7 dígitos usado en rollover GTDTT (misma constante que en campo). */
+const GTDTT_ROLLOVER_MAX = 9999999;
+
+function gtdttGetSensorValue(str, start) {
+  if (!str) {
+    return 0;
+  }
+  if (str.length < (start + 7)) {
+    return 0;
+  }
+  return gtdatSafeInt(str.substr(start, 7), 0);
+}
+
+/** Misma lógica que el snippet de validación GTDTT (safeInt + rollover + piso diario). */
+function gtdttCalcularContadorDiarioSensor(opts) {
+  const MAX_COUNT = GTDTT_ROLLOVER_MAX;
+  let actual = gtdatSafeInt(opts.actual, 0);
+  let inicial = gtdatSafeInt(opts.inicial, 0);
+  let diarioAnterior = gtdatSafeInt(opts.diarioAnterior, 0);
+
+  if (actual <= 0 || actual === MAX_COUNT) {
+    return { inicial: inicial, diario: diarioAnterior };
+  }
+
+  if (inicial <= 0) {
+    return { inicial: actual, diario: diarioAnterior };
+  }
+
+  let diario = 0;
+  if (actual >= inicial) {
+    diario = actual - inicial;
+  } else {
+    diario = (MAX_COUNT - inicial) + actual;
+    if (diario < 0 || diario > MAX_COUNT) {
+      diario = diarioAnterior;
+    }
+  }
+
+  if (diario < diarioAnterior) {
+    diario = diarioAnterior;
+  }
+
+  return { inicial: inicial, diario: diario };
+}
+
 function estadoVehiculo(statusHex, velocidad, fechaGps, ahora = new Date(), isBuff = false, fechaGpsUnidadActual = null) {
   const LIMITE_SIN_SENAL = 30 * 60 * 1000; // 30 min
   const UMBRAL_MOVIMIENTO = 5; // km/h
@@ -1047,127 +1149,157 @@ function onClientConnected(socket) {
         }
       }
 
-      // ================== GTDAT ==================
+      // ================== GTDAT (+RESP:GTDAT transparente, ver AT+GTDAT Queclink) ==================
       else if (message.includes(GTDAT) && !message.includes(ACK)) {
         const isBuffMessage = message.includes(BUFF);
-        // --- TU LÓGICA ORIGINAL (sin cambios funcionales) ---
-        let imei = 2;
-        let flag = 4;
-        let deviceName = 5;
-        let count = 6;
-        let p2 = 7;
-        let p3 = 8;
-        let status = 7;
-        let sentTime = 8;
-        let fechaSend = 10;
-        let data = message.split(',');
-        const MAX_COUNT = 65535;
-        const MAX_COUNT_C2 = 999999;
+        const imei = 2;
+        const flag = 4;
+        const deviceName = 5;
+        const count = 6;
+        const idxEventoOPuerta2 = 7;
+        const idxPuerta3 = 8;
+        const fechaSend = 10;
+        const data = message.split(',');
 
-        let puerta1, puerta2, puerta3;
+        const MAX_COUNT_P1 = 65535;
+        const MAX_COUNT_P23 = 999999;
 
-        if (data[flag] === '>PC' || data[flag] === '>PC3') {
-          if (data[deviceName] === 'P1' || data[deviceName] === 'P2' || data[deviceName] === 'P3') {
-            dbTrackingSystem.collection('unidads').findOne({ imei: data[imei], estado: 'A' }, function (err, document) {
-              if (err) console.log(err);
-              else if (document) {
-                let contador_diario = 0;
-                let contador_inicial = null;
-                let contador_diario_anterior = 0;
-                contador_diario_anterior = document.contador_diario;
+        if (!data[imei]) {
+          return;
+        }
 
-                if (data[deviceName] === 'P1') { contador_diario_anterior = document.contador_diario; contador_inicial = document.contador_inicial; }
-                if (data[deviceName] === 'P2') { contador_diario_anterior = document.contador_diario_sensor_2; contador_inicial = document.contador_inicial_sensor_2; }
-                if (data[deviceName] === 'P3') { contador_diario_anterior = document.contador_diario_sensor_3; contador_inicial = document.contador_inicial_sensor_3; }
+        if (data[flag] !== '>PC' && data[flag] !== '>PC3') {
+          return;
+        }
 
-                if (contador_inicial != null) {
-                  if (contador_inicial > 0) {
-                    contador_diario = (toInteger(data[count])) - contador_inicial;
-                    if (contador_diario < 0) {
-                      if (deviceName === 'C1') contador_diario = (toInteger(data[count])) + MAX_COUNT;
-                      else contador_diario = (toInteger(data[count])) + MAX_COUNT_C2;
-                    }
-                  } else contador_inicial = toInteger(data[count]);
-                } else contador_inicial = toInteger(data[count]);
+        dbTrackingSystem.collection('unidads').findOne({ imei: data[imei], estado: 'A' }, function (err, document) {
+          if (err) {
+            console.log(err);
+            return;
+          }
+          if (!document) {
+            return;
+          }
 
-                if (contador_diario >= contador_diario_anterior && !isBuffMessage) {
-                  if (data[deviceName] === 'P1') {
-                    dbTrackingSystem.collection('unidads').updateOne({ _id: document._id }, {
-                      $set: { contador_total: toInteger(data[count]), contador_diario: contador_diario, contador_inicial: contador_inicial, is_atm: (message.includes(ATM) ? 1 : 0), evento: data[status] }
-                    }, { writeConcern: { w: 0 } });
-                  }
-                  if (data[deviceName] === 'P2') {
-                    dbTrackingSystem.collection('unidads').updateOne({ _id: document._id }, {
-                      $set: { contador_total_sensor_2: toInteger(data[count]), contador_diario_sensor_2: contador_diario, contador_inicial_sensor_2: contador_inicial, is_atm: (message.includes(ATM) ? 1 : 0), evento: data[status] }
-                    }, { writeConcern: { w: 0 } });
-                  }
-                  if (data[deviceName] === 'P3') {
-                    dbTrackingSystem.collection('unidads').updateOne({ _id: document._id }, {
-                      $set: { contador_total_sensor_3: toInteger(data[count]), contador_diario_sensor_3: contador_diario, contador_inicial_sensor_3: contador_inicial, is_atm: (message.includes(ATM) ? 1 : 0), evento: data[status] }
-                    }, { writeConcern: { w: 0 } });
-                  }
-                }
+          try {
+            const dn = data[deviceName];
+
+            if (dn === 'P1' || dn === 'P2' || dn === 'P3') {
+              const actual = gtdatSafeInt(data[count], 0);
+              const maxForSensor = (dn === 'P1') ? MAX_COUNT_P1 : MAX_COUNT_P23;
+              if (actual <= 0 || actual > maxForSensor) {
+                return;
               }
-            });
-          } else {
-            if (data[deviceName] === 'PAC') {
-              dbTrackingSystem.collection('unidads').findOne({ imei: data[imei], estado: 'A' }, function (err, document) {
-                if (err) console.log(err);
-                else if (document) {
-                  let fecha_gps = (toInteger(data[fechaSend]) != 0) ? moment(data[fechaSend], DEVICE_DATE_FORMAT).toDate() : new Date();
-                  let puerta_1 = parseInt(data[count]);
-                  let puerta_2 = parseInt(data[p2]);
-                  let puerta_3 = parseInt(data[p3]);
-                  let fecha_servidor = new Date();
 
-                  puerta1 = (puerta_1 == 0) ? 'PUERTA CERRADA (DELANTERA)' : 'PUERTA ABIERTA (DELANTERA)';
-                  puerta2 = (puerta_2 == 0) ? 'PUERTA CERRADA (MEDIO)' : 'PUERTA ABIERTA (MEDIO)';
-                  puerta3 = (puerta_3 == 0) ? 'PUERTA CERRADA (TRASERA)' : 'PUERTA ABIERTA (TRASERA)';
+              let contador_inicial = 0;
+              let contador_diario_anterior = 0;
+              if (dn === 'P1') {
+                contador_inicial = gtdatSafeInt(document.contador_inicial, 0);
+                contador_diario_anterior = gtdatSafeInt(document.contador_diario, 0);
+              } else if (dn === 'P2') {
+                contador_inicial = gtdatSafeInt(document.contador_inicial_sensor_2, 0);
+                contador_diario_anterior = gtdatSafeInt(document.contador_diario_sensor_2, 0);
+              } else {
+                contador_inicial = gtdatSafeInt(document.contador_inicial_sensor_3, 0);
+                contador_diario_anterior = gtdatSafeInt(document.contador_diario_sensor_3, 0);
+              }
 
-                  dbTrackingSystem.collection('recorridos').insertOne({
-                    imei: data[imei], tipo: GTDIS, unidad_id: document._id, velocidad: document.velocidad, angulo: document.angulo,
-                    longitud: document.longitud, latitud: document.latitud, fecha_gps: fecha_gps, fecha: fecha_servidor,
-                    evento: puerta1, fecha_envio: fecha_gps, js: true
-                  }, { writeConcern: { w: 0 } });
-                  dbTrackingSystem.collection('recorridos').insertOne({
-                    imei: data[imei], tipo: GTDIS, unidad_id: document._id, velocidad: document.velocidad, angulo: document.angulo,
-                    longitud: document.longitud, latitud: document.latitud, fecha_gps: fecha_gps, fecha: fecha_servidor,
-                    evento: puerta2, fecha_envio: fecha_gps, js: true
-                  }, { writeConcern: { w: 0 } });
-                  dbTrackingSystem.collection('recorridos').insertOne({
-                    imei: data[imei], tipo: GTDIS, unidad_id: document._id, velocidad: document.velocidad, angulo: document.angulo,
-                    longitud: document.longitud, latitud: document.latitud, fecha_gps: fecha_gps, fecha: fecha_servidor,
-                    evento: puerta3, fecha_envio: fecha_gps, js: true
-                  }, { writeConcern: { w: 0 } });
+              const contadorData = gtdatCalcularContadorDiario({
+                actual: actual,
+                inicial: contador_inicial,
+                diarioAnterior: contador_diario_anterior,
+                maxInclusive: maxForSensor
+              });
+
+              if (!contadorData.valid) {
+                return;
+              }
+
+              if (!isBuffMessage) {
+                const evento = (data[idxEventoOPuerta2] != null) ? String(data[idxEventoOPuerta2]) : '';
+                const updateData = {
+                  is_atm: (message.includes(ATM) ? 1 : 0),
+                  evento: evento
+                };
+                if (dn === 'P1') {
+                  updateData.contador_total = actual;
+                  updateData.contador_diario = contadorData.diario;
+                  updateData.contador_inicial = contadorData.inicial;
+                } else if (dn === 'P2') {
+                  updateData.contador_total_sensor_2 = actual;
+                  updateData.contador_diario_sensor_2 = contadorData.diario;
+                  updateData.contador_inicial_sensor_2 = contadorData.inicial;
+                } else {
+                  updateData.contador_total_sensor_3 = actual;
+                  updateData.contador_diario_sensor_3 = contadorData.diario;
+                  updateData.contador_inicial_sensor_3 = contadorData.inicial;
                 }
+                dbTrackingSystem.collection('unidads').updateOne({ _id: document._id }, { $set: updateData }, { writeConcern: { w: 0 } });
+              }
+            } else if (dn === 'PAC') {
+              const fecha_gps = (gtdatSafeInt(data[fechaSend], 0) !== 0)
+                ? moment(data[fechaSend], DEVICE_DATE_FORMAT).toDate()
+                : new Date();
+              const puerta_1 = gtdatSafeInt(data[count], 0);
+              const puerta_2 = gtdatSafeInt(data[idxEventoOPuerta2], 0);
+              const puerta_3 = gtdatSafeInt(data[idxPuerta3], 0);
+              const fecha_servidor = new Date();
+
+              const eventos = [
+                { valor: puerta_1, abierto: 'PUERTA ABIERTA (DELANTERA)', cerrado: 'PUERTA CERRADA (DELANTERA)' },
+                { valor: puerta_2, abierto: 'PUERTA ABIERTA (MEDIO)', cerrado: 'PUERTA CERRADA (MEDIO)' },
+                { valor: puerta_3, abierto: 'PUERTA ABIERTA (TRASERA)', cerrado: 'PUERTA CERRADA (TRASERA)' }
+              ];
+
+              eventos.forEach(function (e) {
+                dbTrackingSystem.collection('recorridos').insertOne({
+                  imei: data[imei],
+                  tipo: GTDIS,
+                  unidad_id: document._id,
+                  velocidad: document.velocidad,
+                  angulo: document.angulo,
+                  longitud: document.longitud,
+                  latitud: document.latitud,
+                  fecha_gps: fecha_gps,
+                  fecha: fecha_servidor,
+                  evento: (e.valor === 1) ? e.abierto : e.cerrado,
+                  fecha_envio: fecha_gps,
+                  js: true
+                }, { writeConcern: { w: 0 } });
               });
             } else {
-              dbTrackingSystem.collection('unidads').findOne({ imei: data[imei], estado: 'A' }, function (err, document) {
-                if (err) console.log(err);
-                else if (document) {
-                  let contador_diario = 0;
-                  let contador_inicial = document.contador_inicial;
+              const actual = gtdatSafeInt(data[count], 0);
+              if (actual <= 0 || actual > MAX_COUNT_P1) {
+                return;
+              }
 
-                  if (document.contador_inicial != null) {
-                    if (document.contador_inicial > 0) {
-                      contador_diario = (toInteger(data[count])) - document.contador_inicial;
-                      if (contador_diario < 0) {
-                        if (deviceName === 'C1') contador_diario = (toInteger(data[count])) + MAX_COUNT;
-                        else contador_diario = (toInteger(data[count])) + MAX_COUNT_C2;
-                      }
-                    } else contador_inicial = toInteger(data[count]);
-                  } else contador_inicial = toInteger(data[count]);
-
-                  if (contador_diario >= document.contador_diario && !isBuffMessage) {
-                    dbTrackingSystem.collection('unidads').updateOne({ _id: document._id }, {
-                      $set: { contador_total: toInteger(data[count]), contador_diario: contador_diario, contador_inicial: contador_inicial, is_atm: (message.includes(ATM) ? 1 : 0), evento: data[status] }
-                    }, { writeConcern: { w: 0 } });
-                  }
-                }
+              const contadorData = gtdatCalcularContadorDiario({
+                actual: actual,
+                inicial: gtdatSafeInt(document.contador_inicial, 0),
+                diarioAnterior: gtdatSafeInt(document.contador_diario, 0),
+                maxInclusive: MAX_COUNT_P1
               });
+
+              if (!contadorData.valid) {
+                return;
+              }
+
+              if (!isBuffMessage) {
+                const evento = (data[idxEventoOPuerta2] != null) ? String(data[idxEventoOPuerta2]) : '';
+                dbTrackingSystem.collection('unidads').updateOne({ _id: document._id }, {
+                  $set: {
+                    contador_total: actual,
+                    contador_diario: contadorData.diario,
+                    contador_inicial: contadorData.inicial,
+                    is_atm: (message.includes(ATM) ? 1 : 0),
+                    evento: evento
+                  }
+                }, { writeConcern: { w: 0 } });
+              }
             }
+          } catch (e) {
           }
-        }
+        });
       }
 
       // ================== GTPHL (PHOTO LOCATION PRE-REPORT) ==================
@@ -2253,106 +2385,133 @@ function onClientConnected(socket) {
         });
       }
 
-      // ================== GTDTT (contadores) ==================
+      // ================== GTDTT (contadores): validación alineada con lógica de campo ==================
       else if (message.includes(GTDTT) && !message.includes(ACK)) {
         const isBuffMessage = message.includes(BUFF);
-        // Mantengo tu lógica, solo w:0 en writes (ya ayuda bastante)
-        let imei = 2;
+        const imei = 2;
         let count = 8;
         let sentTime = 9;
-        let data = message.split(',');
-        const MAX_COUNT = 9999999;
+        const data = message.split(',');
+
+        if (!data[imei]) {
+          return;
+        }
 
         dbTrackingSystem.collection('unidads').findOne({ imei: data[imei], estado: 'A' }, function (err, document) {
-          if (err) console.log(err);
-          else if (document) {
-            let contador_diario = 0;
-            let contador_diario_sensor_2 = 0;
-            let contador_diario_sensor_3 = 0;
+          if (err) {
+            console.log(err);
+            return;
+          }
+          if (!document) {
+            return;
+          }
 
-            let contador_inicial = document.contador_inicial;
-            let contador_inicial_sensor_2 = document.contador_inicial_sensor_2;
-            let contador_inicial_sensor_3 = document.contador_inicial_sensor_3;
-
+          try {
             let count_sensor_1 = 0;
             let count_sensor_2 = 0;
             let count_sensor_3 = 0;
+            let keepSensor3FromDoc = false;
 
             if (message.includes(GTDTTDGT)) {
               count = 9;
               sentTime = 10;
-              const count_parse = data[count];
+              const count_parse = data[count] || '';
               const m = /^(\d{8})(\d{4})(\d{5})$/.exec(count_parse);
               if (m) {
-                count_sensor_1 = toInteger(m[1]);
-                count_sensor_2 = toInteger(m[3]);
+                count_sensor_1 = gtdatSafeInt(m[1], 0);
+                count_sensor_2 = gtdatSafeInt(m[3], 0);
+              } else {
+                return;
               }
+              keepSensor3FromDoc = true;
             } else {
-              let count_parse = data[count].replace("RSC", "").replace("\n", "").replace(" ", "");
-              count_sensor_1 = toInteger(count_parse.substr(0, 7));
-              count_sensor_2 = toInteger(count_parse.substr(7, 7));
-              count_sensor_3 = toInteger(count_parse.substr(14, 7));
+              const count_parse = String(data[count] || '')
+                .replace(/RSC/gi, '')
+                .replace(/\n/g, '')
+                .replace(/\s/g, '')
+                .trim();
+              if (!/^\d+$/.test(count_parse) || count_parse.length < 7) {
+                return;
+              }
+              count_sensor_1 = gtdttGetSensorValue(count_parse, 0);
+              count_sensor_2 = gtdttGetSensorValue(count_parse, 7);
+              count_sensor_3 = gtdttGetSensorValue(count_parse, 14);
+              if (count_parse.length < 21) {
+                keepSensor3FromDoc = true;
+              }
             }
 
-            if (count_sensor_1 != 9999999) {
-              if (contador_inicial != null) {
-                if (contador_inicial > 0) {
-                  contador_diario = count_sensor_1 - contador_inicial;
-                  if (contador_diario < 0) contador_diario = count_sensor_1 + MAX_COUNT;
-                } else contador_inicial = count_sensor_1;
-              } else contador_inicial = count_sensor_1;
+            if (
+              count_sensor_1 === GTDTT_ROLLOVER_MAX ||
+              count_sensor_2 === GTDTT_ROLLOVER_MAX ||
+              (!keepSensor3FromDoc && count_sensor_3 === GTDTT_ROLLOVER_MAX)
+            ) {
+            
+              return;
+            }
 
-              if (contador_inicial_sensor_2 != null) {
-                if (contador_inicial_sensor_2 > 0) {
-                  contador_diario_sensor_2 = count_sensor_2 - contador_inicial_sensor_2;
-                  if (contador_diario_sensor_2 < 0) contador_diario_sensor_2 = count_sensor_2 + MAX_COUNT;
-                } else contador_inicial_sensor_2 = count_sensor_2;
-              } else contador_inicial_sensor_2 = count_sensor_2;
+            const sensor1 = gtdttCalcularContadorDiarioSensor({
+              actual: count_sensor_1,
+              inicial: gtdatSafeInt(document.contador_inicial, 0),
+              diarioAnterior: gtdatSafeInt(document.contador_diario, 0)
+            });
 
-              if (contador_inicial_sensor_3 != null) {
-                if (contador_inicial_sensor_3 > 0) {
-                  contador_diario_sensor_3 = count_sensor_3 - contador_inicial_sensor_3;
-                  if (contador_diario_sensor_3 < 0) contador_diario_sensor_3 = count_sensor_3 + MAX_COUNT;
-                } else contador_inicial_sensor_3 = count_sensor_3;
-              } else contador_inicial_sensor_3 = count_sensor_3;
+            const sensor2 = gtdttCalcularContadorDiarioSensor({
+              actual: count_sensor_2,
+              inicial: gtdatSafeInt(document.contador_inicial_sensor_2, 0),
+              diarioAnterior: gtdatSafeInt(document.contador_diario_sensor_2, 0)
+            });
 
-              if (contador_diario < document.contador_diario) contador_diario = document.contador_diario;
-              if (contador_diario_sensor_2 < document.contador_diario_sensor_2) contador_diario_sensor_2 = document.contador_diario_sensor_2;
-              if (contador_diario_sensor_3 < document.contador_diario_sensor_3) contador_diario_sensor_3 = document.contador_diario_sensor_3;
+            let sensor3;
+            if (keepSensor3FromDoc) {
+              sensor3 = {
+                inicial: document.contador_inicial_sensor_3,
+                diario: gtdatSafeInt(document.contador_diario_sensor_3, 0)
+              };
+              count_sensor_3 = gtdatSafeInt(document.contador_total_sensor_3, 0);
+            } else {
+              sensor3 = gtdttCalcularContadorDiarioSensor({
+                actual: count_sensor_3,
+                inicial: gtdatSafeInt(document.contador_inicial_sensor_3, 0),
+                diarioAnterior: gtdatSafeInt(document.contador_diario_sensor_3, 0)
+              });
+            }
 
-              if (!isBuffMessage) {
-                dbTrackingSystem.collection('unidads').updateOne({ _id: document._id }, {
-                  $set: {
-                    contador_total: count_sensor_1,
-                    contador_diario: contador_diario,
-                    contador_inicial: contador_inicial,
-                    contador_total_sensor_2: count_sensor_2,
-                    contador_diario_sensor_2: contador_diario_sensor_2,
-                    contador_inicial_sensor_2: contador_inicial_sensor_2,
-                    contador_total_sensor_3: count_sensor_3,
-                    contador_diario_sensor_3: contador_diario_sensor_3,
-                    contador_inicial_sensor_3: contador_inicial_sensor_3,
-                    is_atm: (message.includes(ATM) ? 1 : 0)
-                  }
-                }, { writeConcern: { w: 0 } });
-              }
-
-              dbTrackingSystem.collection('recorridos').insertOne({
-                imei: data[imei],
-                tipo: GTDAT,
-                unidad_id: document._id,
-                velocidad: document.velocidad_actual,
-                angulo: document.angulo,
-                longitud: document.longitud,
-                latitud: document.latitud,
-                fecha_gps: (toInteger(data[sentTime]) != 0) ? moment(data[sentTime], DEVICE_DATE_FORMAT).toDate() : new Date(),
-                fecha: new Date(),
-                contador_total: count_sensor_1,
-                contador_total_sensor_2: count_sensor_2,
-                contador_total_sensor_3: count_sensor_3,
-                trama: message
+            if (!isBuffMessage) {
+              dbTrackingSystem.collection('unidads').updateOne({ _id: document._id }, {
+                $set: {
+                  contador_total: count_sensor_1,
+                  contador_diario: sensor1.diario,
+                  contador_inicial: sensor1.inicial,
+                  contador_total_sensor_2: count_sensor_2,
+                  contador_diario_sensor_2: sensor2.diario,
+                  contador_inicial_sensor_2: sensor2.inicial,
+                  contador_total_sensor_3: count_sensor_3,
+                  contador_diario_sensor_3: sensor3.diario,
+                  contador_inicial_sensor_3: sensor3.inicial,
+                  is_atm: (message.includes(ATM) ? 1 : 0)
+                }
               }, { writeConcern: { w: 0 } });
             }
+
+            dbTrackingSystem.collection('recorridos').insertOne({
+              imei: data[imei],
+              tipo: GTDAT,
+              unidad_id: document._id,
+              velocidad: document.velocidad_actual,
+              angulo: document.angulo,
+              longitud: document.longitud,
+              latitud: document.latitud,
+              fecha_gps: (gtdatSafeInt(data[sentTime], 0) !== 0)
+                ? moment(data[sentTime], DEVICE_DATE_FORMAT).toDate()
+                : new Date(),
+              fecha: new Date(),
+              contador_total: count_sensor_1,
+              contador_total_sensor_2: count_sensor_2,
+              contador_total_sensor_3: count_sensor_3,
+              trama: message
+            }, { writeConcern: { w: 0 } });
+          } catch (e) {
           }
         });
       }
