@@ -52,6 +52,9 @@ Route::group(['prefix' => 'v2'], function () {
 		Route::get('user-notification-settings', 'UserNotificationSettingsApiController@index_v2');
 		Route::post('user-notification-settings', 'UserNotificationSettingsApiController@store_v2');
 
+		Route::get('photo-unidades', 'PhotoUnidadApiController@index');
+		Route::get('photo-unidades/{id}/imagen', 'PhotoUnidadApiController@showImage');
+
 	});
 
 	Route::post('/recorrido-notify', 'RecorridoController@notify_v2');
