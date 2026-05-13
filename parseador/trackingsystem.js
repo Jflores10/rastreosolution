@@ -2303,7 +2303,19 @@ function onClientConnected(socket) {
         let count = 8;
         let sentTime = 9;
         let data = message.split(',');
+        // Techo 7 dígitos y módulo de rollover en este mensaje (distinto a GTDAT 65535/999999).
         const MAX_COUNT = 9999999;
+        const lecturaGtdttInvalida = function (v) {
+          if (!Number.isFinite(v) || v < 0) return true;
+          if (v > MAX_COUNT) return true;
+          if (v === MAX_COUNT) return true;
+          return false;
+        };
+        const diarioGtdttFueraDeRango = function (d) {
+          if (!Number.isFinite(d) || d < 0) return true;
+          if (d >= MAX_COUNT) return true;
+          return false;
+        };
 
         dbTrackingSystem.collection('unidads').findOne({ imei: data[imei], estado: 'A' }, function (err, document) {
           if (err) console.log(err);
@@ -2336,65 +2348,71 @@ function onClientConnected(socket) {
               count_sensor_3 = toInteger(count_parse.substr(14, 7));
             }
 
-            if (count_sensor_1 != 9999999) {
-              if (contador_inicial != null) {
-                if (contador_inicial > 0) {
-                  contador_diario = count_sensor_1 - contador_inicial;
-                  if (contador_diario < 0) contador_diario = count_sensor_1 + MAX_COUNT;
-                } else contador_inicial = count_sensor_1;
+            if (lecturaGtdttInvalida(count_sensor_1) || lecturaGtdttInvalida(count_sensor_2) || lecturaGtdttInvalida(count_sensor_3)) {
+              return;
+            }
+
+            if (contador_inicial != null) {
+              if (contador_inicial > 0) {
+                contador_diario = count_sensor_1 - contador_inicial;
+                if (contador_diario < 0) contador_diario = count_sensor_1 + MAX_COUNT;
               } else contador_inicial = count_sensor_1;
+            } else contador_inicial = count_sensor_1;
 
-              if (contador_inicial_sensor_2 != null) {
-                if (contador_inicial_sensor_2 > 0) {
-                  contador_diario_sensor_2 = count_sensor_2 - contador_inicial_sensor_2;
-                  if (contador_diario_sensor_2 < 0) contador_diario_sensor_2 = count_sensor_2 + MAX_COUNT;
-                } else contador_inicial_sensor_2 = count_sensor_2;
+            if (contador_inicial_sensor_2 != null) {
+              if (contador_inicial_sensor_2 > 0) {
+                contador_diario_sensor_2 = count_sensor_2 - contador_inicial_sensor_2;
+                if (contador_diario_sensor_2 < 0) contador_diario_sensor_2 = count_sensor_2 + MAX_COUNT;
               } else contador_inicial_sensor_2 = count_sensor_2;
+            } else contador_inicial_sensor_2 = count_sensor_2;
 
-              if (contador_inicial_sensor_3 != null) {
-                if (contador_inicial_sensor_3 > 0) {
-                  contador_diario_sensor_3 = count_sensor_3 - contador_inicial_sensor_3;
-                  if (contador_diario_sensor_3 < 0) contador_diario_sensor_3 = count_sensor_3 + MAX_COUNT;
-                } else contador_inicial_sensor_3 = count_sensor_3;
+            if (contador_inicial_sensor_3 != null) {
+              if (contador_inicial_sensor_3 > 0) {
+                contador_diario_sensor_3 = count_sensor_3 - contador_inicial_sensor_3;
+                if (contador_diario_sensor_3 < 0) contador_diario_sensor_3 = count_sensor_3 + MAX_COUNT;
               } else contador_inicial_sensor_3 = count_sensor_3;
+            } else contador_inicial_sensor_3 = count_sensor_3;
 
-              if (contador_diario < document.contador_diario) contador_diario = document.contador_diario;
-              if (contador_diario_sensor_2 < document.contador_diario_sensor_2) contador_diario_sensor_2 = document.contador_diario_sensor_2;
-              if (contador_diario_sensor_3 < document.contador_diario_sensor_3) contador_diario_sensor_3 = document.contador_diario_sensor_3;
+            if (contador_diario < document.contador_diario) contador_diario = document.contador_diario;
+            if (contador_diario_sensor_2 < document.contador_diario_sensor_2) contador_diario_sensor_2 = document.contador_diario_sensor_2;
+            if (contador_diario_sensor_3 < document.contador_diario_sensor_3) contador_diario_sensor_3 = document.contador_diario_sensor_3;
 
-              if (!isBuffMessage) {
-                dbTrackingSystem.collection('unidads').updateOne({ _id: document._id }, {
-                  $set: {
-                    contador_total: count_sensor_1,
-                    contador_diario: contador_diario,
-                    contador_inicial: contador_inicial,
-                    contador_total_sensor_2: count_sensor_2,
-                    contador_diario_sensor_2: contador_diario_sensor_2,
-                    contador_inicial_sensor_2: contador_inicial_sensor_2,
-                    contador_total_sensor_3: count_sensor_3,
-                    contador_diario_sensor_3: contador_diario_sensor_3,
-                    contador_inicial_sensor_3: contador_inicial_sensor_3,
-                    is_atm: (message.includes(ATM) ? 1 : 0)
-                  }
-                }, { writeConcern: { w: 0 } });
-              }
+            if (diarioGtdttFueraDeRango(contador_diario) || diarioGtdttFueraDeRango(contador_diario_sensor_2) || diarioGtdttFueraDeRango(contador_diario_sensor_3)) {
+              return;
+            }
 
-              dbTrackingSystem.collection('recorridos').insertOne({
-                imei: data[imei],
-                tipo: GTDAT,
-                unidad_id: document._id,
-                velocidad: document.velocidad_actual,
-                angulo: document.angulo,
-                longitud: document.longitud,
-                latitud: document.latitud,
-                fecha_gps: (toInteger(data[sentTime]) != 0) ? moment(data[sentTime], DEVICE_DATE_FORMAT).toDate() : new Date(),
-                fecha: new Date(),
-                contador_total: count_sensor_1,
-                contador_total_sensor_2: count_sensor_2,
-                contador_total_sensor_3: count_sensor_3,
-                trama: message
+            if (!isBuffMessage) {
+              dbTrackingSystem.collection('unidads').updateOne({ _id: document._id }, {
+                $set: {
+                  contador_total: count_sensor_1,
+                  contador_diario: contador_diario,
+                  contador_inicial: contador_inicial,
+                  contador_total_sensor_2: count_sensor_2,
+                  contador_diario_sensor_2: contador_diario_sensor_2,
+                  contador_inicial_sensor_2: contador_inicial_sensor_2,
+                  contador_total_sensor_3: count_sensor_3,
+                  contador_diario_sensor_3: contador_diario_sensor_3,
+                  contador_inicial_sensor_3: contador_inicial_sensor_3,
+                  is_atm: (message.includes(ATM) ? 1 : 0)
+                }
               }, { writeConcern: { w: 0 } });
             }
+
+            dbTrackingSystem.collection('recorridos').insertOne({
+              imei: data[imei],
+              tipo: GTDAT,
+              unidad_id: document._id,
+              velocidad: document.velocidad_actual,
+              angulo: document.angulo,
+              longitud: document.longitud,
+              latitud: document.latitud,
+              fecha_gps: (toInteger(data[sentTime]) != 0) ? moment(data[sentTime], DEVICE_DATE_FORMAT).toDate() : new Date(),
+              fecha: new Date(),
+              contador_total: count_sensor_1,
+              contador_total_sensor_2: count_sensor_2,
+              contador_total_sensor_3: count_sensor_3,
+              trama: message
+            }, { writeConcern: { w: 0 } });
           }
         });
       }
