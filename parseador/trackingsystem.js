@@ -1063,6 +1063,26 @@ function onClientConnected(socket) {
         let data = message.split(',');
         const MAX_COUNT = 65535;
         const MAX_COUNT_C2 = 999999;
+        // Techos de hardware: P1/C1 = 16 bits; P2/P3/C2 (y similares) = hasta MAX_COUNT_C2.
+        const limiteHardwarePorTag = function (tag) {
+          if (tag === 'P1' || tag === 'C1') return MAX_COUNT;
+          return MAX_COUNT_C2;
+        };
+        const lecturaContadorInvalida = function (lectura, tag) {
+          if (!Number.isFinite(lectura) || lectura < 0) return true;
+          const lim = limiteHardwarePorTag(tag);
+          if (lectura > lim) return true;
+          // El equipo suele mandar el máximo “todo unos” como lectura inválida / sin dato.
+          if (lectura === MAX_COUNT || lectura === MAX_COUNT_C2) return true;
+          return false;
+        };
+        const contadorDiarioFueraDeRango = function (diario, tag) {
+          if (!Number.isFinite(diario) || diario < 0) return true;
+          const lim = limiteHardwarePorTag(tag);
+          // Diario acumulado no puede superar el techo del contador; >= lim cubre 65535/999999 y rollover mal corregido.
+          if (diario >= lim) return true;
+          return false;
+        };
 
         let puerta1, puerta2, puerta3;
 
@@ -1071,6 +1091,12 @@ function onClientConnected(socket) {
             dbTrackingSystem.collection('unidads').findOne({ imei: data[imei], estado: 'A' }, function (err, document) {
               if (err) console.log(err);
               else if (document) {
+                const tag = data[deviceName];
+                const lecturaContador = toInteger(data[count]);
+                if (lecturaContadorInvalida(lecturaContador, tag)) {
+                  return;
+                }
+
                 let contador_diario = 0;
                 let contador_inicial = null;
                 let contador_diario_anterior = 0;
@@ -1084,11 +1110,15 @@ function onClientConnected(socket) {
                   if (contador_inicial > 0) {
                     contador_diario = (toInteger(data[count])) - contador_inicial;
                     if (contador_diario < 0) {
-                      if (deviceName === 'C1') contador_diario = (toInteger(data[count])) + MAX_COUNT;
+                      if (data[deviceName] === 'P1') contador_diario = (toInteger(data[count])) + MAX_COUNT;
                       else contador_diario = (toInteger(data[count])) + MAX_COUNT_C2;
                     }
                   } else contador_inicial = toInteger(data[count]);
                 } else contador_inicial = toInteger(data[count]);
+
+                if (contadorDiarioFueraDeRango(contador_diario, tag)) {
+                  return;
+                }
 
                 if (contador_diario >= contador_diario_anterior && !isBuffMessage) {
                   if (data[deviceName] === 'P1') {
@@ -1114,10 +1144,12 @@ function onClientConnected(socket) {
               dbTrackingSystem.collection('unidads').findOne({ imei: data[imei], estado: 'A' }, function (err, document) {
                 if (err) console.log(err);
                 else if (document) {
+                  let puerta_1 = parseInt(data[count], 10);
+                  let puerta_2 = parseInt(data[p2], 10);
+                  let puerta_3 = parseInt(data[p3], 10);
+                 
+
                   let fecha_gps = (toInteger(data[fechaSend]) != 0) ? moment(data[fechaSend], DEVICE_DATE_FORMAT).toDate() : new Date();
-                  let puerta_1 = parseInt(data[count]);
-                  let puerta_2 = parseInt(data[p2]);
-                  let puerta_3 = parseInt(data[p3]);
                   let fecha_servidor = new Date();
 
                   puerta1 = (puerta_1 == 0) ? 'PUERTA CERRADA (DELANTERA)' : 'PUERTA ABIERTA (DELANTERA)';
@@ -1145,6 +1177,12 @@ function onClientConnected(socket) {
               dbTrackingSystem.collection('unidads').findOne({ imei: data[imei], estado: 'A' }, function (err, document) {
                 if (err) console.log(err);
                 else if (document) {
+                  const tag = data[deviceName];
+                  const lecturaContador = toInteger(data[count]);
+                  if (lecturaContadorInvalida(lecturaContador, tag)) {
+                    return;
+                  }
+
                   let contador_diario = 0;
                   let contador_inicial = document.contador_inicial;
 
@@ -1152,11 +1190,15 @@ function onClientConnected(socket) {
                     if (document.contador_inicial > 0) {
                       contador_diario = (toInteger(data[count])) - document.contador_inicial;
                       if (contador_diario < 0) {
-                        if (deviceName === 'C1') contador_diario = (toInteger(data[count])) + MAX_COUNT;
+                        if (data[deviceName] === 'C1') contador_diario = (toInteger(data[count])) + MAX_COUNT;
                         else contador_diario = (toInteger(data[count])) + MAX_COUNT_C2;
                       }
                     } else contador_inicial = toInteger(data[count]);
                   } else contador_inicial = toInteger(data[count]);
+
+                  if (contadorDiarioFueraDeRango(contador_diario, tag)) {
+                    return;
+                  }
 
                   if (contador_diario >= document.contador_diario && !isBuffMessage) {
                     dbTrackingSystem.collection('unidads').updateOne({ _id: document._id }, {
