@@ -826,15 +826,17 @@ function metaTieneCamposVisibles(meta) {
         (meta.ruta_hora_fin && meta.ruta_hora_fin !== '') ||
         (meta.tipo_bitacora && meta.tipo_bitacora !== '') ||
         (meta.bitacora && meta.bitacora !== '') ||
-        Object.prototype.hasOwnProperty.call(meta, 'numvuelta')
+        (meta.numvuelta != null)
     ));
 }
 
-/** Badge compacto: número de vuelta (meta numvuelta) antes del icono de sentido. */
-function htmlBadgeNumVuelta(n) {
+/** Badge de vuelta: solo si hay despacho actual (ruta_actual) y numvuelta > 0. */
+function htmlBadgeNumVuelta(n, rutaActual) {
     var v = parseInt(n, 10);
     if (!isFinite(v) || v <= 0) return '';
-    return '<span class="homev2-num-vuelta" title="Vuelta ' + v + '" style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 3px;margin-right:3px;border-radius:999px;background:#1565C0;color:#fff;font-size:10px;font-weight:700;line-height:1;vertical-align:middle;">' + v + '</span>';
+    var r = rutaActual != null ? String(rutaActual).trim() : '';
+    if (!r) return '';
+    return '<span class="homev2-num-vuelta" title="Vuelta ' + v + '" style="display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;min-width:13px;height:13px;padding:0 3px;margin-right:2px;border-radius:999px;background:#1565C0;color:#fff;font-size:8px;font-weight:400;line-height:13px;vertical-align:middle;">' + v + '</span>';
 }
 
 function applyMetaToLi(uid, meta, source) {
@@ -1782,7 +1784,7 @@ function updateUnidadInList(unidad, opts) {
     var gId = 'g' + unidad._id;
     var bId = 'i' + unidad._id;
   
-    var vueltaHtml = htmlBadgeNumVuelta(unidad.numvuelta);
+    var vueltaHtml = htmlBadgeNumVuelta(unidad.numvuelta, unidad.ruta_actual);
     var sentido = '';
     if (unidad.sentido){
         if (unidad.sentido == 'i') sentido = '<i class="fa fa-arrow-circle-right" title="IDA" style="color:green"></i>&nbsp&nbsp';
@@ -4080,7 +4082,7 @@ $("#velocimetro").myfunc({divFact:10});
                 var bId = 'i' + data.unidades[i]._id; 
                 console.log(data.unidades[i].climatizada);
 
-                var vueltaHtmlI = htmlBadgeNumVuelta(data.unidades[i].numvuelta);
+                var vueltaHtmlI = htmlBadgeNumVuelta(data.unidades[i].numvuelta, ruta_actual);
 
                 sentido='';
 
