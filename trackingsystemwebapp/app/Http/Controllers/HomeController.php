@@ -346,7 +346,7 @@ class HomeController extends Controller
 
     public function search(Request $request)
     {
-        date_default_timezone_set('America/Bogota');
+        // Misma ventana de día que HistoricoController::store (getUnidades): date()/Carbon usan la TZ por defecto de la app (no forzar otra TZ aquí).
         $this->validate($request, [
             'cooperativa' => 'required|exists:cooperativas,_id'
         ]);
@@ -404,8 +404,13 @@ class HomeController extends Controller
         $desde = Carbon::createFromFormat('Y-m-d H:i:s', date('Y-m-d 00:00:00'));
         $hasta = Carbon::createFromFormat('Y-m-d H:i:s', date('Y-m-d 23:59:59'));
 
+        $vueltasNumByUnidad = $this->numVueltasMapPorUnidadesIterable($unidades, $desde, $hasta);
+
         foreach($unidades as $unidad)
         {
+            $_uidK = (string) $unidad['_id'];
+            $_nv = isset($vueltasNumByUnidad[$_uidK]) ? (int) $vueltasNumByUnidad[$_uidK] : 0;
+
             if($unidad["fecha_gps"] != null && $unidad["fecha"] != null)
             {
 
@@ -436,7 +441,13 @@ class HomeController extends Controller
                     $ruta_hora_final->addMinutes($tiempo_final); 
                     $ruta_hora_final = $ruta_hora_final->format('H:i'); // solo hora:minuto
                 }
-                array_push($rutaunidad,["ruta_actual"=>$ruta,"ruta_fecha"=>$ruta_fecha,"ruta_conductor"=>$ruta_conductor,"ruta_hora_fin"=>$ruta_hora_final]);
+                array_push($rutaunidad, array(
+                    "ruta_actual" => $ruta,
+                    "ruta_fecha" => $ruta_fecha,
+                    "ruta_conductor" => $ruta_conductor,
+                    "ruta_hora_fin" => $ruta_hora_final,
+                    "numvuelta" => $_nv,
+                ));
 
                 $f_gps=$unidad["fecha_gps"]->toDateTime();
                 $f_servidor=$unidad["fecha"]->toDateTime();
@@ -464,7 +475,13 @@ class HomeController extends Controller
                 array_push($array,["fecha_servidor"=>null, "fecha_gps"=>null, 'diferencia'=>null,
                 'fecha_puerta_abierta'=>null,'fecha_puerta_cerrada'=>null]);
 
-                array_push($rutaunidad,["ruta_actual"=>'',"ruta_fecha"=>'',"ruta_conductor"=>'',"ruta_hora_fin"=>'']);
+                array_push($rutaunidad, array(
+                    "ruta_actual" => '',
+                    "ruta_fecha" => '',
+                    "ruta_conductor" => '',
+                    "ruta_hora_fin" => '',
+                    "numvuelta" => $_nv,
+                ));
             }
 
             if($unidad["alerta_velocidad_fecha"] != null){
@@ -510,7 +527,7 @@ class HomeController extends Controller
                     
             array_push($array_bitacora,["bitacora"=>( isset($bitacora) && $bitacora != null)?$bitacora->tipo_bitacora:'']);
         }
-        
+
         return response()->json(['unidades'=>$unidades,'array_fechas'=>$array,'notificaciones'=>$array_notificaciones,
         'fecha_puerta_abierta'=>$f_puerta_abierta,'fecha_puerta_cerrada'=>$f_puerta_cerrada,'array_formatted_address'=>$array_geocode,
         'array_rutas'=>$rutaunidad,'array_bitacora'=>$array_bitacora]);
@@ -586,5 +603,127 @@ class HomeController extends Controller
             'ubicacion' => $ubicacion
         ]);
 
+    }
+
+    /**
+     * Marca de tiempo para ordenar despachos del día por hora_programada (si existe) o por fecha.
+     * Misma lógica que HistoricoController::despachoComparableParaOrdenVuelta.
+     */
+    private function despachoComparableParaOrdenVuelta($d)
+    {
+        $fechaBase = Carbon::today();
+        if (isset($d->fecha) && $d->fecha !== null) {
+            try {
+                if ($d->fecha instanceof \MongoDB\BSON\UTCDateTime) {
+                    $fechaBase = Carbon::createFromTimestampUTC($d->fecha->toDateTime()->getTimestamp());
+                } else {
+                    $fechaBase = Carbon::parse($d->fecha);
+                }
+            } catch (\Exception $e) {
+                $fechaBase = Carbon::today();
+            }
+        }
+
+        if (isset($d->hora_programada)) {
+            $hp = $d->hora_programada;
+            try {
+                if ($hp instanceof \MongoDB\BSON\UTCDateTime) {
+                    return Carbon::createFromTimestampUTC($hp->toDateTime()->getTimestamp())->getTimestamp();
+                }
+                if ($hp instanceof \DateTimeInterface) {
+                    return Carbon::parse($hp)->getTimestamp();
+                }
+                if (is_string($hp) && trim($hp) !== '') {
+                    $hps = trim($hp);
+                    if (preg_match('/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/', $hps, $m)) {
+                        return $fechaBase->copy()->startOfDay()->setTime((int) $m[1], (int) $m[2], isset($m[3]) ? (int) $m[3] : 0)->getTimestamp();
+                    }
+
+                    return Carbon::parse($hps)->getTimestamp();
+                }
+            } catch (\Exception $e) {
+                // continuar con fecha del despacho
+            }
+        }
+
+        try {
+            return $fechaBase->getTimestamp();
+        } catch (\Exception $e) {
+            return 0;
+        }
+    }
+
+    /**
+     * Lista ordenada de despachos (P|C) del día: 1-based vuelta actual = posición del primer P;
+     * si no hay P (todas C), devuelve la cantidad de vueltas completadas del día.
+     */
+    private function numVueltaDesdeDespachosOrdenados(array $ordenados)
+    {
+        if (count($ordenados) === 0) {
+            return 0;
+        }
+        foreach ($ordenados as $idx => $d) {
+            if (isset($d->estado) && $d->estado === 'P') {
+                return $idx + 1;
+            }
+        }
+
+        return count($ordenados);
+    }
+
+    /**
+     * Mapa unidad_id (string) => numvuelta del día [$desde, $hasta], despachos P|C (misma regla que HistoricoController::store getUnidades).
+     *
+     * @param  iterable|\Illuminate\Database\Eloquent\Builder  $unidades
+     * @return array<string,int>
+     */
+    private function numVueltasMapPorUnidadesIterable($unidades, $desde, $hasta)
+    {
+        $vueltasNumByUnidad = array();
+        // Misma condición que HistoricoController::store getUnidades (no calcular si no hay unidades).
+        if (!isset($unidades) || $unidades === null) {
+            return $vueltasNumByUnidad;
+        }
+
+        $_idsVueltas = array();
+        foreach ($unidades as $_u) {
+            if (isset($_u->_id)) {
+                $_idsVueltas[] = $_u->_id;
+            }
+        }
+        if (count($_idsVueltas) === 0) {
+            return $vueltasNumByUnidad;
+        }
+
+        $_despV = Despacho::whereIn('unidad_id', $_idsVueltas)
+            ->where('fecha', '>=', $desde)
+            ->where('fecha', '<=', $hasta)
+            ->whereIn('estado', array('P', 'C'))
+            ->get();
+        $_listByU = array();
+        foreach ($_idsVueltas as $_idu) {
+            $_listByU[(string) $_idu] = array();
+        }
+        foreach ($_despV as $_dv) {
+            $_uk = (string) $_dv->unidad_id;
+            if (!isset($_listByU[$_uk])) {
+                continue;
+            }
+            $_listByU[$_uk][] = $_dv;
+        }
+        foreach ($_listByU as $_uk => $_lista) {
+            usort($_lista, function ($a, $b) {
+                $ta = $this->despachoComparableParaOrdenVuelta($a);
+                $tb = $this->despachoComparableParaOrdenVuelta($b);
+                if ($ta === $tb) {
+                    return 0;
+                }
+
+                return ($ta < $tb) ? -1 : 1;
+            });
+            $vueltasNumByUnidad[$_uk] = $this->numVueltaDesdeDespachosOrdenados($_lista);
+        }
+
+        return $vueltasNumByUnidad;
     }
 }
