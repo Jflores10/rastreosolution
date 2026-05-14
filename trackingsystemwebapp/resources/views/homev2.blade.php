@@ -830,13 +830,13 @@ function metaTieneCamposVisibles(meta) {
     ));
 }
 
-/** Badge de vuelta: solo si hay despacho actual (ruta_actual) y numvuelta > 0. */
+/** Badge de vuelta: numvuelta > 0. Se muestra también sin ruta_actual (p. ej. ya cerró despachos del día y aún no hay otro P). */
 function htmlBadgeNumVuelta(n, rutaActual) {
     var v = parseInt(n, 10);
     if (!isFinite(v) || v <= 0) return '';
     var r = rutaActual != null ? String(rutaActual).trim() : '';
-    if (!r) return '';
-    return '<span class="homev2-num-vuelta" title="Vuelta ' + v + '" style="display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;min-width:13px;height:13px;padding:0 3px;margin-right:2px;border-radius:999px;background:#1565C0;color:#fff;font-size:8px;font-weight:400;line-height:13px;vertical-align:middle;">' + v + '</span>';
+    var title = 'Vuelta ' + v ;
+    return '<span class="homev2-num-vuelta" title="' + title + '" style="display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;min-width:13px;height:13px;padding:0 3px;margin-right:2px;border-radius:999px;background:#1565C0;color:#fff;font-size:8px;font-weight:400;line-height:13px;vertical-align:middle;">' + v + '</span>';
 }
 
 /** Conductor en lista: primera palabra + espacio + solo la primera letra de la segunda (resto de palabras se omiten). */
