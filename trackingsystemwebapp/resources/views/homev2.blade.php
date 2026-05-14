@@ -839,6 +839,18 @@ function htmlBadgeNumVuelta(n, rutaActual) {
     return '<span class="homev2-num-vuelta" title="Vuelta ' + v + '" style="display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;min-width:13px;height:13px;padding:0 3px;margin-right:2px;border-radius:999px;background:#1565C0;color:#fff;font-size:8px;font-weight:400;line-height:13px;vertical-align:middle;">' + v + '</span>';
 }
 
+/** Conductor en lista: primera palabra + espacio + solo la primera letra de la segunda (resto de palabras se omiten). */
+function formatRutaConductorDisplay(rc) {
+    if (rc == null || rc === '') return '';
+    var s = String(rc).trim();
+    if (!s) return '';
+    var arr = s.split(/\s+/).filter(function (w) { return w.length > 0; });
+    if (arr.length === 0) return '';
+    if (arr.length === 1) return arr[0];
+    var ini = arr[1].charAt(0);
+    return ini ? (arr[0] + ' ' + ini) : arr[0];
+}
+
 function applyMetaToLi(uid, meta, source) {
     try {
         var li = document.getElementById(uid);
@@ -849,7 +861,7 @@ function applyMetaToLi(uid, meta, source) {
         if (source !== 'sse' && Object.prototype.hasOwnProperty.call(meta, 'ruta_actual')) {
             li.currentU.ruta_actual = meta.ruta_actual != null ? String(meta.ruta_actual) : '';
             li.currentU.ruta_fecha = meta.ruta_fecha != null ? String(meta.ruta_fecha) : '';
-            li.currentU.ruta_conductor = meta.ruta_conductor != null ? String(meta.ruta_conductor) : '';
+            li.currentU.ruta_conductor = formatRutaConductorDisplay(meta.ruta_conductor != null ? String(meta.ruta_conductor) : '');
             li.currentU.ruta_hora_fin = meta.ruta_hora_fin != null ? String(meta.ruta_hora_fin) : '';
             try {
                 var _icR = document.getElementById('i' + uid);
@@ -864,7 +876,7 @@ function applyMetaToLi(uid, meta, source) {
             if (!li.currentU.ruta_actual || li.currentU.ruta_actual === '' || source === 'sse') {
                 li.currentU.ruta_actual = meta.ruta_actual;
                 li.currentU.ruta_fecha = meta.ruta_fecha || li.currentU.ruta_fecha;
-                li.currentU.ruta_conductor = meta.ruta_conductor || li.currentU.ruta_conductor;
+                li.currentU.ruta_conductor = formatRutaConductorDisplay(meta.ruta_conductor || li.currentU.ruta_conductor || '');
                 li.currentU.ruta_hora_fin = meta.ruta_hora_fin || li.currentU.ruta_hora_fin;
             }
         }
@@ -1218,7 +1230,7 @@ function conectarSSE(coopId) {
                 const meta = {
                     ruta_actual: data.ruta_actual || '',
                     ruta_fecha: data.ruta_fecha || '',
-                    ruta_conductor: data.ruta_conductor || '',
+                    ruta_conductor: formatRutaConductorDisplay(data.ruta_conductor || ''),
                     ruta_hora_fin: data.ruta_hora_fin || '',
                     tipo_bitacora: data.tipo_bitacora || '',
                     bitacora: data.bitacora || ''
@@ -1361,7 +1373,7 @@ function conectarSSE(coopId) {
                                             const meta = {
                                                 ruta_actual: pending.ruta_actual || '',
                                                 ruta_fecha: pending.ruta_fecha || '',
-                                                ruta_conductor: pending.ruta_conductor || '',
+                                                ruta_conductor: formatRutaConductorDisplay(pending.ruta_conductor || ''),
                                                 ruta_hora_fin: pending.ruta_hora_fin || '',
                                                 tipo_bitacora: pending.tipo_bitacora || '',
                                                 bitacora: pending.bitacora || ''
@@ -1794,7 +1806,7 @@ function updateUnidadInList(unidad, opts) {
     // Campos auxiliares que pueden venir en el payload
     var ruta_actual = unidad.ruta_actual || '';
     var ruta_fecha = unidad.ruta_fecha || '';
-    var ruta_conductor = unidad.ruta_conductor || '';
+    var ruta_conductor = formatRutaConductorDisplay(unidad.ruta_conductor || '');
     var ruta_hora_fin = unidad.ruta_hora_fin || '';
 
     var fecha_puerta_abierta = '--';
@@ -3957,18 +3969,9 @@ $("#velocimetro").myfunc({divFact:10});
                 ruta_actual=data.array_rutas[i].ruta_actual;
                 ruta_fecha='';
                 ruta_fecha=data.array_rutas[i].ruta_fecha;
-                ruta_conductor='';
-                ruta_conductor=data.array_rutas[i].ruta_conductor;
+                ruta_conductor = formatRutaConductorDisplay(data.array_rutas[i].ruta_conductor);
                 
                 ruta_hora_fin=data.array_rutas[i].ruta_hora_fin;
-
-                //si ruta_conductor no es null, entonces solo capturar las dos primeras palabras
-                if(ruta_conductor!=null && ruta_conductor!='')
-                {
-                    var arr = ruta_conductor.split(" ");
-                    if(arr.length>2)
-                        ruta_conductor=arr[0]+' '+arr[1];
-                }
 
                 if(data.array_formatted_address[i].formatted_address!=null)
                     ubication=data.array_formatted_address[i].formatted_address;
