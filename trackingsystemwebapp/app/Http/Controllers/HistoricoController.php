@@ -775,10 +775,51 @@ class HistoricoController extends Controller
             $f_puerta_cerrada=null;
             $f_puerta_abierta_trasera=null;
             $f_puerta_cerrada_trasera=null;
-            
+
+            // numvuelta por unidad (misma lógica que getUnidadesMeta) para primera carga
+            $vueltasNumByUnidad = array();
+            if (isset($unidades) && count($unidades) > 0) {
+                $_idsVueltas = array();
+                foreach ($unidades as $_u) {
+                    $_idsVueltas[] = $_u->_id;
+                }
+                $_despV = Despacho::whereIn('unidad_id', $_idsVueltas)
+                    ->where('fecha', '>=', $desde)
+                    ->where('fecha', '<=', $hasta)
+                    ->whereIn('estado', array('P', 'C'))
+                    ->get();
+                $_listByU = array();
+                foreach ($_idsVueltas as $_idu) {
+                    $_listByU[(string) $_idu] = array();
+                }
+                foreach ($_despV as $_dv) {
+                    $_uk = (string) $_dv->unidad_id;
+                    if (!isset($_listByU[$_uk])) {
+                        continue;
+                    }
+                    $_listByU[$_uk][] = $_dv;
+                }
+                foreach ($_listByU as $_uk => $_lista) {
+                    usort($_lista, function ($a, $b) {
+                        $ta = $this->despachoComparableParaOrdenVuelta($a);
+                        $tb = $this->despachoComparableParaOrdenVuelta($b);
+                        if ($ta === $tb) {
+                            return 0;
+                        }
+
+                        return ($ta < $tb) ? -1 : 1;
+                    });
+                    $vueltasNumByUnidad[$_uk] = $this->numVueltaDesdeDespachosOrdenados($_lista);
+                }
+            }
+
             foreach($unidades as $unidad)
             {
-                
+                $_uidK = (string) $unidad->_id;
+                $_nv = isset($vueltasNumByUnidad[$_uidK]) ? (int) $vueltasNumByUnidad[$_uidK] : 0;
+                $unidad->numvuelta = $_nv;
+                $unidad['numvuelta'] = $_nv;
+
                 if($unidad["fecha_gps"] != null && $unidad["fecha"] != null)
                 {
 
@@ -822,7 +863,13 @@ class HistoricoController extends Controller
                         $ruta_hora_final = $ruta_hora_final->format('H:i'); // solo hora:minuto
 
                     }
-                    array_push($rutaunidad,["ruta_actual"=>$ruta,"ruta_fecha"=>$ruta_fecha,"ruta_conductor"=>$ruta_conductor,"ruta_hora_fin"=>$ruta_hora_final]);
+                    array_push($rutaunidad, array(
+                        "ruta_actual" => $ruta,
+                        "ruta_fecha" => $ruta_fecha,
+                        "ruta_conductor" => $ruta_conductor,
+                        "ruta_hora_fin" => $ruta_hora_final,
+                        "numvuelta" => $_nv,
+                    ));
 
                     $f_gps=$unidad["fecha_gps"]->toDateTime();
                     $f_servidor=$unidad["fecha"]->toDateTime();
@@ -880,7 +927,13 @@ class HistoricoController extends Controller
                     array_push($array,["fecha_servidor"=>null, "fecha_gps"=>null, 'diferencia'=>null,
                     'fecha_puerta_abierta'=>null,'fecha_puerta_cerrada'=>null]);
 
-                    array_push($rutaunidad,["ruta_actual"=>'',"ruta_fecha"=>'',"ruta_conductor"=>'']);
+                    array_push($rutaunidad, array(
+                        "ruta_actual" => '',
+                        "ruta_fecha" => '',
+                        "ruta_conductor" => '',
+                        "ruta_hora_fin" => '',
+                        "numvuelta" => $_nv,
+                    ));
                 }
 
                 if($unidad->fecha_gps!=null && $unidad->fecha!=null)

@@ -4082,7 +4082,11 @@ $("#velocimetro").myfunc({divFact:10});
                 var bId = 'i' + data.unidades[i]._id; 
                 console.log(data.unidades[i].climatizada);
 
-                var vueltaHtmlI = htmlBadgeNumVuelta(data.unidades[i].numvuelta, ruta_actual);
+                var _nvInit = data.unidades[i].numvuelta;
+                if (_nvInit == null || _nvInit === '') {
+                    _nvInit = (data.array_rutas[i] && data.array_rutas[i].numvuelta != null) ? data.array_rutas[i].numvuelta : 0;
+                }
+                var vueltaHtmlI = htmlBadgeNumVuelta(_nvInit, ruta_actual);
 
                 sentido='';
 
