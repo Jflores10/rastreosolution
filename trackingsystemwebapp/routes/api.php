@@ -45,6 +45,12 @@ Route::group(['prefix' => 'v2'], function () {
 		Route::post('cooperativas/getcoordenadas', 'CooperativaApiController@getCoordenadas_v2');
 		Route::post('despachos/socios', 'DespachoApiController@getDespachosSocios_v2');
 		Route::post('despachos/punto', 'DespachoApiController@getPuntoControl_v2');
+		Route::post('puntos-control/buscar', 'PuntoControlApiController@search');
+		Route::post('puntos-control/buscar-json', 'PuntoControlApiController@searchJson');
+		Route::post('puntos-control', 'PuntoControlApiController@store');
+		Route::post('puntos-control/{id}', 'PuntoControlApiController@update');
+		Route::get('puntos-control/{id}', 'PuntoControlApiController@show');
+
 		Route::post('historico/unidades-meta', 'HistoricoApiController@getUnidadesMeta');
 		Route::post('historico/reproductor', 'HistoricoApiController@getHistoricoReproductor');
 		Route::post('device-token', 'DeviceTokenApiController@register_v2');
