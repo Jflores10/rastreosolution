@@ -129,6 +129,72 @@ class HistoricoController extends Controller
             });
         }
     }
+
+    /**
+     * Marca de tiempo para ordenar despachos del día por hora_programada (si existe) o por fecha.
+     */
+    private function despachoComparableParaOrdenVuelta($d)
+    {
+        $fechaBase = Carbon::today();
+        if (isset($d->fecha) && $d->fecha !== null) {
+            try {
+                if ($d->fecha instanceof \MongoDB\BSON\UTCDateTime) {
+                    $fechaBase = Carbon::createFromTimestampUTC($d->fecha->toDateTime()->getTimestamp());
+                } else {
+                    $fechaBase = Carbon::parse($d->fecha);
+                }
+            } catch (\Exception $e) {
+                $fechaBase = Carbon::today();
+            }
+        }
+
+        if (isset($d->hora_programada)) {
+            $hp = $d->hora_programada;
+            try {
+                if ($hp instanceof \MongoDB\BSON\UTCDateTime) {
+                    return Carbon::createFromTimestampUTC($hp->toDateTime()->getTimestamp())->getTimestamp();
+                }
+                if ($hp instanceof \DateTimeInterface) {
+                    return Carbon::parse($hp)->getTimestamp();
+                }
+                if (is_string($hp) && trim($hp) !== '') {
+                    $hps = trim($hp);
+                    if (preg_match('/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/', $hps, $m)) {
+                        return $fechaBase->copy()->startOfDay()->setTime((int) $m[1], (int) $m[2], isset($m[3]) ? (int) $m[3] : 0)->getTimestamp();
+                    }
+
+                    return Carbon::parse($hps)->getTimestamp();
+                }
+            } catch (\Exception $e) {
+                // continuar con fecha del despacho
+            }
+        }
+
+        try {
+            return $fechaBase->getTimestamp();
+        } catch (\Exception $e) {
+            return 0;
+        }
+    }
+
+    /**
+     * Lista ordenada de despachos (P|C) del día: 1-based vuelta actual = posición del primer P;
+     * si no hay P (todas C), devuelve la cantidad de vueltas completadas del día.
+     */
+    private function numVueltaDesdeDespachosOrdenados(array $ordenados)
+    {
+        if (count($ordenados) === 0) {
+            return 0;
+        }
+        foreach ($ordenados as $idx => $d) {
+            if (isset($d->estado) && $d->estado === 'P') {
+                return $idx + 1;
+            }
+        }
+
+        return count($ordenados);
+    }
+
     // New: return metadata (ruta_actual, ruta_fecha, ruta_conductor, tipo_bitacora) for one or many unidades
     public function getUnidadesMeta(Request $request)
     {
@@ -308,6 +374,37 @@ class HistoricoController extends Controller
                 ->where('fecha', '<=', $hasta)
                 ->get();
 
+            // Despachos del día P|C (excluye I) para número de vuelta ordenado por hora_programada
+            $despachosVueltas = Despacho::whereIn('unidad_id', $toFetch)
+                ->where('fecha', '>=', $desde)
+                ->where('fecha', '<=', $hasta)
+                ->whereIn('estado', array('P', 'C'))
+                ->get();
+
+            $vueltasPorUnidad = array();
+            foreach ($toFetch as $uidKey) {
+                $vueltasPorUnidad[(string) $uidKey] = array();
+            }
+            foreach ($despachosVueltas as $dv) {
+                $uidv = (string) $dv->unidad_id;
+                if (!array_key_exists($uidv, $vueltasPorUnidad)) {
+                    continue;
+                }
+                $vueltasPorUnidad[$uidv][] = $dv;
+            }
+            foreach ($vueltasPorUnidad as $uidv => $listaV) {
+                usort($listaV, function ($a, $b) {
+                    $ta = $this->despachoComparableParaOrdenVuelta($a);
+                    $tb = $this->despachoComparableParaOrdenVuelta($b);
+                    if ($ta === $tb) {
+                        return 0;
+                    }
+
+                    return ($ta < $tb) ? -1 : 1;
+                });
+                $vueltasPorUnidad[$uidv] = $listaV;
+            }
+
             // For bitacoras, apply visibility rules similar to BitacoraController
             $user = Auth::user();
             $bitacorasQuery = Bitacora::orderBy('fechaInicio', 'desc')
@@ -415,6 +512,9 @@ class HistoricoController extends Controller
                 $meta['tiempo_power']        = $tp;
                 $meta['tiempo_power_update'] = $tpu_iso;
                 $meta['bolt_activo']         = $bolt_activo;
+
+                $listaVueltas = isset($vueltasPorUnidad[(string) $uid]) ? $vueltasPorUnidad[(string) $uid] : array();
+                $meta['numvuelta'] = $this->numVueltaDesdeDespachosOrdenados($listaVueltas);
 
                 // cache short-term (even an empty object to avoid hot loops)
                 try {
