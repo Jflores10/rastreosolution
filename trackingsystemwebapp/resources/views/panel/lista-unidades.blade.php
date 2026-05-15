@@ -210,6 +210,15 @@ Unidades
                       <input class="form-control" name="modelo" id="modelo" type="text"/>
                       <span class="help-block" id="span_modelo"></span>
                   </div>
+                  <div class="form-group" id="div-tipo-in1">
+                      <label for="tipo_in1">Tipo IN1</label>
+                      <select class="form-control" id="tipo_in1" name="tipo_in1">
+                          <option value="" disabled selected hidden>Seleccione...</option>
+                          <option value="bp">Boton Panico</option>
+                          <option value="p">Puertas</option>
+                      </select>
+                      <span class="help-block" id="span_tipo_in1"></span>
+                  </div>
               </div>
               <div class="col-lg-6 col-md-6 col-sm-12">
                   <div class="form-group" id="div-serie">

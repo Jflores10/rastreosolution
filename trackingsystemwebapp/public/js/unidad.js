@@ -15,6 +15,11 @@ function editarUnidad(url, tipo_usuario_valor)
         tipo_unidad_id.value = data.tipo_unidad_id;
         marca.value = data.marca;
         modelo.value = data.modelo;
+        if (data.tipo_in1) {
+            document.getElementById('tipo_in1').value = data.tipo_in1;
+        } else {
+            document.getElementById('tipo_in1').value = '';
+        }
         serie.value = data.serie;
         motor.value = data.motor;
         email_alarma.value = data.email_alarma;
@@ -57,11 +62,13 @@ function crearUnidad(url, tipo_usuario_valor, id_cooperativa)
     var climatizada = document.getElementById('climatizada');
     var rampa = document.getElementById('rampa');
     var imei = document.getElementById('imei');
+    var tipo_in1 = document.getElementById('tipo_in1');
     var atm = document.getElementById('atm').checked;
     var velocidad = document.getElementById('velocidad').value;
 
     var div_descripcion = document.getElementById('div-descripcion');
     var div_tipo_unidad = document.getElementById('div-tipo-unidad');
+    var div_tipo_in1 = document.getElementById('div-tipo-in1');
     var div_marca = document.getElementById('div-marca');
     var div_modelo = document.getElementById('div-modelo');
     var div_placa = document.getElementById('div-placa');
@@ -72,6 +79,7 @@ function crearUnidad(url, tipo_usuario_valor, id_cooperativa)
 
     var span_descripcion = document.getElementById('span_descripcion');
     var span_tipo_unidad = document.getElementById('span_tipo_unidad');
+    var span_tipo_in1 = document.getElementById('span_tipo_in1');
     var span_marca = document.getElementById('span_marca');
     var span_modelo = document.getElementById('span_modelo');
     var span_placa = document.getElementById('span_placa');
@@ -82,6 +90,7 @@ function crearUnidad(url, tipo_usuario_valor, id_cooperativa)
 
     div_descripcion.classList.remove('has-error');
     div_tipo_unidad.classList.remove('has-error');
+    div_tipo_in1.classList.remove('has-error');
     div_marca.classList.remove('has-error');
     div_modelo.classList.remove('has-error');
     div_placa.classList.remove('has-error');
@@ -111,6 +120,7 @@ function crearUnidad(url, tipo_usuario_valor, id_cooperativa)
             marca:marca.value,
             serie:serie.value,
             tipo_unidad_id:tipo_unidad_id.value,
+            tipo_in1:tipo_in1.value,
             motor:motor.value,
             email_alarma:email_alarma.value,
             sistema_energizado:sistema_energizado.checked,
@@ -154,11 +164,13 @@ function actualizarUnidad(url, tipo_usuario_valor, id_cooperativa)
     var climatizada = document.getElementById('climatizada');
     var rampa = document.getElementById('rampa');
     var imei = document.getElementById('imei');
+    var tipo_in1 = document.getElementById('tipo_in1');
     var atm = document.getElementById('atm').checked;
     var velocidad = document.getElementById('velocidad').value;
 
     var div_descripcion = document.getElementById('div-descripcion');
     var div_tipo_unidad = document.getElementById('div-tipo-unidad');
+    var div_tipo_in1 = document.getElementById('div-tipo-in1');
     var div_marca = document.getElementById('div-marca');
     var div_modelo = document.getElementById('div-modelo');
     var div_placa = document.getElementById('div-placa');
@@ -169,6 +181,7 @@ function actualizarUnidad(url, tipo_usuario_valor, id_cooperativa)
 
     var span_descripcion = document.getElementById('span_descripcion');
     var span_tipo_unidad = document.getElementById('span_tipo_unidad');
+    var span_tipo_in1 = document.getElementById('span_tipo_in1');
     var span_marca = document.getElementById('span_marca');
     var span_modelo = document.getElementById('span_modelo');
     var span_placa = document.getElementById('span_placa');
@@ -179,6 +192,7 @@ function actualizarUnidad(url, tipo_usuario_valor, id_cooperativa)
 
     div_descripcion.classList.remove('has-error');
     div_tipo_unidad.classList.remove('has-error');
+    div_tipo_in1.classList.remove('has-error');
     div_marca.classList.remove('has-error');
     div_modelo.classList.remove('has-error');
     div_placa.classList.remove('has-error');
@@ -207,6 +221,7 @@ function actualizarUnidad(url, tipo_usuario_valor, id_cooperativa)
         cooperativa_id:cooperativa_id,
         modelo:modelo.value,
         tipo_unidad_id:tipo_unidad_id.value,
+        tipo_in1:tipo_in1.value,
         marca:marca.value, serie:serie.value,
         motor:motor.value,email_alarma:email_alarma.value,
         sistema_energizado:sistema_energizado.checked,
@@ -313,6 +328,15 @@ function mensajesError(data,div_descripcion,span_descripcion, div_cooperativa,sp
         div_email_alarma.classList.add('has-error');
         span_email_alarma.innerHTML = '<strong>' + data.messages.email_alarma + '</strong>';
     }
+
+    if (data.messages.hasOwnProperty('tipo_in1')){
+        var div_tipo_in1 = document.getElementById('div-tipo-in1');
+        var span_tipo_in1 = document.getElementById('span_tipo_in1');
+        if (div_tipo_in1 && span_tipo_in1) {
+            div_tipo_in1.classList.add('has-error');
+            span_tipo_in1.innerHTML = '<strong>' + data.messages.tipo_in1 + '</strong>';
+        }
+    }
 }
 
 function cleanForm(tipo_usuario_valor) {
@@ -336,6 +360,9 @@ function cleanForm(tipo_usuario_valor) {
     document.getElementById('marca').value='';
     document.getElementById('imei').value='';
     document.getElementById('tipo_unidad_id').value='';
+    document.getElementById('tipo_in1').value='';
+    document.getElementById('span_tipo_in1').innerHTML = '<strong>' + '' + '</strong>';
+    document.getElementById('div-tipo-in1').classList.remove('has-error');
     document.getElementById('sistema_energizado').checked=false;
     document.getElementById('contador_cero_manual').checked=false;
     document.getElementById('desconexion_sistema').checked=false;

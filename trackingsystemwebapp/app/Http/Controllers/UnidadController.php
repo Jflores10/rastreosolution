@@ -50,7 +50,8 @@ class UnidadController extends Controller
             'motor' => 'required|max:25',
             'email_alarma' => 'required|email',
             'atm' => 'required',
-            'velocidad' => 'nullable|numeric'
+            'velocidad' => 'nullable|numeric',
+            'tipo_in1' => 'required|in:bp,p'
         ]);
         if ($validator->fails())
             return response()->json(['error' => true, 'messages' => $validator->errors()]);
@@ -80,7 +81,8 @@ class UnidadController extends Controller
                 'creador_id' => Auth::user()->_id,
                 'modificador_id' => Auth::user()->_id,
                 'atm' => ($request->input('atm') == 'true')?'S':'N',
-                'velocidad' => $request->input('velocidad')
+                'velocidad' => $request->input('velocidad'),
+                'tipo_in1' => $request->input('tipo_in1')
             ]);
             return response()->json(['error' => false, 'unidad' => $request->all()]);
         }
@@ -128,7 +130,8 @@ class UnidadController extends Controller
                 'motor' => 'required|max:50',
                 'tipo_unidad_id' => 'required',
                 'email_alarma' => 'required|email',
-                'velocidad' => 'nullable|numeric'
+                'velocidad' => 'nullable|numeric',
+                'tipo_in1' => 'required|in:bp,p'
             ]);
         else
             $validator = Validator::make($request->all(), [
@@ -142,7 +145,8 @@ class UnidadController extends Controller
                 'motor' => 'required|max:50',
                 'tipo_unidad_id' => 'required',
                 'email_alarma' => 'required|email',
-                'velocidad' => 'nullable|numeric'
+                'velocidad' => 'nullable|numeric',
+                'tipo_in1' => 'required|in:bp,p'
             ]);
 
         if ($validator->fails())
@@ -168,6 +172,7 @@ class UnidadController extends Controller
             $unidad->rampa= ((($request->input('rampa'))=="true")?true:false);
             $unidad->atm = ($request->input('atm') == 'true')?'S':'N';
             $unidad->velocidad = $request->input('velocidad');
+            $unidad->tipo_in1 = $request->input('tipo_in1');
             $unidad->save();
             return response()->json(['error' => false, 'unidad' => $unidad]);
         }
