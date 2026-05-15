@@ -19,7 +19,7 @@ Unidades
         <div class="x_content">
             @if($tipo_usuario_valor=='1')
             <br />
-            <button onclick="cleanForm('{{$tipo_usuario_valor}}');" type="button" data-toggle="modal" data-target="#form" class="btn btn-default"><i class="fa fa-plus"></i> Crear nuevo</button>
+            <button onclick="cleanForm('{{$tipo_usuario_valor}}');" type="button" data-toggle="modal" data-target="#modal-unidad" class="btn btn-default"><i class="fa fa-plus"></i> Crear nuevo</button>
             <br />
             @endif
             <form class="form-inline" name="form_search" method="GET" action="{{ url('/unidades/search') }}" id="form_search">
@@ -108,7 +108,7 @@ Unidades
                     @foreach ($unidades as $unidad)
                         <tr class="{{($unidad->estado=='I')?'danger':''}}">
                             @if($tipo_usuario_valor=='1')
-                              <td><button onclick="editarUnidad('{{ url('/unidades/' . $unidad->_id) }}','{{$tipo_usuario_valor}}');" data-toggle="modal" data-target="#form" class="btn btn-primary"><i class="fa fa-edit"></i></button></td>
+                              <td><button onclick="editarUnidad('{{ url('/unidades/' . $unidad->_id) }}','{{$tipo_usuario_valor}}','{{ $unidad->_id }}');" data-toggle="modal" data-target="#modal-unidad" class="btn btn-primary"><i class="fa fa-edit"></i></button></td>
                             @endif
                             <td>{{ $unidad->placa }}</td>
                             <td>{{ $unidad->descripcion }}</td>
@@ -151,7 +151,7 @@ Unidades
 </div>
 
 <!-- Modal -->
-<div class="modal fade" id="form" tabindex="-1" role="dialog" aria-labelledby="modalLabel">
+<div class="modal fade" id="modal-unidad" tabindex="-1" role="dialog" aria-labelledby="modalLabel">
   <div class="modal-dialog" role="document">
     <div class="modal-content">
       <div class="modal-header">
@@ -213,7 +213,7 @@ Unidades
                   <div class="form-group" id="div-tipo-in1">
                       <label for="tipo_in1">Tipo IN1</label>
                       <select class="form-control" id="tipo_in1" name="tipo_in1">
-                          <option value="" disabled selected hidden>Seleccione...</option>
+                          <option value="">Seleccione...</option>
                           <option value="bp">Boton Panico</option>
                           <option value="p">Puertas</option>
                       </select>
@@ -233,7 +233,7 @@ Unidades
                   </div>
                   <div class="form-group" id="div-email-alarma">
                       <label for="email_alarma">Email</label>
-                      <input class="form-control" name="email_alarma" id="email_alarma" type="email_alarma"/>
+                      <input class="form-control" name="email_alarma" id="email_alarma" type="email"/>
                       <span class="help-block" id="span_email_alarma"></span>
                   </div>
                   <div class="form-group">
@@ -296,7 +296,7 @@ Unidades
 
         function guardar()
         {
-            if (actual_id == null)
+            if (!actual_id)
             {
                 crearUnidad('{{ url('/unidades') }}','{{$tipo_usuario_valor}}',id_cooperativa);
             }

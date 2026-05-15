@@ -1,38 +1,50 @@
 
 var actual_id = null;
 
+function mensajeValidacion(val) {
+    if (val == null) return '';
+    if (Array.isArray(val)) return val[0];
+    return val;
+}
 
-function editarUnidad(url, tipo_usuario_valor)
+function editarUnidad(url, tipo_usuario_valor, unidadId)
 {
     cleanForm(tipo_usuario_valor);
-    $.get(url, function ( data ) {
-        actual_id = data._id;
-        placa.value=data.placa;
-        descripcion.value = data.descripcion;
-        if(tipo_usuario_valor==1)
-          document.getElementById('cooperativa_id').value=data.cooperativa_id;
-        imei.value = data.imei;
-        tipo_unidad_id.value = data.tipo_unidad_id;
-        marca.value = data.marca;
-        modelo.value = data.modelo;
-        if (data.tipo_in1) {
-            document.getElementById('tipo_in1').value = data.tipo_in1;
-        } else {
-            document.getElementById('tipo_in1').value = '';
-        }
-        serie.value = data.serie;
-        motor.value = data.motor;
-        email_alarma.value = data.email_alarma;
-        document.getElementById('atm').checked = (data.atm == 'S');
-        document.getElementById('velocidad').value = (data.velocidad != undefined)?data.velocidad:'';
+    actual_id = unidadId || null;
 
-        if(data.sistema_energizado)sistema_energizado.checked=true;
-        if(data.contador_cero_manual)contador_cero_manual.checked=true;
-        if(data.desconexion_sistema)desconexion_sistema.checked=true;
-        if(data.control_velocidad)control_velocidad.checked=true;
-        if(data.climatizada)climatizada.checked=true;
-        if(data.rampa)rampa.checked=true;
-    }, "json");
+    $.get(url, function (data) {
+        if (data._id) {
+            actual_id = data._id;
+        } else if (unidadId) {
+            actual_id = unidadId;
+        }
+
+        document.getElementById('placa').value = data.placa || '';
+        document.getElementById('descripcion').value = data.descripcion || '';
+        if (tipo_usuario_valor == 1 || tipo_usuario_valor == '1') {
+            document.getElementById('cooperativa_id').value = data.cooperativa_id || '';
+        }
+        document.getElementById('imei').value = data.imei || '';
+        document.getElementById('tipo_unidad_id').value = data.tipo_unidad_id || '';
+        document.getElementById('marca').value = data.marca || '';
+        document.getElementById('modelo').value = data.modelo || '';
+        document.getElementById('tipo_in1').value = data.tipo_in1 || '';
+        document.getElementById('serie').value = data.serie || '';
+        document.getElementById('motor').value = data.motor || '';
+        document.getElementById('email_alarma').value = data.email_alarma || '';
+        document.getElementById('atm').checked = (data.atm == 'S');
+        document.getElementById('velocidad').value = (data.velocidad != undefined) ? data.velocidad : '';
+
+        document.getElementById('sistema_energizado').checked = !!data.sistema_energizado;
+        document.getElementById('contador_cero_manual').checked = !!data.contador_cero_manual;
+        document.getElementById('desconexion_sistema').checked = !!data.desconexion_sistema;
+        document.getElementById('control_velocidad').checked = !!data.control_velocidad;
+        document.getElementById('climatizada').checked = !!data.climatizada;
+        document.getElementById('rampa').checked = !!data.rampa;
+    }, 'json').fail(function () {
+        alert('No se pudo cargar la unidad. Intente de nuevo.');
+        actual_id = null;
+    });
 }
 
 function setUnidadConteo(url){       
@@ -112,7 +124,6 @@ function crearUnidad(url, tipo_usuario_valor, id_cooperativa)
     else
        cooperativa_id=id_cooperativa;
 
-
     $.post(url, {
             descripcion : descripcion.value,
             cooperativa_id:cooperativa_id,
@@ -143,7 +154,9 @@ function crearUnidad(url, tipo_usuario_valor, id_cooperativa)
                 div_tipo_unidad,span_tipo_unidad,div_motor,span_motor,div_marca,span_marca,
                 div_serie,span_serie,div_modelo,span_modelo,div_placa,span_placa,
                 div_email_alarma,span_email_alarma,div_imei,span_imei);
-    }, "json");
+    }, "json").fail(function () {
+        alert('Error al guardar la unidad. Revise los datos e intente de nuevo.');
+    });
 }
 
 
@@ -243,7 +256,9 @@ function actualizarUnidad(url, tipo_usuario_valor, id_cooperativa)
                 div_tipo_unidad,span_tipo_unidad,div_motor,span_motor,div_marca,span_marca,
                 div_serie,span_serie,div_modelo,span_modelo,div_placa,span_placa,
                 div_email_alarma,span_email_alarma,div_imei,span_imei);
-       }, "json");
+       }, "json").fail(function () {
+        alert('Error al actualizar la unidad. Revise los datos e intente de nuevo.');
+    });
 }
 
 function estadoUnidad(url,check)
@@ -334,7 +349,7 @@ function mensajesError(data,div_descripcion,span_descripcion, div_cooperativa,sp
         var span_tipo_in1 = document.getElementById('span_tipo_in1');
         if (div_tipo_in1 && span_tipo_in1) {
             div_tipo_in1.classList.add('has-error');
-            span_tipo_in1.innerHTML = '<strong>' + data.messages.tipo_in1 + '</strong>';
+            span_tipo_in1.innerHTML = '<strong>' + mensajeValidacion(data.messages.tipo_in1) + '</strong>';
         }
     }
 }
@@ -400,3 +415,4 @@ $("[name='chk_estado']").bootstrapSwitch();
 /**
  * Created by José Daniel on 04/09/2016.
  */
+

@@ -51,7 +51,7 @@ class UnidadController extends Controller
             'email_alarma' => 'required|email',
             'atm' => 'required',
             'velocidad' => 'nullable|numeric',
-            'tipo_in1' => 'required|in:bp,p'
+            'tipo_in1' => 'nullable|in:bp,p'
         ]);
         if ($validator->fails())
             return response()->json(['error' => true, 'messages' => $validator->errors()]);
@@ -82,7 +82,7 @@ class UnidadController extends Controller
                 'modificador_id' => Auth::user()->_id,
                 'atm' => ($request->input('atm') == 'true')?'S':'N',
                 'velocidad' => $request->input('velocidad'),
-                'tipo_in1' => $request->input('tipo_in1')
+                'tipo_in1' => ($request->input('tipo_in1') !== null && $request->input('tipo_in1') !== '') ? $request->input('tipo_in1') : ''
             ]);
             return response()->json(['error' => false, 'unidad' => $request->all()]);
         }
@@ -131,7 +131,7 @@ class UnidadController extends Controller
                 'tipo_unidad_id' => 'required',
                 'email_alarma' => 'required|email',
                 'velocidad' => 'nullable|numeric',
-                'tipo_in1' => 'required|in:bp,p'
+                'tipo_in1' => 'nullable|in:bp,p'
             ]);
         else
             $validator = Validator::make($request->all(), [
@@ -146,7 +146,7 @@ class UnidadController extends Controller
                 'tipo_unidad_id' => 'required',
                 'email_alarma' => 'required|email',
                 'velocidad' => 'nullable|numeric',
-                'tipo_in1' => 'required|in:bp,p'
+                'tipo_in1' => 'nullable|in:bp,p'
             ]);
 
         if ($validator->fails())
@@ -172,7 +172,8 @@ class UnidadController extends Controller
             $unidad->rampa= ((($request->input('rampa'))=="true")?true:false);
             $unidad->atm = ($request->input('atm') == 'true')?'S':'N';
             $unidad->velocidad = $request->input('velocidad');
-            $unidad->tipo_in1 = $request->input('tipo_in1');
+            $tipoIn1 = $request->input('tipo_in1');
+            $unidad->tipo_in1 = ($tipoIn1 !== null && $tipoIn1 !== '') ? $tipoIn1 : '';
             $unidad->save();
             return response()->json(['error' => false, 'unidad' => $unidad]);
         }
