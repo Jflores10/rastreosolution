@@ -180,8 +180,8 @@ class PuntoControlApiController extends Controller
         $punto_control->salida = $request->input('salida');
         $punto_control->mt = $request->input('otro');
         $punto_control->estado_exportacion = 'P';
+        $punto_control->estado = $request->input('estado');
         $punto_control->tipo_mar = $request->input('tipo_mar');
-
         if ($request->input('tipo_mar') == '1') {
             $punto_control->latitud = $request->input('latitud');
             $punto_control->longitud = $request->input('longitud');
