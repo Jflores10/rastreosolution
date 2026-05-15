@@ -58,6 +58,7 @@ const GTIGN = 'GTIGN';
 const GTDTT = 'GTDTT';
 const GTDTTDGT = 'DGT';
 const ADMIN = 'ADMIN';
+const CMD_VIGILANTE_AT_GTOUT = 'AT+GTOUT=gv300,0,,,0,0,0,0,0,0,0,,0,0,,,,FFFF$';
 const GTLOG = 'GTLOG';
 const GTGOT = 'GTGOT';
 const GTGIN = 'GTGIN';
@@ -106,6 +107,7 @@ const PUSH_TYPE_GEOFENCE =  'geofence';
 const PUSH_TYPE_ONOFF =  'onoff';
 const PUSH_TYPE_IGN = 'ign';
 const PUSH_TYPE_OVERSPEED = 'overspeed';
+const PUSH_TYPE_BPANICO = 'bpanico';
 
 const PUSH_NOTIFICATION_TIMEZONE = (process.env.PUSH_NOTIFICATION_TIMEZONE || 'America/Guayaquil').trim();
 const PUSH_GPS_DATETIME_AS_UTC = String(process.env.PUSH_GPS_DATETIME_AS_UTC || '1').trim() === '1';
@@ -885,6 +887,17 @@ function procesarRecorridosYAlertas_GTFRI(documentValue, data, message, indexes)
 
   } catch (e) {
     if (debug) console.log('procesarRecorridosYAlertas_GTFRI outer ex:', e);
+  }
+}
+
+// Igual que la rama ADMIN de este servidor: reenvía la línea AT al socket del dispositivo ya conectado.
+function escribirLineaComandoAlGps(sock, cmdLine) {
+  if (!sock || !sock.writable) return;
+  const line = String(cmdLine || '').replace(/\r?\n$/, '') + '\n';
+  try {
+    sock.write(line);
+  } catch (e) {
+    console.error('escribirLineaComandoAlGps:', e && e.message);
   }
 }
 
@@ -1969,7 +1982,9 @@ function onClientConnected(socket) {
         let latitude = 10;
         let datetime = 11;
         let fechaGPS = toInteger(data[datetime]);
-
+        let fecha_gps = (fechaGPS != 0)
+        ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate()
+        : new Date();
         dbTrackingSystem.collection('unidads').findOne(
           { imei: data[imei], estado: 'A' },
           function (err, unidad) {
@@ -1981,7 +1996,7 @@ function onClientConnected(socket) {
                 {
                   $set: {
                     ignicionf: 'on',
-                    fecha_gps: (fechaGPS != 0) ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate() : new Date(),
+                    fecha_gps: fecha_gps,
                     latitud: toFloat(data[latitude]),
                     longitud: toFloat(data[longitude]),
                     velocidad_actual: toFloat(data[speed]),
@@ -1998,6 +2013,8 @@ function onClientConnected(socket) {
               buildUnidadPayloadRealtime({ imei: unidad.imei, _id: unidad._id, ignicionf: 'on' });
             }
 
+            
+
             enviarALaravelPorWS({
               type: 'unidad.ignicion',
               unidad_id: unidad._id,
@@ -2008,13 +2025,17 @@ function onClientConnected(socket) {
               longitud: toFloat(data[longitude]),
               velocidad_actual: toFloat(data[speed]),
               angulo: toInteger(data[angle]),
-              fecha_gps: (fechaGPS != 0) ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate() : new Date(),
+              fecha_gps: fecha_gps,
               fecha: new Date(),
               cooperativa_id: unidad.cooperativa_id ? String(unidad.cooperativa_id).trim() : null,
               _raw_message: message
             });
 
-            const fecha_gps = fechaGpsFromGpsField(data[datetime], fechaGPS);
+            if (!isBuffMessage && String(unidad.vigilante || '').trim() === 'on') {
+              escribirLineaComandoAlGps(socket, CMD_VIGILANTE_AT_GTOUT);
+            }
+            
+
             const lat = toFloat(data[latitude]);
             const lng = toFloat(data[longitude]);
             const fechaHoraTxtEnc = formatFechaGpsParaPush(fecha_gps);
@@ -2043,7 +2064,9 @@ function onClientConnected(socket) {
         let latitude = 10;
         let datetime = 11;
         let fechaGPS = toInteger(data[datetime]);
-
+        let fecha_gps = (fechaGPS != 0)
+        ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate()
+        : new Date();
         dbTrackingSystem.collection('unidads').findOne(
           { imei: data[imei], estado: 'A' },
           function (err, unidad) {
@@ -2055,7 +2078,7 @@ function onClientConnected(socket) {
                 {
                   $set: {
                     ignicionf: 'off',
-                    fecha_gps: (fechaGPS != 0) ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate() : new Date(),
+                    fecha_gps: fecha_gps,
                     latitud: toFloat(data[latitude]),
                     longitud: toFloat(data[longitude]),
                     velocidad_actual: toFloat(data[speed]),
@@ -2082,13 +2105,12 @@ function onClientConnected(socket) {
               longitud: toFloat(data[longitude]),
               velocidad_actual: toFloat(data[speed]),
               angulo: toInteger(data[angle]),
-              fecha_gps: (fechaGPS != 0) ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate() : new Date(),
+              fecha_gps: fecha_gps,
               fecha: new Date(),
               cooperativa_id: unidad.cooperativa_id ? String(unidad.cooperativa_id).trim() : null,
               _raw_message: message
             });
 
-            const fecha_gps = fechaGpsFromGpsField(data[datetime], fechaGPS);
             const lat = toFloat(data[latitude]);
             const lng = toFloat(data[longitude]);
             const fechaHoraTxtApag = formatFechaGpsParaPush(fecha_gps);
@@ -2123,7 +2145,11 @@ function onClientConnected(socket) {
         dbTrackingSystem.collection('unidads').findOne({ imei: data[imei], estado: 'A' }, function (err, document) {
           if (err) console.log(err);
           else if (document) {
-            const fecha_gps = fechaGpsFromGpsField(data[datetime], fechaGPS);
+            //const fecha_gps = fechaGpsFromGpsField(data[datetime], fechaGPS);
+            let fecha_gps = (fechaGPS != 0)
+            ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate()
+            : new Date();
+
             const now = new Date();
             const lat = toFloat(data[latitude]);
             const lng = toFloat(data[longitude]);
@@ -2216,7 +2242,10 @@ function onClientConnected(socket) {
         dbTrackingSystem.collection('unidads').findOne({ imei: data[imei], estado: 'A' }, function (err, document) {
           if (err) console.log(err);
           else if (document) {
-            const fecha_gps = fechaGpsFromGpsField(data[datetime], fechaGPS);
+            let fecha_gps = (fechaGPS != 0)
+            ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate()
+            : new Date();
+            //const fecha_gps = fechaGpsFromGpsField(data[datetime], fechaGPS);
             const now = new Date();
             const lat = toFloat(data[latitude]);
             const lng = toFloat(data[longitude]);

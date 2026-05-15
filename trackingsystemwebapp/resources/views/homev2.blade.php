@@ -68,6 +68,47 @@
     }
     /* ──────────────────────────────────────────────────────────────────────── */
 
+    /* Toasts alertas (esquina superior derecha) */
+    #ts-toast-container {
+        position: fixed;
+        top: 16px;
+        right: 16px;
+        z-index: 10050;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        max-width: 380px;
+        pointer-events: none;
+    }
+    .ts-toast {
+        pointer-events: auto;
+        background: #1c2133;
+        color: #f5f7ff;
+        border-left: 4px solid #e53935;
+        border-radius: 6px;
+        padding: 12px 14px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+        font-size: 13px;
+        line-height: 1.4;
+        opacity: 0;
+        transform: translateX(24px);
+        transition: opacity 0.25s ease, transform 0.25s ease;
+    }
+    .ts-toast.ts-toast--visible {
+        opacity: 1;
+        transform: translateX(0);
+    }
+    .ts-toast__title {
+        font-weight: 600;
+        margin-bottom: 4px;
+        color: #ff8a80;
+    }
+    .ts-toast__fecha {
+        margin-top: 6px;
+        font-size: 11px;
+        color: #b0bec5;
+    }
+
     /* Ajuste botones */
     .comandos-v .btn{
         margin-bottom:5px;
@@ -695,7 +736,9 @@ Dashboard
     </div>
   </div>
 </div>
+<div id="ts-toast-container" aria-live="polite" aria-atomic="true"></div>
 @endsection
+
 @section('scripts')
 <script src="js/speedometer.js"></script>
 <script>
@@ -1175,6 +1218,64 @@ function puedeActualizarMarcadorMapaPorSSE() {
     return typeof playing === 'undefined' || !playing;
 }
 
+/** Formato fecha_gps para toasts (mismo offset que el listado). */
+function formatFechaGpsToast(fg) {
+    const d = fechaGpsInstante(fg);
+    if (!d) return '';
+    const dAdj = new Date(d.getTime());
+    dAdj.setHours(dAdj.getHours() + GPS_HOUR_OFFSET);
+    return dAdj.toLocaleString('es-EC', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    });
+}
+
+/**
+ * Toast de alerta en esquina superior derecha (botón pánico, etc.).
+ * fechaGps opcional; si el 3er argumento es número, se usa como duracionMs.
+ */
+function mostrarToastAlerta(titulo, mensaje, fechaGps, duracionMs) {
+    const container = document.getElementById('ts-toast-container');
+    if (!container) return;
+    if (typeof fechaGps === 'number') {
+        duracionMs = fechaGps;
+        fechaGps = null;
+    }
+    const dur = (typeof duracionMs === 'number' && duracionMs > 0) ? duracionMs : 8000;
+    const el = document.createElement('div');
+    el.className = 'ts-toast';
+    const titleEl = document.createElement('div');
+    titleEl.className = 'ts-toast__title';
+    titleEl.textContent = titulo || 'Alerta';
+    const bodyEl = document.createElement('div');
+    bodyEl.className = 'ts-toast__body';
+    bodyEl.textContent = mensaje || '';
+    el.appendChild(titleEl);
+    el.appendChild(bodyEl);
+    const fechaTxt = formatFechaGpsToast(fechaGps);
+    if (fechaTxt) {
+        const fechaEl = document.createElement('div');
+        fechaEl.className = 'ts-toast__fecha';
+        fechaEl.textContent = fechaTxt;
+        el.appendChild(fechaEl);
+    }
+    container.appendChild(el);
+    requestAnimationFrame(function () {
+        el.classList.add('ts-toast--visible');
+    });
+    setTimeout(function () {
+        el.classList.remove('ts-toast--visible');
+        setTimeout(function () {
+            if (el.parentNode) el.parentNode.removeChild(el);
+        }, 300);
+    }, dur);
+}
+
 function conectarSSE(coopId) {
 
     if (sse && sse.readyState === EventSource.OPEN) {
@@ -1309,6 +1410,22 @@ function conectarSSE(coopId) {
             }
             updateUnidadInList(li.currentU);
         } catch (e) {}
+    });
+
+    sse.addEventListener('unidad.alerta.bpanico', (evt) => {
+        try {
+            const msg = JSON.parse(evt.data);
+            const uid = normalizarUnidadId(msg && (msg.unidad_id || msg._id));
+            if (!uid || !unidadPerteneceAFiltroRutaActual(uid)) return;
+            if (msg.is_buff) return;
+
+            const texto = String(msg.mensaje || 'Botón de pánico').trim();
+            const fechaGps = msg.fecha_gps != null ? msg.fecha_gps : msg.fecha;
+            mostrarToastAlerta('🚨 Botón de pánico', texto, fechaGps);
+
+            setBuffBlink(uid, true);
+            setTimeout(function () { setBuffBlink(uid, false); }, 12000);
+        } catch (e) { console.warn('parse unidad.alerta.bpanico', e); }
     });
 
     sse.addEventListener('unidad.location', (evt) => {
