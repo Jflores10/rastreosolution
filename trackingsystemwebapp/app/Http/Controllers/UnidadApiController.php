@@ -96,6 +96,9 @@ class UnidadApiController extends Controller
         $validator = Validator::make($request->all(), [
             'usuario_id' => 'required',
             'cooperativa_id' => 'required',
+        ], [
+            'usuario_id.required' => 'El identificador del usuario es obligatorio.',
+            'cooperativa_id.required' => 'El identificador de la cooperativa es obligatorio.',
         ]);
 
         if ($validator->fails()) {
@@ -109,7 +112,14 @@ class UnidadApiController extends Controller
         $user_id = trim($request->input('usuario_id'));
         $cooperativa_id = $request->input('cooperativa_id');
 
-        $user = User::findOrFail($user_id);
+        $user = User::find($user_id);
+        if (!$user) {
+            return response()->json([
+                'error' => true,
+                'api_version' => 'v2',
+                'message' => 'Usuario no encontrado.',
+            ], 404);
+        }
 
         if ($user->estado !== 'A') {
             return response()->json([
@@ -178,6 +188,12 @@ class UnidadApiController extends Controller
         $validator = Validator::make($request->all(), [
             'desde' => 'required|date',
             'hasta' => 'required|date|after:desde',
+        ], [
+            'desde.required' => 'La fecha de inicio es obligatoria.',
+            'desde.date' => 'La fecha de inicio no tiene un formato válido.',
+            'hasta.required' => 'La fecha de fin es obligatoria.',
+            'hasta.date' => 'La fecha de fin no tiene un formato válido.',
+            'hasta.after' => 'La fecha de fin debe ser posterior a la fecha de inicio.',
         ]);
 
         if ($validator->fails()) {
@@ -211,5 +227,47 @@ class UnidadApiController extends Controller
             'api_version' => 'v2',
             'recorridos' => $recorridos,
         ], 200);
+    }
+
+    /**
+     * v2: actualiza el campo vigilante de la unidad ('on' u 'off').
+     * Cuerpo JSON: _id (identificador de la unidad), vigilante (on|off).
+     */
+    public function actualizarVigilante_v2(Request $request)
+    {
+        $validator = Validator::make($request->all(), array(
+            '_id' => 'required',
+            'vigilante' => 'required|in:on,off',
+        ), array(
+            '_id.required' => 'El identificador de la unidad es obligatorio.',
+            'vigilante.required' => 'El valor de vigilante es obligatorio.',
+            'vigilante.in' => 'vigilante debe ser on u off.',
+        ));
+
+        if ($validator->fails()) {
+            return response()->json(array(
+                'error' => true,
+                'api_version' => 'v2',
+                'messages' => $validator->errors(),
+            ), 422);
+        }
+
+        $unidad = Unidad::find($request->input('_id'));
+        if (!$unidad) {
+            return response()->json(array(
+                'error' => true,
+                'api_version' => 'v2',
+                'message' => 'Unidad no encontrada.',
+            ), 404);
+        }
+
+        $unidad->vigilante = $request->input('vigilante');
+        $unidad->save();
+
+        return response()->json(array(
+            'error' => false,
+            'api_version' => 'v2',
+            'unidad' => $unidad,
+        ), 200);
     }
 }

@@ -39,6 +39,7 @@ Route::group(['prefix' => 'v2'], function () {
 		Route::post('users/{id}/cambiar-contrasena', 'UserApiController@cambiarContrasena');
 
 		Route::get('unidades', 'UnidadApiController@index_v2');
+		Route::post('unidades/vigilante', 'UnidadApiController@actualizarVigilante_v2');
 		Route::post('{id}/recorrido', 'UnidadApiController@obtenerHistorial_v2');
 		Route::get('cooperativas', 'CooperativaApiController@index_v2');
 		Route::post('cooperativas/getrutas', 'CooperativaApiController@getRutas_v2');
