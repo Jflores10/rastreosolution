@@ -245,12 +245,14 @@ class PuntoControlApiController extends Controller
      * Parámetros: cooperativa (obligatorio, id cooperativa para scope permitido),
      * estado (obligatorio: A, I o T), search (opcional, filtro por descripción),
      * creador_id (opcional: solo puntos creados por ese usuario; si no se envía o va vacío, no se filtra por creador).
+     * page (opcional, entero >= 1; por defecto 1). Siempre 20 registros por página (paginacion en la respuesta).
      */
     public function search(Request $request)
     {
         $validator = Validator::make($request->all(), [
             'cooperativa' => 'required',
             'estado' => 'required|max:1',
+            'page' => 'sometimes|integer|min:1',
         ], [
             'cooperativa.required' => 'El identificador de cooperativa es obligatorio.',
             'estado.required' => 'El estado es obligatorio (A, I o T).',
@@ -295,12 +297,27 @@ class PuntoControlApiController extends Controller
             }
         }
 
-        $puntos_control = $query->get();
+        $porPagina = 20;
+        $pagina = (int) $request->input('page', 1);
+        if ($pagina < 1) {
+            $pagina = 1;
+        }
+
+        $total = (clone $query)->count();
+        $ultimaPagina = $total > 0 ? (int) ceil($total / $porPagina) : 1;
+        $items = $query->skip(($pagina - 1) * $porPagina)->take($porPagina)->get();
 
         return response()->json([
             'error' => false,
             'api_version' => 'v2',
-            'puntos_control' => $puntos_control,
+            'puntos_control' => $items,
+            'paginacion' => [
+                'pagina_actual' => $pagina,
+                'por_pagina' => $porPagina,
+                'total' => $total,
+                'ultima_pagina' => $ultimaPagina,
+                'tiene_mas' => $pagina < $ultimaPagina,
+            ],
         ]);
     }
 
