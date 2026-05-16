@@ -109,6 +109,12 @@ const PUSH_TYPE_IGN = 'ign';
 const PUSH_TYPE_OVERSPEED = 'overspeed';
 const PUSH_TYPE_BPANICO = 'bpanico';
 
+/** Token de acceso LocationIQ (panel https://my.locationiq.com/) — reverse geocoding en texto de push */
+const LOCATIONIQ_API_KEY = (process.env.LOCATIONIQ_API_KEY || '').trim();
+/** Base regional, ej. https://us1.locationiq.com/v1/reverse o https://eu1.locationiq.com/v1/reverse */
+const LOCATIONIQ_REVERSE_BASE = (process.env.LOCATIONIQ_REVERSE_BASE || 'https://us1.locationiq.com/v1/reverse').trim();
+const LOCATIONIQ_REVERSE_TIMEOUT_MS = Number(process.env.LOCATIONIQ_REVERSE_TIMEOUT_MS || '8000');
+
 const PUSH_NOTIFICATION_TIMEZONE = (process.env.PUSH_NOTIFICATION_TIMEZONE || 'America/Guayaquil').trim();
 const PUSH_GPS_DATETIME_AS_UTC = String(process.env.PUSH_GPS_DATETIME_AS_UTC || '1').trim() === '1';
 const PUSH_GPS_HOUR_OFFSET = Number(process.env.PUSH_GPS_HOUR_OFFSET || -5);
@@ -396,6 +402,104 @@ function solicitarNotificacionPushPorImei(imei, bodyText, notificationTypeCode) 
     pushDebugLog('exception', e && e.message ? e.message : e);
     if (debug) console.log('solicitarNotificacionPushPorImei', e);
   }
+}
+
+/**
+ * Reverse geocoding con LocationIQ (API tipo Nominatim).
+ * @param {function(Error|null, string)} callback — segundo argumento: display_name o cadena vacía
+ */
+function reverseGeocodeLocationIqDisplayName(lat, lng, callback) {
+  let done = false;
+  function finish(err, name) {
+    if (done) return;
+    done = true;
+    callback(err, name);
+  }
+
+  if (!LOCATIONIQ_API_KEY) {
+    return setImmediate(function () { finish(null, ''); });
+  }
+  const la = Number(lat);
+  const lo = Number(lng);
+  if (!Number.isFinite(la) || !Number.isFinite(lo)) {
+    return setImmediate(function () { finish(null, ''); });
+  }
+  if (Math.abs(la) > 90 || Math.abs(lo) > 180) {
+    return setImmediate(function () { finish(null, ''); });
+  }
+
+  let reqUrl;
+  try {
+    reqUrl = new URL(LOCATIONIQ_REVERSE_BASE);
+    reqUrl.searchParams.set('key', LOCATIONIQ_API_KEY);
+    reqUrl.searchParams.set('lat', String(la));
+    reqUrl.searchParams.set('lon', String(lo));
+    reqUrl.searchParams.set('format', 'json');
+    reqUrl.searchParams.set('accept-language', 'es');
+  } catch (e) {
+    return setImmediate(function () { finish(e, ''); });
+  }
+
+  const useHttps = reqUrl.protocol !== 'http:';
+  const mod = useHttps ? https : http;
+  const defaultPort = useHttps ? 443 : 80;
+  const opts = {
+    hostname: reqUrl.hostname,
+    port: reqUrl.port ? parseInt(reqUrl.port, 10) : defaultPort,
+    path: reqUrl.pathname + reqUrl.search,
+    method: 'GET',
+    headers: {
+      'User-Agent': 'rastreosolution-parseador/1 (push reverse-geocode)',
+      'Accept': 'application/json'
+    },
+    timeout: LOCATIONIQ_REVERSE_TIMEOUT_MS
+  };
+
+  const req = mod.request(opts, function (res) {
+    let buf = '';
+    res.on('data', function (chunk) { buf += chunk.toString('utf8'); });
+    res.on('end', function () {
+      try {
+        if (res.statusCode !== 200) {
+          pushDebugLog('locationiq', 'http', res.statusCode, buf ? buf.substring(0, 200) : '');
+          return finish(null, '');
+        }
+        const j = JSON.parse(buf);
+        if (j.error) {
+          pushDebugLog('locationiq', 'api_error', j.error);
+          return finish(null, '');
+        }
+        const name = j.display_name != null ? String(j.display_name).trim() : '';
+        finish(null, name);
+      } catch (err) {
+        pushDebugLog('locationiq', 'parse_error', err && err.message ? err.message : err);
+        finish(null, '');
+      }
+    });
+  });
+  req.on('timeout', function () {
+    try { req.destroy(); } catch (e) { }
+    pushDebugLog('locationiq', 'timeout');
+    finish(null, '');
+  });
+  req.on('error', function (err) {
+    pushDebugLog('locationiq', 'req_error', err && err.message ? err.message : err);
+    finish(null, '');
+  });
+  req.end();
+}
+
+/**
+ * Envía push igual que solicitarNotificacionPushPorImei, añadiendo línea de dirección si LocationIQ responde.
+ */
+function solicitarNotificacionPushConDireccion(imei, bodySinDireccion, lat, lng, notificationTypeCode) {
+  reverseGeocodeLocationIqDisplayName(lat, lng, function (err, direccion) {
+    let body = bodySinDireccion;
+    if (direccion) {
+      body += '\n* 📫 Dirección:* ' + direccion;
+    }
+    solicitarNotificacionPushPorImei(imei, body, notificationTypeCode);
+  });
 }
 
 /**
@@ -1588,7 +1692,7 @@ function onClientConnected(socket) {
                       lineaPuntoControl +
                       '* 📅 Fecha:* ' + fechaTxtGeo + '\n' +
                       '* ⏰ Hora:* ' + horaTxtGeo;
-                      solicitarNotificacionPushPorImei(data[imei], txtGeofenceEntrada, PUSH_TYPE_GEOFENCE);
+                      solicitarNotificacionPushConDireccion(data[imei], txtGeofenceEntrada, latitud, longitudV, PUSH_TYPE_GEOFENCE);
                   } else if (entrada === 0) {
                     const fechaHoraTxtGeo = formatFechaGpsParaPush(fecha_gps);
                     const fechaPartesGeo = fechaHoraTxtGeo.split(' ');
@@ -1601,7 +1705,7 @@ function onClientConnected(socket) {
                       lineaPuntoControl +
                       '* 📅 Fecha:* ' + fechaTxtGeo + '\n' +
                       '* ⏰ Hora:* ' + horaTxtGeo;
-                      solicitarNotificacionPushPorImei(data[imei], txtGeofenceSalida, PUSH_TYPE_GEOFENCE);
+                      solicitarNotificacionPushConDireccion(data[imei], txtGeofenceSalida, latitud, longitudV, PUSH_TYPE_GEOFENCE);
                   }
                 });
               }
@@ -1706,7 +1810,7 @@ function onClientConnected(socket) {
                       lineaPuntoControl +
                       '* 📅 Fecha:* ' + fechaTxtGeo + '\n' +
                       '* ⏰ Hora:* ' + horaTxtGeo;
-                    solicitarNotificacionPushPorImei(data[imei], txtGeofenceEntrada, PUSH_TYPE_GEOFENCE);
+                    solicitarNotificacionPushConDireccion(data[imei], txtGeofenceEntrada, latitud, longitudV, PUSH_TYPE_GEOFENCE);
                   } else if (inout === 0) {
                     const fechaHoraTxtGeo = formatFechaGpsParaPush(fecha_gps);
                     const fechaPartesGeo = fechaHoraTxtGeo.split(' ');
@@ -1719,7 +1823,7 @@ function onClientConnected(socket) {
                       lineaPuntoControl +
                       '* 📅 Fecha:* ' + fechaTxtGeo + '\n' +
                       '* ⏰ Hora:* ' + horaTxtGeo;
-                    solicitarNotificacionPushPorImei(data[imei], txtGeofenceSalida, PUSH_TYPE_GEOFENCE);
+                    solicitarNotificacionPushConDireccion(data[imei], txtGeofenceSalida, latitud, longitudV, PUSH_TYPE_GEOFENCE);
                   }
                 });
               }
@@ -2048,7 +2152,7 @@ function onClientConnected(socket) {
               '* 🚍 Vehiculo:* ' + unidadTxtEnc + '\n' +
               '* 📅 Fecha:* ' + fechaTxtEnc + '\n' +
               '* ⏰ Hora:* ' + horaTxtEnc;
-            solicitarNotificacionPushPorImei(data[imei], txtIgnEncendida, PUSH_TYPE_IGN);
+            solicitarNotificacionPushConDireccion(data[imei], txtIgnEncendida, lat, lng, PUSH_TYPE_IGN);
           }
         );
       }
@@ -2123,7 +2227,7 @@ function onClientConnected(socket) {
               '* 🚍 Vehiculo:* ' + unidadTxtApag + '\n' +
               '* 📅 Fecha:* ' + fechaTxtApag + '\n' +
               '* ⏰ Hora:* ' + horaTxtApag;
-            solicitarNotificacionPushPorImei(data[imei],txtIgnApagada, PUSH_TYPE_IGN);
+            solicitarNotificacionPushConDireccion(data[imei], txtIgnApagada, lat, lng, PUSH_TYPE_IGN);
           }
         );
       }
@@ -2145,7 +2249,6 @@ function onClientConnected(socket) {
         dbTrackingSystem.collection('unidads').findOne({ imei: data[imei], estado: 'A' }, function (err, document) {
           if (err) console.log(err);
           else if (document) {
-            //const fecha_gps = fechaGpsFromGpsField(data[datetime], fechaGPS);
             let fecha_gps = (fechaGPS != 0)
             ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate()
             : new Date();
@@ -2222,7 +2325,7 @@ function onClientConnected(socket) {
               '* 🚍 Vehiculo:* ' + unidadTxtApag + '\n' +
               '* 📅 Fecha:* ' + fechaTxtApag + '\n' +
               '* ⏰ Hora:* ' + horaTxtApag;
-            solicitarNotificacionPushPorImei(data[imei], txtApagada, PUSH_TYPE_ONOFF);
+            solicitarNotificacionPushConDireccion(data[imei], txtApagada, lat, lng, PUSH_TYPE_ONOFF);
           }
         });
       }
@@ -2245,7 +2348,6 @@ function onClientConnected(socket) {
             let fecha_gps = (fechaGPS != 0)
             ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate()
             : new Date();
-            //const fecha_gps = fechaGpsFromGpsField(data[datetime], fechaGPS);
             const now = new Date();
             const lat = toFloat(data[latitude]);
             const lng = toFloat(data[longitude]);
@@ -2319,7 +2421,7 @@ function onClientConnected(socket) {
               '* 🚍 Vehiculo:* ' + unidadTxtEnc + '\n' +
               '* 📅 Fecha:* ' + fechaTxtEnc + '\n' +
               '* ⏰ Hora:* ' + horaTxtEnc;
-            solicitarNotificacionPushPorImei(data[imei], txtEncendida, PUSH_TYPE_ONOFF);
+            solicitarNotificacionPushConDireccion(data[imei], txtEncendida, lat, lng, PUSH_TYPE_ONOFF);
           }
         });
       }
@@ -2549,7 +2651,7 @@ function onClientConnected(socket) {
               '* 🏎️ Velocidad:* ' + velocidadTxtEV + ' km/h\n' +
               '* 📅 Fecha:* ' + fechaTxtEV + '\n' +
               '* ⏰ Hora:* ' + horaTxtEV;
-            solicitarNotificacionPushPorImei(data[imei], txtExcesoVelocidad, PUSH_TYPE_OVERSPEED);
+            solicitarNotificacionPushConDireccion(data[imei], txtExcesoVelocidad, lat, lng, PUSH_TYPE_OVERSPEED);
 
           }
         );
