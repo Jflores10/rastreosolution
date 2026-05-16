@@ -142,7 +142,7 @@ class PhotoUnidadApiController extends Controller
                 'imei' => $row->imei,
                 'tipo' => $row->tipo ?? null,
                 'tipo_evento' => $row->tipo_evento ?? null,
-                'fecha_gps' => $row->fecha_gps ? $row->fecha_gps->format('c') : null,
+                'fecha_gps' => $this->fechaParseada($row->fecha_gps),
                 'latitud' => $latitud,
                 'longitud' => $longitud,
                 'direccion' => $direccion,
@@ -201,6 +201,24 @@ class PhotoUnidadApiController extends Controller
         }
 
         return response()->file($realFile);
+    }
+
+    /**
+     * Igual que HistoricoController: toDateTime() y restar 10 horas a fecha_gps.
+     *
+     * @param mixed $fecha_gps
+     * @return string|null
+     */
+    private function fechaParseada($fecha_gps)
+    {
+        if ($fecha_gps === null || !is_object($fecha_gps) || !method_exists($fecha_gps, 'toDateTime')) {
+            return null;
+        }
+
+        $f_gps = $fecha_gps->toDateTime();
+        date_sub($f_gps, date_interval_create_from_date_string('10 hours'));
+
+        return $f_gps->format('c');
     }
 
     /**
