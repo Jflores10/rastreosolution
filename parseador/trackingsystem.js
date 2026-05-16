@@ -1955,6 +1955,33 @@ function onClientConnected(socket) {
               longitudV = document.longitud;
             }
 
+            if (document.tipo_in1==='bp') {
+              const fechaHoraTxtBp = formatFechaGpsParaPush(fecha_gps);
+              const fechaPartesBp = fechaHoraTxtBp.split(' ');
+              const fechaTxtBp = fechaPartesBp.length > 0 ? fechaPartesBp[0] : fechaHoraTxtBp;
+              const horaTxtBp = fechaPartesBp.length > 1 ? fechaPartesBp[1] : '';
+              const unidadTxtBp = String(document.descripcion).trim();
+              const txtBpanico =
+                unidadTxtBp + ':🚨 Botón de pánico\n' +
+                '* 🚍 Vehiculo:* ' + unidadTxtBp + '\n' +
+                '* ⚡ Evento:* ' + puerta + '\n' +
+                '* 📅 Fecha:* ' + fechaTxtBp + '\n' +
+                '* ⏰ Hora:* ' + horaTxtBp;
+              solicitarNotificacionPushConDireccion(data[imei], txtBpanico, latitud, longitudV, PUSH_TYPE_BPANICO);
+              enviarALaravelPorWS({
+                type: 'unidad.alerta.bpanico',
+                unidad_id: document._id,
+                _id: document._id,
+                imei: document.imei,
+                mensaje: unidadTxtBp + ' — ' + document.placa,
+                fecha_gps: fecha_gps,
+                cooperativa_id: document.cooperativa_id
+                  ? String(document.cooperativa_id).trim()
+                  : null,
+                _raw_message: message
+              });
+            }
+
             // Registrar recorrido
             dbTrackingSystem.collection('recorridos').insertOne({
               imei: data[imei],
