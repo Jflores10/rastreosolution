@@ -216,7 +216,7 @@ class PhotoUnidadApiController extends Controller
         }
 
         $f_gps = $fecha_gps->toDateTime();
-        date_sub($f_gps, date_interval_create_from_date_string('10 hours'));
+        date_sub($f_gps, date_interval_create_from_date_string('5 hours'));
 
         return $f_gps->format('c');
     }
