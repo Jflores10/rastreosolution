@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\DeviceToken;
 use App\NotificationType;
 use App\Services\FcmV1Service;
+use App\Services\LocationIqReverseGeocodeService;
 use App\Unidad;
 use App\User;
 use App\UserNotificationSetting;
@@ -13,6 +14,25 @@ use Illuminate\Support\Facades\Log;
 
 class InternalPushController extends Controller
 {
+    /**
+     * Determina si un registro en devices_token debe usarse para enviar push.
+     * En Mongo a veces active viene como string o falta (legacy).
+     */
+    protected function deviceTokenRowIsActive($row)
+    {
+        if (!isset($row->token) || trim((string) $row->token) === '') {
+            return false;
+        }
+        if (!isset($row->active)) {
+            return true;
+        }
+        $a = $row->active;
+        if ($a === false || $a === 0 || $a === '0' || $a === 'false' || $a === 'FALSE') {
+            return false;
+        }
+        return true;
+    }
+
     /**
      * Llamado por el parseador GPS (HTTP). Requiere LARAVEL_PUSH_SECRET.
      *
@@ -24,7 +44,7 @@ class InternalPushController extends Controller
      * FcmV1Service envía texto plano en notification.body y el HTML en data.html_body; la app móvil debe
      * usar html_body al construir la notificación (p. ej. Html.fromHtml) si se quiere ver el icono FA.
      */
-    public function pushByUnidad(Request $request, FcmV1Service $fcm)
+    public function pushByUnidad(Request $request, FcmV1Service $fcm, LocationIqReverseGeocodeService $locationIq)
     {
 
         $expected = env('LARAVEL_PUSH_SECRET');
@@ -90,8 +110,25 @@ class InternalPushController extends Controller
             return response()->json(array('error' => false, 'sent' => 0, 'message' => 'Ningún usuario con esta notificación habilitada'));
         }
 
-        $tokens = DeviceToken::whereIn('user_id', $userIds)->where('active', true)->get();
+        $tokens = DeviceToken::whereIn('user_id', $userIds)->get();
+        $tokens = $tokens->filter(function ($row) {
+            return $this->deviceTokenRowIsActive($row);
+        });
         if ($tokens->isEmpty()) {
+            return response()->json(array('error' => false, 'sent' => 0, 'message' => 'Sin tokens de dispositivo'));
+        }
+
+        // Un mismo token FCM no debe enviarse varias veces (varias filas / usuarios).
+        $seenToken = array();
+        $uniqueTokens = $tokens->filter(function ($row) use (&$seenToken) {
+            $t = trim((string) $row->token);
+            if ($t === '' || isset($seenToken[$t])) {
+                return false;
+            }
+            $seenToken[$t] = true;
+            return true;
+        });
+        if ($uniqueTokens->isEmpty()) {
             return response()->json(array('error' => false, 'sent' => 0, 'message' => 'Sin tokens de dispositivo'));
         }
 
@@ -100,10 +137,25 @@ class InternalPushController extends Controller
             return response()->json(array('error' => false, 'sent' => 0, 'message' => 'Firebase no configurado'));
         }
 
+        // Reverse geocoding solo si hay destinatarios reales (evita llamar LocationIQ en cada trama GPS).
+        $lat = $request->input('lat');
+        $lng = $request->input('lng');
+        if ($lat !== null && $lng !== null && $lat !== '' && $lng !== '') {
+            $body = $locationIq->appendDireccionToPushBody($body, $lat, $lng);
+        }
+
         $title = 'Aviso';
         $sent = 0;
-        foreach ($tokens as $row) {
-            if (!empty($row->token) && $fcm->sendToDevice($row->token, $title, $body)) {
+        foreach ($uniqueTokens as $row) {
+            $tokenStr = trim((string) $row->token);
+            if ($tokenStr === '') {
+                continue;
+            }
+            $result = $fcm->sendToDevice($tokenStr, $title, $body);
+            if (is_array($result) && !empty($result['deactivate_token'])) {
+                DeviceToken::where('token', $tokenStr)->update(array('active' => false));
+            }
+            if (is_array($result) && !empty($result['success'])) {
                 ++$sent;
             }
         }

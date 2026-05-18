@@ -128,17 +128,17 @@ class FcmV1Service
      * @param string $deviceToken
      * @param string $title
      * @param string $body
-     * @return bool
+     * @return array success(bool), deactivate_token(bool)
      */
     public function sendToDevice($deviceToken, $title, $body)
     {
         $account = $this->loadServiceAccount();
         if (!$account) {
-            return false;
+            return array('success' => false, 'deactivate_token' => false);
         }
         $access = $this->getAccessToken($account);
         if (!$access) {
-            return false;
+            return array('success' => false, 'deactivate_token' => false);
         }
         // Permite forzar project_id desde .env cuando el JSON pertenece a otra cuenta/proyecto.
         $projectId = trim((string) env('FIREBASE_PROJECT_ID', $account['project_id']));
@@ -214,7 +214,7 @@ class FcmV1Service
                 ),
                 'body' => json_encode($payload),
             ));
-            return true;
+            return array('success' => true, 'deactivate_token' => false);
         } catch (RequestException $e) {
             $responseBody = '';
             if ($e->hasResponse()) {
@@ -225,6 +225,15 @@ class FcmV1Service
                 ? ('...' . substr((string) $deviceToken, -12))
                 : (string) $deviceToken;
 
+            $deactivateToken = false;
+            if ($responseBody !== '') {
+                if (stripos($responseBody, 'UNREGISTERED') !== false
+                    || stripos($responseBody, 'registration-token-not-registered') !== false
+                    || stripos($responseBody, 'not a valid FCM registration token') !== false) {
+                    $deactivateToken = true;
+                }
+            }
+
             \Log::warning('FCM send error', array(
                 'project_id' => $projectId,
                 'client_email' => isset($account['client_email']) ? $account['client_email'] : null,
@@ -232,13 +241,13 @@ class FcmV1Service
                 'message' => $e->getMessage(),
                 'response' => $responseBody,
             ));
-            return false;
+            return array('success' => false, 'deactivate_token' => $deactivateToken);
         } catch (\Exception $e) {
             \Log::warning('FCM send error: ' . $e->getMessage(), array(
                 'project_id' => $projectId,
                 'client_email' => isset($account['client_email']) ? $account['client_email'] : null,
             ));
-            return false;
+            return array('success' => false, 'deactivate_token' => false);
         }
     }
 }

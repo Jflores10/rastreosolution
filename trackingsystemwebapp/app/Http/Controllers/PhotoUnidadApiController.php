@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\PhotoUnidad;
 use App\Unidad;
 use Carbon\Carbon;
-use GuzzleHttp\Client;
+use App\Services\LocationIqReverseGeocodeService;
 use Illuminate\Http\Request;
 
 class PhotoUnidadApiController extends Controller
@@ -133,7 +133,8 @@ class PhotoUnidadApiController extends Controller
                 $lngF = (float) $longitud;
                 $coordCacheKey = sprintf('%.5f,%.5f', $latF, $lngF);
                 if (!array_key_exists($coordCacheKey, $direccionPorCoordenadas)) {
-                    $direccionPorCoordenadas[$coordCacheKey] = $this->locationIqReverseDisplayName($latF, $lngF);
+                    $direccionPorCoordenadas[$coordCacheKey] = app(LocationIqReverseGeocodeService::class)
+                        ->reverseDisplayName($latF, $lngF);
                 }
                 $direccion = $direccionPorCoordenadas[$coordCacheKey];
             }
@@ -221,64 +222,4 @@ class PhotoUnidadApiController extends Controller
         return $f_gps->format('c');
     }
 
-    /**
-     * Reverse geocoding LocationIQ (mismo criterio que el parseador: LOCATIONIQ_API_KEY, LOCATIONIQ_REVERSE_BASE).
-     *
-     * @param float $lat
-     * @param float $lng
-     * @return string|null
-     */
-    private function locationIqReverseDisplayName($lat, $lng)
-    {
-        $apiKey = trim((string) env('LOCATIONIQ_API_KEY', ''));
-        if ($apiKey === '') {
-            return null;
-        }
-        if (!is_finite($lat) || !is_finite($lng) || abs($lat) > 90 || abs($lng) > 180) {
-            return null;
-        }
-
-        $base = rtrim((string) env('LOCATIONIQ_REVERSE_BASE', 'https://us1.locationiq.com/v1/reverse'), '/');
-        $timeoutMs = (int) env('LOCATIONIQ_REVERSE_TIMEOUT_MS', 8000);
-        if ($timeoutMs < 500) {
-            $timeoutMs = 500;
-        }
-        $timeoutSec = $timeoutMs / 1000.0;
-
-        try {
-            $client = new Client(array(
-                'timeout' => $timeoutSec,
-                'connect_timeout' => 3.0,
-            ));
-            $response = $client->get($base, array(
-                'query' => array(
-                    'key' => $apiKey,
-                    'lat' => $lat,
-                    'lon' => $lng,
-                    'format' => 'json',
-                    'accept-language' => 'es',
-                ),
-                'http_errors' => false,
-            ));
-            if ($response->getStatusCode() !== 200) {
-                return null;
-            }
-            $json = json_decode((string) $response->getBody(), true);
-            if (!is_array($json)) {
-                return null;
-            }
-            if (isset($json['error'])) {
-                return null;
-            }
-            if (empty($json['display_name'])) {
-                return null;
-            }
-
-            return trim((string) $json['display_name']);
-        } catch (\Exception $e) {
-            \Log::debug('PhotoUnidadApi LocationIQ reverse: '.$e->getMessage());
-
-            return null;
-        }
-    }
 }
