@@ -417,14 +417,17 @@ function reverseGeocodeLocationIqDisplayName(lat, lng, callback) {
   }
 
   if (!LOCATIONIQ_API_KEY) {
+    console.error('[locationiq-reverse] sin LOCATIONIQ_API_KEY, lat=', lat, 'lng=', lng);
     return setImmediate(function () { finish(null, ''); });
   }
   const la = Number(lat);
   const lo = Number(lng);
   if (!Number.isFinite(la) || !Number.isFinite(lo)) {
+    console.error('[locationiq-reverse] coordenadas no numericas:', { lat: lat, lng: lng });
     return setImmediate(function () { finish(null, ''); });
   }
   if (Math.abs(la) > 90 || Math.abs(lo) > 180) {
+    console.error('[locationiq-reverse] coordenadas fuera de rango:', { lat: la, lng: lo });
     return setImmediate(function () { finish(null, ''); });
   }
 
@@ -437,6 +440,7 @@ function reverseGeocodeLocationIqDisplayName(lat, lng, callback) {
     reqUrl.searchParams.set('format', 'json');
     reqUrl.searchParams.set('accept-language', 'es');
   } catch (e) {
+    console.error('[locationiq-reverse] error armando URL:', e && e.message ? e.message : e, { lat: la, lng: lo });
     return setImmediate(function () { finish(e, ''); });
   }
 
@@ -461,30 +465,39 @@ function reverseGeocodeLocationIqDisplayName(lat, lng, callback) {
     res.on('end', function () {
       try {
         if (res.statusCode !== 200) {
-          pushDebugLog('locationiq', 'http', res.statusCode, buf ? buf.substring(0, 200) : '');
+          const bodyPreview = buf ? buf.substring(0, 300) : '';
+          pushDebugLog('locationiq', 'http', res.statusCode, bodyPreview);
+          console.error('[locationiq-reverse] HTTP', res.statusCode, { lat: la, lng: lo, body: bodyPreview });
           return finish(null, '');
         }
         const j = JSON.parse(buf);
         if (j.error) {
           pushDebugLog('locationiq', 'api_error', j.error);
+          console.error('[locationiq-reverse] error API:', j.error, { lat: la, lng: lo });
           return finish(null, '');
         }
         const name = j.display_name != null ? String(j.display_name).trim() : '';
+        if (!name) {
+          console.error('[locationiq-reverse] respuesta sin display_name:', { lat: la, lng: lo, keys: Object.keys(j || {}) });
+        }
         finish(null, name);
       } catch (err) {
         pushDebugLog('locationiq', 'parse_error', err && err.message ? err.message : err);
-        finish(null, '');
+        console.error('[locationiq-reverse] error parseando JSON:', err && err.message ? err.message : err, { lat: la, lng: lo });
+        finish(err, '');
       }
     });
   });
   req.on('timeout', function () {
     try { req.destroy(); } catch (e) { }
     pushDebugLog('locationiq', 'timeout');
+    console.error('[locationiq-reverse] timeout', LOCATIONIQ_REVERSE_TIMEOUT_MS, 'ms', { lat: la, lng: lo });
     finish(null, '');
   });
   req.on('error', function (err) {
     pushDebugLog('locationiq', 'req_error', err && err.message ? err.message : err);
-    finish(null, '');
+    console.error('[locationiq-reverse] error de red:', err && err.message ? err.message : err, { lat: la, lng: lo });
+    finish(err, '');
   });
   req.end();
 }
@@ -494,9 +507,24 @@ function reverseGeocodeLocationIqDisplayName(lat, lng, callback) {
  */
 function solicitarNotificacionPushConDireccion(imei, bodySinDireccion, lat, lng, notificationTypeCode) {
   reverseGeocodeLocationIqDisplayName(lat, lng, function (err, direccion) {
+    if (err) {
+      console.error('[push-reverse-geocode] err reverse geocode:', err && err.message ? err.message : err, {
+        imei: imei,
+        lat: lat,
+        lng: lng,
+        type: notificationTypeCode
+      });
+    }
     let body = bodySinDireccion;
     if (direccion) {
       body += '\n* 📫 Dirección:* ' + direccion;
+    } else if (!err) {
+      console.error('[push-reverse-geocode] sin direccion (respuesta vacia):', {
+        imei: imei,
+        lat: lat,
+        lng: lng,
+        type: notificationTypeCode
+      });
     }
     solicitarNotificacionPushPorImei(imei, body, notificationTypeCode);
   });
