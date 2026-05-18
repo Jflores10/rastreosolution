@@ -119,6 +119,7 @@ class PhotoUnidadApiController extends Controller
         }
 
         $baseImagenUrl = url('/api/v2/photo-unidades');
+        $geoService = app(LocationIqReverseGeocodeService::class);
         $direccionPorCoordenadas = array();
         $data = array();
         foreach ($items as $row) {
@@ -131,12 +132,14 @@ class PhotoUnidadApiController extends Controller
                 && is_numeric($latitud) && is_numeric($longitud)) {
                 $latF = (float) $latitud;
                 $lngF = (float) $longitud;
-                $coordCacheKey = sprintf('%.5f,%.5f', $latF, $lngF);
-                if (!array_key_exists($coordCacheKey, $direccionPorCoordenadas)) {
-                    $direccionPorCoordenadas[$coordCacheKey] = app(LocationIqReverseGeocodeService::class)
-                        ->reverseDisplayName($latF, $lngF);
+                $rounded = $geoService->roundCoordinates($latF, $lngF);
+                if ($rounded !== null) {
+                    $coordCacheKey = $rounded[0].','.$rounded[1];
+                    if (!array_key_exists($coordCacheKey, $direccionPorCoordenadas)) {
+                        $direccionPorCoordenadas[$coordCacheKey] = $geoService->reverseDisplayName($latF, $lngF);
+                    }
+                    $direccion = $direccionPorCoordenadas[$coordCacheKey];
                 }
-                $direccion = $direccionPorCoordenadas[$coordCacheKey];
             }
             $data[] = array(
                 'id' => $id,
