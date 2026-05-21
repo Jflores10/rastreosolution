@@ -2066,6 +2066,7 @@ function onClientConnected(socket) {
             });
 
             if (!isBuffMessage && String(unidad.vigilante || '').trim() === 'on') {
+              console.log('escribirLineaComandoAlGps', CMD_VIGILANTE_AT_GTOUT);
               escribirLineaComandoAlGps(socket, CMD_VIGILANTE_AT_GTOUT);
             }
             
