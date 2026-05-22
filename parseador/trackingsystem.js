@@ -898,8 +898,8 @@ function procesarRecorridosYAlertas_GTFRI(documentValue, data, message, indexes)
 }
 
 /**
- * Reenvía comando AT al GPS con el mismo flujo que enviar_comando (ComandosController):
- * ADMIN;IMEI;cmd → getSocket(imei) → write "cmd\\n" al dispositivo.
+ * Igual que ComandosController::enviar_comando: envía ADMIN;{imei};{cmd}\\r\\n al parseador por TCP.
+ * La rama ADMIN existente reenvía el AT al GPS (getSocket + cmd\\n).
  * @param {string|object} imeiOrSock IMEI del bus o socket (se resuelve a IMEI en socketArray)
  * @param {string} cmdLine ej. AT+GTOUT=gv300,0,,,0,0,0,0,0,0,0,,0,0,,,,FFFF$
  * @returns {boolean}
@@ -929,20 +929,21 @@ function escribirLineaComandoAlGps(imeiOrSock, cmdLine) {
     return false;
   }
 
-  const socketObject = getSocket(imei);
-  if (!socketObject || !socketObject.socket || !socketObject.socket.writable) {
-    console.error('escribirLineaComandoAlGps: sin socket activo para IMEI', imei);
-    return false;
-  }
-
-  const response = cmd + '\n';
+  const payload = 'ADMIN;' + imei + ';' + cmd + '\r\n';
   try {
-    socketObject.socket.write(response);
-    sendLogsToAdminSockets('ADMIN;' + imei + ';' + cmd + '\n');
-    console.log('escribirLineaComandoAlGps: comando enviado OK', { imei: imei, cmd: cmd });
+    const client = net.createConnection({ host: '127.0.0.1', port: PORT });
+    client.on('error', function (e) {
+      console.error('escribirLineaComandoAlGps:', e && e.message ? e.message : e, { imei: imei, payload: payload });
+    });
+    client.on('connect', function () {
+      client.write(payload, function () {
+        client.end();
+        console.log('escribirLineaComandoAlGps: comando enviado OK', { imei: imei, payload: payload });
+      });
+    });
     return true;
   } catch (e) {
-    console.error('escribirLineaComandoAlGps:', e && e.message ? e.message : e, { imei: imei, cmd: cmd });
+    console.error('escribirLineaComandoAlGps:', e && e.message ? e.message : e, { imei: imei, payload: payload });
     return false;
   }
 }
