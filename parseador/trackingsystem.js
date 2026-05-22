@@ -58,7 +58,7 @@ const GTIGN = 'GTIGN';
 const GTDTT = 'GTDTT';
 const GTDTTDGT = 'DGT';
 const ADMIN = 'ADMIN';
-const CMD_VIGILANTE_AT_GTOUT = 'AT+GTOUT=gv300,0,,,0,0,0,0,0,0,0,,0,0,,,,FFFF$';
+const CMD_VIGILANTE_AT_GTOUT = 'AT+GTOUT=gv300,1,,,0,0,0,0,0,0,0,,0,0,,,,FFFF$';
 const GTLOG = 'GTLOG';
 const GTGOT = 'GTGOT';
 const GTGIN = 'GTGIN';
