@@ -897,53 +897,23 @@ function procesarRecorridosYAlertas_GTFRI(documentValue, data, message, indexes)
   }
 }
 
-/**
- * Igual que ComandosController::enviar_comando: envía ADMIN;{imei};{cmd}\\r\\n al parseador por TCP.
- * La rama ADMIN existente reenvía el AT al GPS (getSocket + cmd\\n).
- * @param {string|object} imeiOrSock IMEI del bus o socket (se resuelve a IMEI en socketArray)
- * @param {string} cmdLine ej. AT+GTOUT=gv300,0,,,0,0,0,0,0,0,0,,0,0,,,,FFFF$
- * @returns {boolean}
- */
-function escribirLineaComandoAlGps(imeiOrSock, cmdLine) {
-  let cmd = String(cmdLine || '').trim();
-  cmd = cmd.replace(/\r?\n$/g, '').replace(/\r$/g, '');
-  if (!cmd) {
-    console.error('escribirLineaComandoAlGps: comando vacio');
-    return false;
-  }
+/** Mismo envío que ComandosController::enviar_comando → ADMIN;imei;cmd + AT al socket del IMEI. */
+function escribirLineaComandoAlGps(imei, cmdLine) {
+  const imeiKey = String(imei || '').trim();
+  const cmd = String(cmdLine || CMD_VIGILANTE_AT_GTOUT).trim();
+  if (!imeiKey || !cmd) return false;
 
-  let imei = null;
-  if (typeof imeiOrSock === 'string' || typeof imeiOrSock === 'number') {
-    imei = String(imeiOrSock).trim();
-  } else if (imeiOrSock && typeof imeiOrSock.write === 'function') {
-    for (let i = 0; i < socketArray.length; i++) {
-      if (socketArray[i].socket === imeiOrSock) {
-        imei = String(socketArray[i].imei || '').trim();
-        break;
-      }
-    }
-  }
+  sendLogsToAdminSockets('ADMIN;' + imeiKey + ';' + cmd + '\r\n');
 
-  if (!imei) {
-    console.error('escribirLineaComandoAlGps: IMEI no encontrado');
-    return false;
-  }
+  const socketObject = getSocket(imeiKey);
+  if (!socketObject || !socketObject.socket || !socketObject.socket.writable) return false;
 
-  const payload = 'ADMIN;' + imei + ';' + cmd + '\r\n';
   try {
-    const client = net.createConnection({ host: '127.0.0.1', port: PORT });
-    client.on('error', function (e) {
-      console.error('escribirLineaComandoAlGps:', e && e.message ? e.message : e, { imei: imei, payload: payload });
-    });
-    client.on('connect', function () {
-      client.write(payload, function () {
-        client.end();
-        console.log('escribirLineaComandoAlGps: comando enviado OK', { imei: imei, payload: payload });
-      });
-    });
+    socketObject.socket.write(cmd + '\n');
+    console.log("Correcto  comando")
     return true;
   } catch (e) {
-    console.error('escribirLineaComandoAlGps:', e && e.message ? e.message : e, { imei: imei, payload: payload });
+    console.error('escribirLineaComandoAlGps:', e);
     return false;
   }
 }
