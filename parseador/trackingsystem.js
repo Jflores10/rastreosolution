@@ -897,20 +897,29 @@ function procesarRecorridosYAlertas_GTFRI(documentValue, data, message, indexes)
   }
 }
 
-/** Mismo envío que ComandosController::enviar_comando → ADMIN;imei;cmd + AT al socket del IMEI. */
+/**
+ * Igual que ComandosController::enviar_comando:
+ * conecta al parseador y envía ADMIN;{imei};{cmd}\r\n (la rama ADMIN reenvía el AT al GPS).
+ */
 function escribirLineaComandoAlGps(imei, cmdLine) {
   const imeiKey = String(imei || '').trim();
   const cmd = String(cmdLine || CMD_VIGILANTE_AT_GTOUT).trim();
   if (!imeiKey || !cmd) return false;
 
-  sendLogsToAdminSockets('ADMIN;' + imeiKey + ';' + cmd + '\r\n');
-
-  const socketObject = getSocket(imeiKey);
-  if (!socketObject || !socketObject.socket || !socketObject.socket.writable) return false;
+  const host = String(process.env.TCP_HOST || '127.0.0.1').trim();
+  const port = Number(process.env.TCP_PORT || PORT);
+  const payload = 'ADMIN;' + imeiKey + ';' + cmd + '\r\n';
 
   try {
-    socketObject.socket.write(cmd + '\n');
-    console.log("Correcto  comando")
+    const client = net.createConnection({ host: host, port: port });
+    client.on('error', function (e) {
+      console.error('escribirLineaComandoAlGps:', e && e.message ? e.message : e, { imei: imeiKey });
+    });
+    client.on('connect', function () {
+      client.write(payload, function () {
+        client.end();
+      });
+    });
     return true;
   } catch (e) {
     console.error('escribirLineaComandoAlGps:', e);
