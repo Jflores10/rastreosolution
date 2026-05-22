@@ -897,14 +897,52 @@ function procesarRecorridosYAlertas_GTFRI(documentValue, data, message, indexes)
   }
 }
 
-// Igual que la rama ADMIN de este servidor: reenvía la línea AT al socket del dispositivo ya conectado.
-function escribirLineaComandoAlGps(sock, cmdLine) {
-  if (!sock || !sock.writable) return;
-  const line = String(cmdLine || '').replace(/\r?\n$/, '') + '\n';
+/**
+ * Reenvía comando AT al GPS con el mismo flujo que enviar_comando (ComandosController):
+ * ADMIN;IMEI;cmd → getSocket(imei) → write "cmd\\n" al dispositivo.
+ * @param {string|object} imeiOrSock IMEI del bus o socket (se resuelve a IMEI en socketArray)
+ * @param {string} cmdLine ej. AT+GTOUT=gv300,0,,,0,0,0,0,0,0,0,,0,0,,,,FFFF$
+ * @returns {boolean}
+ */
+function escribirLineaComandoAlGps(imeiOrSock, cmdLine) {
+  let cmd = String(cmdLine || '').trim();
+  cmd = cmd.replace(/\r?\n$/g, '').replace(/\r$/g, '');
+  if (!cmd) {
+    console.error('escribirLineaComandoAlGps: comando vacio');
+    return false;
+  }
+
+  let imei = null;
+  if (typeof imeiOrSock === 'string' || typeof imeiOrSock === 'number') {
+    imei = String(imeiOrSock).trim();
+  } else if (imeiOrSock && typeof imeiOrSock.write === 'function') {
+    for (let i = 0; i < socketArray.length; i++) {
+      if (socketArray[i].socket === imeiOrSock) {
+        imei = String(socketArray[i].imei || '').trim();
+        break;
+      }
+    }
+  }
+
+  if (!imei) {
+    console.error('escribirLineaComandoAlGps: IMEI no encontrado');
+    return false;
+  }
+
+  const socketObject = getSocket(imei);
+  if (!socketObject || !socketObject.socket || !socketObject.socket.writable) {
+    console.error('escribirLineaComandoAlGps: sin socket activo para IMEI', imei);
+    return false;
+  }
+
+  const response = cmd + '\n';
   try {
-    sock.write(line);
+    socketObject.socket.write(response);
+    sendLogsToAdminSockets('ADMIN;' + imei + ';' + cmd + '\n');
+    return true;
   } catch (e) {
-    console.error('escribirLineaComandoAlGps:', e && e.message);
+    console.error('escribirLineaComandoAlGps:', e && e.message ? e.message : e, { imei: imei, cmd: cmd });
+    return false;
   }
 }
 
@@ -2066,8 +2104,7 @@ function onClientConnected(socket) {
             });
 
             if (!isBuffMessage && String(unidad.vigilante || '').trim() === 'on') {
-              console.log('escribirLineaComandoAlGps', CMD_VIGILANTE_AT_GTOUT);
-              escribirLineaComandoAlGps(socket, CMD_VIGILANTE_AT_GTOUT);
+              escribirLineaComandoAlGps(String(data[imei] || unidad.imei || '').trim(), CMD_VIGILANTE_AT_GTOUT);
             }
             
 
@@ -2416,22 +2453,38 @@ function onClientConnected(socket) {
 
             if (contador_inicial != null) {
               if (contador_inicial > 0) {
-                contador_diario = count_sensor_1 - contador_inicial;
-                if (contador_diario < 0) contador_diario = count_sensor_1 + MAX_COUNT;
+                if (count_sensor_1 < contador_inicial) {
+                  // Total GPS menor que inicial en BD (reinicio del equipo o inicial corrupto).
+                  contador_inicial = count_sensor_1;
+                  contador_diario = 0;
+                } else {
+                  contador_diario = count_sensor_1 - contador_inicial;
+                  if (contador_diario < 0) contador_diario = count_sensor_1 + MAX_COUNT;
+                }
               } else contador_inicial = count_sensor_1;
             } else contador_inicial = count_sensor_1;
 
             if (contador_inicial_sensor_2 != null) {
               if (contador_inicial_sensor_2 > 0) {
-                contador_diario_sensor_2 = count_sensor_2 - contador_inicial_sensor_2;
-                if (contador_diario_sensor_2 < 0) contador_diario_sensor_2 = count_sensor_2 + MAX_COUNT;
+                if (count_sensor_2 < contador_inicial_sensor_2) {
+                  contador_inicial_sensor_2 = count_sensor_2;
+                  contador_diario_sensor_2 = 0;
+                } else {
+                  contador_diario_sensor_2 = count_sensor_2 - contador_inicial_sensor_2;
+                  if (contador_diario_sensor_2 < 0) contador_diario_sensor_2 = count_sensor_2 + MAX_COUNT;
+                }
               } else contador_inicial_sensor_2 = count_sensor_2;
             } else contador_inicial_sensor_2 = count_sensor_2;
 
             if (contador_inicial_sensor_3 != null) {
               if (contador_inicial_sensor_3 > 0) {
-                contador_diario_sensor_3 = count_sensor_3 - contador_inicial_sensor_3;
-                if (contador_diario_sensor_3 < 0) contador_diario_sensor_3 = count_sensor_3 + MAX_COUNT;
+                if (count_sensor_3 < contador_inicial_sensor_3) {
+                  contador_inicial_sensor_3 = count_sensor_3;
+                  contador_diario_sensor_3 = 0;
+                } else {
+                  contador_diario_sensor_3 = count_sensor_3 - contador_inicial_sensor_3;
+                  if (contador_diario_sensor_3 < 0) contador_diario_sensor_3 = count_sensor_3 + MAX_COUNT;
+                }
               } else contador_inicial_sensor_3 = count_sensor_3;
             } else contador_inicial_sensor_3 = count_sensor_3;
 
@@ -2458,6 +2511,7 @@ function onClientConnected(socket) {
                   is_atm: (message.includes(ATM) ? 1 : 0)
                 }
               }, { writeConcern: { w: 0 } });
+
             }
 
             dbTrackingSystem.collection('recorridos').insertOne({
