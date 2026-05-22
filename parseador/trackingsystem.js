@@ -939,6 +939,7 @@ function escribirLineaComandoAlGps(imeiOrSock, cmdLine) {
   try {
     socketObject.socket.write(response);
     sendLogsToAdminSockets('ADMIN;' + imei + ';' + cmd + '\n');
+    console.log('escribirLineaComandoAlGps: comando enviado OK', { imei: imei, cmd: cmd });
     return true;
   } catch (e) {
     console.error('escribirLineaComandoAlGps:', e && e.message ? e.message : e, { imei: imei, cmd: cmd });
