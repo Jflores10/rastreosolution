@@ -2382,9 +2382,19 @@ function onClientConnected(socket) {
         let imei = 2;
         let count = 8;
         let sentTime = 9;
+        let type = 7;
         let data = message.split(',');
+
+        const eventType = toInteger(data[type]);
+        // IGNORAR evento 17
+        // Este evento viene invertido y genera inconsistencias
+        if (eventType == 17) {
+          return;
+        }
         // Techo 7 dígitos y módulo de rollover en este mensaje (distinto a GTDAT 65535/999999).
         const MAX_COUNT = 9999999;
+
+        
         const lecturaGtdttInvalida = function (v) {
           if (!Number.isFinite(v) || v < 0) return true;
           if (v > MAX_COUNT) return true;
