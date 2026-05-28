@@ -2393,6 +2393,7 @@ function onClientConnected(socket) {
         }
         // Techo 7 dígitos y módulo de rollover en este mensaje (distinto a GTDAT 65535/999999).
         const MAX_COUNT = 9999999;
+        const MAX_INCREMENTO = 100;
 
         
         const lecturaGtdttInvalida = function (v) {
@@ -2405,6 +2406,13 @@ function onClientConnected(socket) {
           if (!Number.isFinite(d) || d < 0) return true;
           if (d >= MAX_COUNT) return true;
           return false;
+        };
+        const saltoImposible = function (prev, current) {
+          if (!Number.isFinite(prev) || prev < 0) return false;
+          if (!Number.isFinite(current) || current < 0) return true;
+          // Si disminuye, se interpreta como rollover/reinicio y se permite.
+          if (current < prev) return false;
+          return (current - prev) > MAX_INCREMENTO;
         };
 
         dbTrackingSystem.collection('unidads').findOne({ imei: data[imei], estado: 'A' }, function (err, document) {
@@ -2425,20 +2433,59 @@ function onClientConnected(socket) {
             if (message.includes(GTDTTDGT)) {
               count = 9;
               sentTime = 10;
-              const count_parse = data[count];
+              const count_parse = String(data[count] || '')
+                .replace(/\n/g, "")
+                .replace(/\r/g, "")
+                .replace(/ /g, "")
+                .trim();
               const m = /^(\d{8})(\d{4})(\d{5})$/.exec(count_parse);
               if (m) {
                 count_sensor_1 = toInteger(m[1]);
                 count_sensor_2 = toInteger(m[3]);
+              } else {
+                return;
               }
             } else {
-              let count_parse = data[count].replace("RSC", "").replace("\n", "").replace(" ", "");
-              count_sensor_1 = toInteger(count_parse.substr(0, 7));
-              count_sensor_2 = toInteger(count_parse.substr(7, 7));
-              count_sensor_3 = toInteger(count_parse.substr(14, 7));
+              let count_parse = String(data[count] || '')
+                .replace("RSC", "")
+                .replace(/\n/g, "")
+                .replace(/\r/g, "")
+                .replace(/ /g, "")
+                .trim();
+              if (count_parse.length < 14) {
+                return;
+              }
+              const s1 = count_parse.slice(0, 7);
+              const s2 = count_parse.slice(7, 14);
+              let s3 = "0";
+              if (count_parse.length >= 21) {
+                s3 = count_parse.slice(14, 21);
+              }
+              if (!s1 || !s2 || !s3 || s1.length < 7 || s2.length < 7) {
+                return;
+              }
+              if (!/^\d+$/.test(s1) || !/^\d+$/.test(s2) || !/^\d+$/.test(s3)) {
+                return;
+              }
+              count_sensor_1 = toInteger(s1);
+              count_sensor_2 = toInteger(s2);
+              count_sensor_3 = toInteger(s3);
             }
 
             if (lecturaGtdttInvalida(count_sensor_1) || lecturaGtdttInvalida(count_sensor_2) || lecturaGtdttInvalida(count_sensor_3)) {
+             
+              return;
+            }
+            const anteriorSensor1 = toInteger(document.contador_total);
+            const anteriorSensor2 = toInteger(document.contador_total_sensor_2);
+            const anteriorSensor3 = toInteger(document.contador_total_sensor_3);
+            if (saltoImposible(anteriorSensor1, count_sensor_1)) {
+              return;
+            }
+            if (saltoImposible(anteriorSensor2, count_sensor_2)) {
+              return;
+            }
+            if (saltoImposible(anteriorSensor3, count_sensor_3)) {
               return;
             }
 
@@ -2479,11 +2526,8 @@ function onClientConnected(socket) {
               } else contador_inicial_sensor_3 = count_sensor_3;
             } else contador_inicial_sensor_3 = count_sensor_3;
 
-            if (contador_diario < document.contador_diario) contador_diario = document.contador_diario;
-            if (contador_diario_sensor_2 < document.contador_diario_sensor_2) contador_diario_sensor_2 = document.contador_diario_sensor_2;
-            if (contador_diario_sensor_3 < document.contador_diario_sensor_3) contador_diario_sensor_3 = document.contador_diario_sensor_3;
-
             if (diarioGtdttFueraDeRango(contador_diario) || diarioGtdttFueraDeRango(contador_diario_sensor_2) || diarioGtdttFueraDeRango(contador_diario_sensor_3)) {
+              
               return;
             }
 
