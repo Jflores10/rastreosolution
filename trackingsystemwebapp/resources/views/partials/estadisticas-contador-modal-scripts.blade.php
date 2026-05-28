@@ -10,8 +10,26 @@ var STATS_REFRESH_MS = 30000;
 var statsUltimoRango = { un_solo_dia: true, es_hoy: true };
 var statsUiInicializado = false;
 var statsContextoHome = { cooperativa_id: null, unidades: [] };
+var STATS_COLOR_PALETTE = [
+    '#2A62BC', '#00AA88', '#F39C12', '#8E44AD', '#E74C3C',
+    '#16A085', '#D35400', '#2C3E50', '#27AE60', '#C0392B',
+    '#2980B9', '#7F8C8D', '#1ABC9C', '#9B59B6', '#E67E22'
+];
 
 function contadorDiarioDispDesdeUnidad(unidad) { var v = Number(unidad && unidad.contador_diario); return isNaN(v) ? 0 : v; }
+function statsHexToRgba(hex, alpha) {
+    var h = String(hex || '').replace('#', '');
+    if (h.length === 3) h = h.split('').map(function (c) { return c + c; }).join('');
+    var r = parseInt(h.substring(0, 2), 16);
+    var g = parseInt(h.substring(2, 4), 16);
+    var b = parseInt(h.substring(4, 6), 16);
+    if (!isFinite(r) || !isFinite(g) || !isFinite(b)) return 'rgba(42,98,188,' + alpha + ')';
+    return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+}
+function statsColorPorIndice(i, alpha) {
+    var c = STATS_COLOR_PALETTE[i % STATS_COLOR_PALETTE.length];
+    return statsHexToRgba(c, alpha);
+}
 function statsDestroyChart(chart) { if (chart) chart.destroy(); return null; }
 function statsResetParticipacionWrapHeight(barCount) { var wrap = document.getElementById('stats-participacion-wrap'); if (wrap) wrap.style.height = Math.max(280, (barCount || 0) * 32) + 'px'; }
 function statsClearCanvasAfterDestroy(canvas) { if (!canvas) return null; var parent = canvas.parentNode; if (!parent) return canvas; var nuevoCanvas = document.createElement('canvas'); nuevoCanvas.id = canvas.id; parent.replaceChild(nuevoCanvas, canvas); return nuevoCanvas; }
@@ -68,8 +86,20 @@ function statsRefrescarDatos(esPolling) {
 }
 function statsRenderChartContador(items, esPolling) {
     var labels = [], values = []; for (var i = 0; i < items.length; i++) { labels.push(items[i].label); values.push(items[i].value); }
+    var bgColors = [], borderColors = [];
+    for (var c = 0; c < labels.length; c++) {
+        bgColors.push(statsColorPorIndice(c, 0.75));
+        borderColors.push(statsColorPorIndice(c, 1));
+    }
     var canvas = document.getElementById('statsChartContadorDiario'); if (!canvas) return; var ctx = canvas.getContext('2d');
-    if (chartContadorDiario) { chartContadorDiario.data.labels = labels; chartContadorDiario.data.datasets[0].data = values; chartContadorDiario.update(esPolling ? { duration: 0 } : undefined); return; }
+    if (chartContadorDiario) {
+        chartContadorDiario.data.labels = labels;
+        chartContadorDiario.data.datasets[0].data = values;
+        chartContadorDiario.data.datasets[0].backgroundColor = bgColors;
+        chartContadorDiario.data.datasets[0].borderColor = borderColors;
+        chartContadorDiario.update(esPolling ? { duration: 0 } : undefined);
+        return;
+    }
     chartContadorDiario = new Chart(ctx, {
         type: 'bar',
         data: {
@@ -77,8 +107,8 @@ function statsRenderChartContador(items, esPolling) {
             datasets: [{
                 label: 'Contador diario',
                 data: values,
-                backgroundColor: 'rgba(42, 98, 188, 0.75)',
-                borderColor: 'rgba(42, 98, 188, 1)',
+                backgroundColor: bgColors,
+                borderColor: borderColors,
                 borderWidth: 1
             }]
         },
@@ -103,10 +133,22 @@ function statsRenderChartParticipacion(items, esPolling) {
     var pctRows = []; for (var j = 0; j < items.length; j++) pctRows.push({ label: items[j].label, percent: total > 0 ? (items[j].value / total) * 100 : 0, raw: items[j].value });
     pctRows.sort(function (a, b) { return b.percent - a.percent; });
     var labels = [], percents = []; for (var k = 0; k < pctRows.length; k++) { labels.push(pctRows[k].label); percents.push(Math.round(pctRows[k].percent * 10) / 10); }
+    var bgColors = [], borderColors = [];
+    for (var pc = 0; pc < labels.length; pc++) {
+        bgColors.push(statsColorPorIndice(pc, 0.75));
+        borderColors.push(statsColorPorIndice(pc, 1));
+    }
     var canvas = document.getElementById('statsChartParticipacion'); if (!canvas) return;
     var barCount = pctRows.length, rebuild = !chartParticipacion || barCount !== statsParticipacionBarCount || !esPolling;
     statsResetParticipacionWrapHeight(barCount);
-    if (!rebuild) { chartParticipacion.data.labels = labels; chartParticipacion.data.datasets[0].data = percents; chartParticipacion.update(esPolling ? { duration: 0 } : undefined); return; }
+    if (!rebuild) {
+        chartParticipacion.data.labels = labels;
+        chartParticipacion.data.datasets[0].data = percents;
+        chartParticipacion.data.datasets[0].backgroundColor = bgColors;
+        chartParticipacion.data.datasets[0].borderColor = borderColors;
+        chartParticipacion.update(esPolling ? { duration: 0 } : undefined);
+        return;
+    }
     statsParticipacionBarCount = barCount; chartParticipacion = statsDestroyChart(chartParticipacion); canvas = statsClearCanvasAfterDestroy(canvas); if (!canvas) return;
     chartParticipacion = new Chart(canvas.getContext('2d'), {
         type: 'horizontalBar',
@@ -115,8 +157,8 @@ function statsRenderChartParticipacion(items, esPolling) {
             datasets: [{
                 label: 'Participación %',
                 data: percents,
-                backgroundColor: 'rgba(0, 170, 136, 0.75)',
-                borderColor: 'rgba(0, 170, 136, 1)',
+                backgroundColor: bgColors,
+                borderColor: borderColors,
                 borderWidth: 1
             }]
         },
