@@ -170,7 +170,7 @@ Estadísticas contador diario
                 <div class="clearfix"></div>
             </div>
             <div class="x_content">
-                <p class="text-muted" style="margin-bottom:12px;">Porcentaje del contador diario de cada unidad respecto al total seleccionado (mayor a menor).</p>
+                <p class="text-muted" style="margin-bottom:12px;">Porcentaje del contador diario de cada unidad .</p>
                 <div class="stats-chart-wrap stats-chart-wrap--participacion" id="stats-participacion-wrap">
                     <canvas id="statsChartParticipacion"></canvas>
                 </div>
