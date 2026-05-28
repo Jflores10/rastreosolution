@@ -1697,8 +1697,7 @@ class HistoricoController extends Controller
 
     /**
      * Una sola consulta a recorridos para todas las unidades del rango.
-     * Hoy (un solo día): usa contador_diario en Unidad.
-     * Rango/ayer: usa delta de contador_total (último - primero) en recorridos.
+     * Usa delta de contador_total (último - primero) en recorridos para cualquier rango (incluye hoy).
      */
     private function contadoresDiariosBatch(array $ids, $porId, $iniUtc, $finUtc, $unSoloDia, $esHoy)
     {
@@ -1710,12 +1709,7 @@ class HistoricoController extends Controller
             if (!isset($porId[$uid])) {
                 continue;
             }
-            if ($unSoloDia && $esHoy) {
-                $u = $porId[$uid];
-                $resultado[$uid] = ($u->contador_diario !== null) ? (int) $u->contador_diario : 0;
-            } else {
-                $needRecorrido[] = $uid;
-            }
+            $needRecorrido[] = $uid;
         }
 
         if (empty($needRecorrido)) {
