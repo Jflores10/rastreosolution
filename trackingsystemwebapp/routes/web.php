@@ -14,7 +14,7 @@ Route::group(['middleware' => ['auth', 'usuario']], function () {
     Route::get('/home', 'HomeController@index');
 
     Route::get('/homev2', 'HomeController@index2');
-
+    Route::get('/estadisticas-contador-diario', 'HomeController@estadisticasContadorDiario');
 
     Route::get('/puntos', 'HomeController@cargarPuntosControl');
     Route::get('/puntos-atm', 'HomeController@cargarPuntosControlATM');
@@ -204,6 +204,8 @@ Route::group(['middleware' => ['auth', 'usuario']], function () {
 
     Route::match(['get', 'post'], 'historico-atm', 'HistoricoController@historicoAtm');
     Route::post('historico/unidades-meta', 'HistoricoController@getUnidadesMeta');
+    Route::post('historico/unidades-estadisticas', 'HistoricoController@getUnidadesCooperativaEstadisticas');
+    Route::post('historico/estadisticas-contador-diario', 'HistoricoController@getEstadisticasContadorDiario');
    
     Route::match(['get', 'post'], 'comandos', 'ComandosController@index');
     Route::get('/comandos/unidades/{id}', 'ComandosController@unidades_by_cooperativa');

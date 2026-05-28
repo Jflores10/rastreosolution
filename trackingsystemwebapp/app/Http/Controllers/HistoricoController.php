@@ -1512,5 +1512,337 @@ class HistoricoController extends Controller
         }
     }
 
+    /**
+     * Listado ligero de unidades activas para la pantalla de estadísticas (sin despachos ni bitácoras).
+     */
+    public function getUnidadesCooperativaEstadisticas(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'cooperativa_id' => 'required',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => true, 'mensaje' => 'Parámetros incompletos.'], 422);
+        }
+
+        $cooperativaId = (string) $request->input('cooperativa_id');
+        $tipoUsuario = Auth::user()->tipo_usuario->valor;
+
+        if ($tipoUsuario == 4 || $tipoUsuario == 5) {
+            $pertenecientes = Auth::user()->unidades_pertenecientes;
+            if (empty($pertenecientes)) {
+                return response()->json(['error' => false, 'unidades' => []]);
+            }
+            $unidades = Unidad::orderBy('descripcion', 'asc')
+                ->where('estado', 'A')
+                ->whereIn('_id', $pertenecientes)
+                ->get(['_id', 'descripcion']);
+        } elseif ($tipoUsuario == 1) {
+            $unidades = Unidad::orderBy('descripcion', 'asc')
+                ->where('cooperativa_id', $cooperativaId)
+                ->where('estado', 'A')
+                ->get(['_id', 'descripcion']);
+        } elseif ($tipoUsuario == 2 || $tipoUsuario == 3) {
+            if ((string) Auth::user()->cooperativa_id !== $cooperativaId) {
+                return response()->json(['error' => true, 'mensaje' => 'Sin permiso.'], 403);
+            }
+            $unidades = Unidad::orderBy('descripcion', 'asc')
+                ->where('cooperativa_id', $cooperativaId)
+                ->where('estado', 'A')
+                ->get(['_id', 'descripcion']);
+        } else {
+            return response()->json(['error' => true, 'mensaje' => 'Sin permiso.'], 403);
+        }
+
+        return response()->json(['error' => false, 'unidades' => $unidades]);
+    }
+
+    /**
+     * Contadores para gráficos de estadísticas (rango de fechas).
+     * Un día: máximo contador_diario en recorridos; si es hoy, valor actual de Unidad.
+     * Varios días: suma del máximo diario por cada día del rango.
+     */
+    public function getEstadisticasContadorDiario(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'cooperativa_id' => 'required',
+            'fecha_inicio' => 'required',
+            'fecha_fin' => 'required',
+            'unidad_ids' => 'required',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => true, 'mensaje' => 'Parámetros incompletos.'], 422);
+        }
+
+        $ids = $request->input('unidad_ids');
+        if (!is_array($ids)) {
+            $ids = array_filter([$ids]);
+        }
+        $ids = array_values(array_filter($ids));
+
+        if (count($ids) === 0) {
+            return response()->json(['error' => false, 'unidades' => []]);
+        }
+
+        $tipoUsuario = Auth::user()->tipo_usuario->valor;
+        if ($tipoUsuario == 4 || $tipoUsuario == 5) {
+            $permitidas = [];
+            $pertenecientes = Auth::user()->unidades_pertenecientes;
+            if (!empty($pertenecientes)) {
+                foreach ((array) $pertenecientes as $pid) {
+                    $permitidas[(string) $pid] = true;
+                }
+            }
+            $ids = array_values(array_filter($ids, function ($id) use ($permitidas) {
+                return isset($permitidas[(string) $id]);
+            }));
+        }
+
+        try {
+            $rango = $this->parseRangoFechasEstadisticas(
+                $request->input('fecha_inicio'),
+                $request->input('fecha_fin')
+            );
+        } catch (\Exception $e) {
+            return response()->json(['error' => true, 'mensaje' => 'Rango de fechas inválido.'], 422);
+        }
+
+        $unidades = Unidad::whereIn('_id', $ids)->where('estado', 'A')->get(['_id', 'descripcion', 'contador_diario']);
+        $porId = [];
+        foreach ($unidades as $u) {
+            $porId[(string) $u->_id] = $u;
+        }
+
+        $valores = $this->contadoresDiariosBatch(
+            $ids,
+            $porId,
+            $rango['ini_utc'],
+            $rango['fin_utc'],
+            $rango['un_solo_dia'],
+            $rango['es_hoy']
+        );
+
+        $resultado = [];
+        foreach ($ids as $uid) {
+            $uid = (string) $uid;
+            if (!isset($porId[$uid])) {
+                continue;
+            }
+            $u = $porId[$uid];
+            $resultado[] = [
+                '_id' => $uid,
+                'descripcion' => $u->descripcion ?? $uid,
+                'contador_diario' => isset($valores[$uid]) ? $valores[$uid] : 0,
+            ];
+        }
+
+        return response()->json([
+            'error' => false,
+            'unidades' => $resultado,
+            'fecha_inicio' => $rango['ini']->format('Y-m-d H:i:s'),
+            'fecha_fin' => $rango['fin']->format('Y-m-d H:i:s'),
+            'un_solo_dia' => $rango['un_solo_dia'],
+            'es_hoy' => $rango['es_hoy'],
+        ]);
+    }
+
+    private function parseRangoFechasEstadisticas($fechaInicio, $fechaFin)
+    {
+        $ini = Carbon::parse(str_replace('/', '-', $fechaInicio));
+        $fin = Carbon::parse(str_replace('/', '-', $fechaFin));
+
+        if ($fin->lt($ini)) {
+            $tmp = $ini;
+            $ini = $fin->copy()->startOfDay();
+            $fin = $tmp->copy()->endOfDay();
+        } else {
+            if (strlen(trim($fechaInicio)) <= 10) {
+                $ini->startOfDay();
+            }
+            if (strlen(trim($fechaFin)) <= 10) {
+                $fin->endOfDay();
+            }
+        }
+
+        $iniQuery = $ini->copy();
+        $finQuery = $fin->copy();
+        $iniQuery->addHours(5);
+        $finQuery->addHours(5);
+
+        $hoy = Carbon::today();
+
+        return [
+            'ini' => $ini,
+            'fin' => $fin,
+            'ini_utc' => new UTCDateTime($iniQuery->getTimestamp() * 1000),
+            'fin_utc' => new UTCDateTime($finQuery->getTimestamp() * 1000),
+            'un_solo_dia' => $ini->format('Y-m-d') === $fin->format('Y-m-d'),
+            'es_hoy' => $ini->isSameDay($hoy) && $fin->isSameDay($hoy),
+        ];
+    }
+
+    private function idsToObjectIds(array $ids)
+    {
+        $oids = [];
+        foreach ($ids as $id) {
+            try {
+                $oids[] = new ObjectID((string) $id);
+            } catch (\Exception $e) {
+            }
+        }
+
+        return $oids;
+    }
+
+    /**
+     * Una sola consulta a recorridos para todas las unidades del rango.
+     */
+    private function contadoresDiariosBatch(array $ids, $porId, $iniUtc, $finUtc, $unSoloDia, $esHoy)
+    {
+        $resultado = [];
+        $needRecorrido = [];
+
+        foreach ($ids as $uid) {
+            $uid = (string) $uid;
+            if (!isset($porId[$uid])) {
+                continue;
+            }
+            if ($unSoloDia && $esHoy) {
+                $u = $porId[$uid];
+                $resultado[$uid] = ($u->contador_diario !== null) ? (int) $u->contador_diario : 0;
+            } else {
+                $needRecorrido[] = $uid;
+            }
+        }
+
+        if (empty($needRecorrido)) {
+            return $resultado;
+        }
+
+        $oids = $this->idsToObjectIds($needRecorrido);
+        if (empty($oids)) {
+            foreach ($needRecorrido as $uid) {
+                $resultado[$uid] = 0;
+            }
+
+            return $resultado;
+        }
+
+        $recorridos = Recorrido::whereIn('unidad_id', $oids)
+            ->where('fecha_gps', '>=', $iniUtc)
+            ->where('fecha_gps', '<=', $finUtc)
+            ->where('contador_diario', '>', 0)
+            ->get(['unidad_id', 'contador_diario', 'fecha_gps']);
+
+        if ($unSoloDia) {
+            foreach ($recorridos as $r) {
+                $uid = (string) $r->unidad_id;
+                $c = (int) ($r->contador_diario ?? 0);
+                if (!isset($resultado[$uid]) || $c > $resultado[$uid]) {
+                    $resultado[$uid] = $c;
+                }
+            }
+            foreach ($needRecorrido as $uid) {
+                if (!isset($resultado[$uid])) {
+                    $resultado[$uid] = 0;
+                }
+                if ($esHoy && isset($porId[$uid])) {
+                    $u = $porId[$uid];
+                    $live = ($u->contador_diario !== null) ? (int) $u->contador_diario : 0;
+                    if ($live > $resultado[$uid]) {
+                        $resultado[$uid] = $live;
+                    }
+                }
+            }
+        } else {
+            $porUnidadDia = [];
+            foreach ($recorridos as $r) {
+                if (empty($r->fecha_gps)) {
+                    continue;
+                }
+                $uid = (string) $r->unidad_id;
+                $fg = $r->fecha_gps->toDateTime();
+                $fg = clone $fg;
+                $fg->modify('-10 hours');
+                $dia = $fg->format('Y-m-d');
+                $c = (int) ($r->contador_diario ?? 0);
+                if (!isset($porUnidadDia[$uid][$dia]) || $c > $porUnidadDia[$uid][$dia]) {
+                    $porUnidadDia[$uid][$dia] = $c;
+                }
+            }
+            foreach ($needRecorrido as $uid) {
+                $resultado[$uid] = isset($porUnidadDia[$uid]) ? array_sum($porUnidadDia[$uid]) : 0;
+            }
+        }
+
+        return $resultado;
+    }
+
+    private function contadorDiarioUnidadEnRango($unidadId, $iniUtc, $finUtc, $unSoloDia, $esHoy)
+    {
+        if ($esHoy && $unSoloDia) {
+            $u = Unidad::find($unidadId);
+            if ($u && $u->contador_diario !== null) {
+                return (int) $u->contador_diario;
+            }
+        }
+
+        try {
+            $oid = new ObjectID($unidadId);
+        } catch (\Exception $e) {
+            return 0;
+        }
+
+        $recorridos = Recorrido::where('unidad_id', $oid)
+            ->where('fecha_gps', '>=', $iniUtc)
+            ->where('fecha_gps', '<=', $finUtc)
+            ->where('contador_diario', '>', 0)
+            ->orderBy('fecha_gps', 'asc')
+            ->get(['contador_diario', 'fecha_gps']);
+
+        if ($recorridos->isEmpty()) {
+            if ($esHoy && $unSoloDia) {
+                $u = Unidad::find($unidadId);
+                return ($u && $u->contador_diario !== null) ? (int) $u->contador_diario : 0;
+            }
+            return 0;
+        }
+
+        if ($unSoloDia) {
+            $max = 0;
+            foreach ($recorridos as $r) {
+                $c = (int) ($r->contador_diario ?? 0);
+                if ($c > $max) {
+                    $max = $c;
+                }
+            }
+            if ($esHoy && $unSoloDia) {
+                $u = Unidad::find($unidadId);
+                if ($u && $u->contador_diario !== null && (int) $u->contador_diario > $max) {
+                    $max = (int) $u->contador_diario;
+                }
+            }
+            return $max;
+        }
+
+        $porDia = [];
+        foreach ($recorridos as $r) {
+            if (empty($r->fecha_gps)) {
+                continue;
+            }
+            $fg = $r->fecha_gps->toDateTime();
+            $fg = clone $fg;
+            $fg->modify('-10 hours');
+            $dia = $fg->format('Y-m-d');
+            $c = (int) ($r->contador_diario ?? 0);
+            if (!isset($porDia[$dia]) || $c > $porDia[$dia]) {
+                $porDia[$dia] = $c;
+            }
+        }
+
+        return array_sum($porDia);
+    }
+
 
 }

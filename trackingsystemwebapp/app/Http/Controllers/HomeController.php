@@ -236,7 +236,29 @@ class HomeController extends Controller
         return view('homev2', ['cooperativas' => $cooperativas, 'unidades' => $unidades, 'rutas'=>$rutas,'rutas_atm'=>$rutas_atm, 'atm'=>$despachos_atm]);
     }
 
-    
+    public function estadisticasContadorDiario()
+    {
+        $user = Auth::user();
+        $cooperativas = [];
+        $cooperativa = null;
+
+        if ($user->tipo_usuario->valor == 4 || $user->tipo_usuario->valor == 5) {
+            $cooperativas = Cooperativa::where('_id', $user->cooperativa_id)->where('estado', 'A')->get();
+            $cooperativa = Cooperativa::where('_id', $user->cooperativa_id)->where('estado', 'A')->first();
+        } elseif ($user->tipo_usuario->valor == 1) {
+            $cooperativas = Cooperativa::orderBy('descripcion', 'asc')->where('estado', 'A')->get();
+        } elseif ($user->tipo_usuario->valor == 2 || $user->tipo_usuario->valor == 3) {
+            $cooperativas = Cooperativa::where('_id', $user->cooperativa_id)->where('estado', 'A')->get();
+            $cooperativa = Cooperativa::where('_id', $user->cooperativa_id)->where('estado', 'A')->first();
+        } else {
+            return view('panel.error', ['mensaje_acceso' => 'No posee suficientes permisos para poder ingresar a este sitio.']);
+        }
+
+        return view('estadisticas-contador-diario', [
+            'cooperativas' => $cooperativas,
+            'cooperativa' => $cooperativa,
+        ]);
+    }
 
     public function index()
     {

@@ -472,6 +472,7 @@ Dashboard
                     <button class="btn btn-info" onclick="setOpciones();" data-toggle="modal" data-target="#form"><i class="fa fa-cog"></i></button>
                     <button class="btn btn-info" type="button" onclick="eraseClick();cargarTodasLasUnidades();"><i class="fa fa-spinner"></i></button>
                     <button class="btn btn-info" type="button" onclick="consultarEnLinea();"><i class="fa fa-eye"></i></button>
+                    <button class="btn btn-info" type="button" onclick="irEstadisticasContadorDiario();" title="Estadísticas contador diario"><i class="fa fa-bar-chart"></i></button>
                 </div>
               </div>
             </div>
@@ -736,6 +737,7 @@ Dashboard
     </div>
   </div>
 </div>
+
 <div id="ts-toast-container" aria-live="polite" aria-atomic="true"></div>
 @endsection
 
@@ -1103,6 +1105,28 @@ function refreshVisibleUnidadesMeta() {
 
 // Refresco periódico del meta (ruta, bolt, etc.); el batch aplica ruta_* explícitas (vacías = sin despacho P)
 setInterval(refreshVisibleUnidadesMeta, 20000);
+
+function irEstadisticasContadorDiario() {
+    var url = '{{ url('/estadisticas-contador-diario') }}';
+    var coopEl = document.getElementById('cooperativa');
+    var qs = [];
+    if (coopEl && coopEl.value) {
+        qs.push('cooperativa_id=' + encodeURIComponent(coopEl.value));
+    }
+    try {
+        var lis = document.querySelectorAll('#ul_unidades li');
+        var ids = [];
+        var i;
+        for (i = 0; i < lis.length; i++) {
+            if (lis[i].id) ids.push(lis[i].id);
+        }
+        if (ids.length) {
+            qs.push('unidades=' + encodeURIComponent(ids.join(',')));
+        }
+    } catch (e) {}
+    if (qs.length) url += '?' + qs.join('&');
+    window.location.href = url;
+}
 
 /**
  * En móviles / pestaña en segundo plano el navegador suspende timers y SSE.
@@ -1732,6 +1756,13 @@ function obtenerCurrentUContador(row) {
     return row.currentU || null;
 }
 
+/** Misma normalización que updateUnidadInList → contador_diario_disp en la lista lateral. */
+function contadorDiarioDispDesdeUnidad(unidad) {
+    var contador_diario_disp = Number(unidad && unidad.contador_diario);
+    if (isNaN(contador_diario_disp)) contador_diario_disp = 0;
+    return contador_diario_disp;
+}
+
 function computeEstadoMovilParaContador(unidad) {
     return estadoVistaListaUnidad(unidad);
 }
@@ -1902,8 +1933,7 @@ function updateUnidadInList(unidad, opts) {
     var velocidad_num = Number(unidad.velocidad_actual) || 0;
     var contador_total_disp = Number(unidad.contador_total);
     if (isNaN(contador_total_disp)) contador_total_disp = 0;
-    var contador_diario_disp = Number(unidad.contador_diario);
-    if (isNaN(contador_diario_disp)) contador_diario_disp = 0;
+    var contador_diario_disp = contadorDiarioDispDesdeUnidad(unidad);
     unidad.contador_total = contador_total_disp;
     unidad.contador_diario = contador_diario_disp;
 
