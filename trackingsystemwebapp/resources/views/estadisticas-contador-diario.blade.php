@@ -62,15 +62,15 @@ Estadísticas contador diario
         text-align: right;
         margin-top: 16px;
     }
+    #reloj {
+        display: none !important;
+    }
 </style>
 @endsection
 @section('content')
 <div class="page-title">
     <div class="title_left">
         <h3><i class="fa fa-bar-chart"></i> Estadísticas — contador diario</h3>
-    </div>
-    <div class="title_right text-right">
-        <a href="{{ url('/homev2') }}" class="btn btn-default"><i class="fa fa-arrow-left"></i> Volver al mapa</a>
     </div>
 </div>
 <div class="clearfix"></div>
