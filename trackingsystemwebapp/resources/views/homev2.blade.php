@@ -738,6 +738,8 @@ Dashboard
   </div>
 </div>
 
+@include('partials.estadisticas-contador-modal')
+
 <div id="ts-toast-container" aria-live="polite" aria-atomic="true"></div>
 @endsection
 
@@ -1107,25 +1109,21 @@ function refreshVisibleUnidadesMeta() {
 setInterval(refreshVisibleUnidadesMeta, 20000);
 
 function irEstadisticasContadorDiario() {
-    var url = '{{ url('/estadisticas-contador-diario') }}';
     var coopEl = document.getElementById('cooperativa');
-    var qs = [];
-    if (coopEl && coopEl.value) {
-        qs.push('cooperativa_id=' + encodeURIComponent(coopEl.value));
-    }
+    var coopId = (coopEl && coopEl.value) ? String(coopEl.value) : '';
+    var ids = [];
     try {
         var lis = document.querySelectorAll('#ul_unidades li');
-        var ids = [];
         var i;
         for (i = 0; i < lis.length; i++) {
             if (lis[i].id) ids.push(lis[i].id);
         }
-        if (ids.length) {
-            qs.push('unidades=' + encodeURIComponent(ids.join(',')));
-        }
     } catch (e) {}
-    if (qs.length) url += '?' + qs.join('&');
-    window.location.href = url;
+    statsContextoHome = {
+        cooperativa_id: coopId,
+        unidades: ids
+    };
+    $('#estadisticasContadorModal').modal('show');
 }
 
 /**
@@ -5089,6 +5087,8 @@ $("#velocimetro").myfunc({divFact:10});
 	});
 
 </script>
+
+@include('partials.estadisticas-contador-modal-scripts')
 
 
 <script src="https://developers.google.com/maps/documentation/javascript/examples/markerclusterer/markerclusterer.js">
