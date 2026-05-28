@@ -1697,6 +1697,8 @@ class HistoricoController extends Controller
 
     /**
      * Una sola consulta a recorridos para todas las unidades del rango.
+     * Hoy (un solo día): usa contador_diario en Unidad.
+     * Rango/ayer: usa delta de contador_total (último - primero) en recorridos.
      */
     private function contadoresDiariosBatch(array $ids, $porId, $iniUtc, $finUtc, $unSoloDia, $esHoy)
     {
@@ -1732,48 +1734,32 @@ class HistoricoController extends Controller
         $recorridos = Recorrido::whereIn('unidad_id', $oids)
             ->where('fecha_gps', '>=', $iniUtc)
             ->where('fecha_gps', '<=', $finUtc)
-            ->where('contador_diario', '>', 0)
-            ->get(['unidad_id', 'contador_diario', 'fecha_gps']);
+            ->where('contador_total', '>=', 0)
+            ->orderBy('fecha_gps', 'asc')
+            ->get(['unidad_id', 'contador_total', 'fecha_gps']);
 
-        if ($unSoloDia) {
-            foreach ($recorridos as $r) {
-                $uid = (string) $r->unidad_id;
-                $c = (int) ($r->contador_diario ?? 0);
-                if (!isset($resultado[$uid]) || $c > $resultado[$uid]) {
-                    $resultado[$uid] = $c;
-                }
+        $primeroPorUnidad = [];
+        $ultimoPorUnidad = [];
+        foreach ($recorridos as $r) {
+            if (empty($r->fecha_gps)) {
+                continue;
             }
-            foreach ($needRecorrido as $uid) {
-                if (!isset($resultado[$uid])) {
-                    $resultado[$uid] = 0;
-                }
-                if ($esHoy && isset($porId[$uid])) {
-                    $u = $porId[$uid];
-                    $live = ($u->contador_diario !== null) ? (int) $u->contador_diario : 0;
-                    if ($live > $resultado[$uid]) {
-                        $resultado[$uid] = $live;
-                    }
-                }
+            $uid = (string) $r->unidad_id;
+            $total = (int) ($r->contador_total ?? 0);
+            if (!isset($primeroPorUnidad[$uid])) {
+                $primeroPorUnidad[$uid] = $total;
             }
-        } else {
-            $porUnidadDia = [];
-            foreach ($recorridos as $r) {
-                if (empty($r->fecha_gps)) {
-                    continue;
-                }
-                $uid = (string) $r->unidad_id;
-                $fg = $r->fecha_gps->toDateTime();
-                $fg = clone $fg;
-                $fg->modify('-10 hours');
-                $dia = $fg->format('Y-m-d');
-                $c = (int) ($r->contador_diario ?? 0);
-                if (!isset($porUnidadDia[$uid][$dia]) || $c > $porUnidadDia[$uid][$dia]) {
-                    $porUnidadDia[$uid][$dia] = $c;
-                }
+            $ultimoPorUnidad[$uid] = $total;
+        }
+
+        foreach ($needRecorrido as $uid) {
+            if (!isset($primeroPorUnidad[$uid]) || !isset($ultimoPorUnidad[$uid])) {
+                $resultado[$uid] = 0;
+                continue;
             }
-            foreach ($needRecorrido as $uid) {
-                $resultado[$uid] = isset($porUnidadDia[$uid]) ? array_sum($porUnidadDia[$uid]) : 0;
-            }
+            $delta = (int) $ultimoPorUnidad[$uid] - (int) $primeroPorUnidad[$uid];
+            // Evita negativos en caso de reinicio fuera del rango.
+            $resultado[$uid] = $delta >= 0 ? $delta : 0;
         }
 
         return $resultado;
