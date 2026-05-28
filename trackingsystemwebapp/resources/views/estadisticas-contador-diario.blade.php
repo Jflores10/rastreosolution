@@ -213,10 +213,13 @@ function statsResetParticipacionWrapHeight(barCount) {
 }
 
 function statsClearCanvasAfterDestroy(canvas) {
-    if (!canvas) return;
-    canvas.removeAttribute('style');
-    canvas.removeAttribute('width');
-    canvas.removeAttribute('height');
+    if (!canvas) return null;
+    var parent = canvas.parentNode;
+    if (!parent) return canvas;
+    var nuevoCanvas = document.createElement('canvas');
+    nuevoCanvas.id = canvas.id;
+    parent.replaceChild(nuevoCanvas, canvas);
+    return nuevoCanvas;
 }
 
 function statsGetCooperativaId() {
@@ -565,7 +568,8 @@ function statsRenderChartParticipacion(items, esPolling) {
     if (!canvas) return;
 
     var barCount = pctRows.length;
-    var rebuild = !chartParticipacion || barCount !== statsParticipacionBarCount;
+    // Rebuild en interacción manual para evitar artefactos de dibujo al cambiar selección.
+    var rebuild = !chartParticipacion || barCount !== statsParticipacionBarCount || !esPolling;
 
     statsResetParticipacionWrapHeight(barCount);
 
@@ -579,7 +583,8 @@ function statsRenderChartParticipacion(items, esPolling) {
 
     statsParticipacionBarCount = barCount;
     chartParticipacion = statsDestroyChart(chartParticipacion);
-    statsClearCanvasAfterDestroy(canvas);
+    canvas = statsClearCanvasAfterDestroy(canvas);
+    if (!canvas) return;
     var ctx = canvas.getContext('2d');
 
     chartParticipacion = new Chart(ctx, {
