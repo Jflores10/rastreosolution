@@ -30,6 +30,11 @@ function statsColorPorIndice(i, alpha) {
     var c = STATS_COLOR_PALETTE[i % STATS_COLOR_PALETTE.length];
     return statsHexToRgba(c, alpha);
 }
+function statsOrdenarItemsMayorMenor(items) {
+    return items.slice().sort(function (a, b) {
+        return (b.value || 0) - (a.value || 0);
+    });
+}
 function statsDestroyChart(chart) { if (chart) chart.destroy(); return null; }
 function statsResetParticipacionWrapHeight(barCount) { var wrap = document.getElementById('stats-participacion-wrap'); if (wrap) wrap.style.height = Math.max(280, (barCount || 0) * 32) + 'px'; }
 function statsClearCanvasAfterDestroy(canvas) { if (!canvas) return null; var parent = canvas.parentNode; if (!parent) return canvas; var nuevoCanvas = document.createElement('canvas'); nuevoCanvas.id = canvas.id; parent.replaceChild(nuevoCanvas, canvas); return nuevoCanvas; }
@@ -85,6 +90,7 @@ function statsRefrescarDatos(esPolling) {
         }).always(function () { statsRefreshEnCurso = false; statsRefreshXhr = null; });
 }
 function statsRenderChartContador(items, esPolling) {
+    items = statsOrdenarItemsMayorMenor(items);
     var labels = [], values = []; for (var i = 0; i < items.length; i++) { labels.push(items[i].label); values.push(items[i].value); }
     var bgColors = [], borderColors = [];
     for (var c = 0; c < labels.length; c++) {
@@ -129,9 +135,10 @@ function statsRenderChartContador(items, esPolling) {
     });
 }
 function statsRenderChartParticipacion(items, esPolling) {
+    items = statsOrdenarItemsMayorMenor(items);
     var total = 0; for (var i = 0; i < items.length; i++) total += items[i].value;
     var pctRows = []; for (var j = 0; j < items.length; j++) pctRows.push({ label: items[j].label, percent: total > 0 ? (items[j].value / total) * 100 : 0, raw: items[j].value });
-    pctRows.sort(function (a, b) { return b.percent - a.percent; });
+    pctRows.sort(function (a, b) { return b.raw - a.raw; });
     var labels = [], percents = []; for (var k = 0; k < pctRows.length; k++) { labels.push(pctRows[k].label); percents.push(Math.round(pctRows[k].percent * 10) / 10); }
     var bgColors = [], borderColors = [];
     for (var pc = 0; pc < labels.length; pc++) {
