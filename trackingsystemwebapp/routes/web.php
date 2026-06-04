@@ -177,6 +177,7 @@ Route::group(['middleware' => ['auth', 'usuario']], function () {
     Route::post('notification-types/delete/{id}', 'NotificationTypeController@destroyPost');
     Route::resource('notification-types', 'NotificationTypeController', array('except' => array('create', 'edit', 'show')));
     Route::get('fotos', 'PhotoUnidadController@index')->name('fotos.index');
+    Route::post('fotos/{id}/marcar', 'PhotoUnidadController@marcar')->name('fotos.marcar');
     Route::get('fotos/{id}/imagen', 'PhotoUnidadController@showImage')->name('fotos.imagen');
 
     Route::group(['prefix' => 'reportes-unidades'], function () {

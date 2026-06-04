@@ -1855,6 +1855,8 @@ function onClientConnected(socket) {
         let data = message.split(',');
 
         let puerta = '';
+        if (toInteger(data[indexdoor]) === 10) puerta = 'PUERTA ABIERTA (DELANTERAPR)';
+        if (toInteger(data[indexdoor]) === 11) puerta = 'PUERTA CERRADA (DELANTERAPR)';
         if (toInteger(data[indexdoor]) === 20) puerta = 'PUERTA ABIERTA (DELANTERA)';
         if (toInteger(data[indexdoor]) === 21) puerta = 'PUERTA CERRADA (DELANTERA)';
         if (toInteger(data[indexdoor]) === 30) puerta = 'PUERTA ABIERTA (TRASERA)';
@@ -1957,11 +1959,47 @@ function onClientConnected(socket) {
                 );
               }
 
+            }
+            // ================= PUERTA DELANTERA PR =================
+            else if (toInteger(data[indexdoor]) === 10 || toInteger(data[indexdoor]) === 11) {
+
+              let fechaPuertaAbiertaPr = null;
+              let fechaPuertaCerradaPr = null;
+
+              if (puerta === 'PUERTA ABIERTA (DELANTERAPR)') {
+                fechaPuertaAbiertaPr = fecha_gps;
+              } else if (document.fecha_puerta_abierta_delanterapr !== undefined && document.fecha_puerta_abierta_delanterapr !== null) {
+                fechaPuertaAbiertaPr = document.fecha_puerta_abierta_delanterapr;
+              }
+
+              if (puerta === 'PUERTA CERRADA (DELANTERAPR)') {
+                fechaPuertaCerradaPr = fecha_gps;
+              } else if (document.fecha_puerta_cerrada_delanterapr !== undefined && document.fecha_puerta_cerrada_delanterapr !== null) {
+                fechaPuertaCerradaPr = document.fecha_puerta_cerrada_delanterapr;
+              }
+
+              if (!isBuffMessage) {
+                dbTrackingSystem.collection('unidads').updateOne(
+                  { _id: document._id },
+                  {
+                    $set: {
+                      puerta_delanterapr: puerta,
+                      alerta_puerta_message_delanterapr: puerta,
+                      alerta_puerta_fecha_delanterapr: fecha_gps,
+                      fecha_puerta_abierta_delanterapr: fechaPuertaAbiertaPr,
+                      fecha_puerta_cerrada_delanterapr: fechaPuertaCerradaPr,
+                      is_atm: 0
+                    }
+                  },
+                  { writeConcern: { w: 0 } }
+                );
+              }
+
               enviarALaravelPorWS({
                 type: 'unidad.alerta.puerta',
                 unidad_id: document._id,
                 imei: document.imei,
-                puerta: 'DELANTERA',
+                puerta: 'DELANTERAPR',
                 estado: puerta,
                 fecha: fecha_gps,
                 cooperativa_id: document.cooperativa_id
@@ -1972,7 +2010,7 @@ function onClientConnected(socket) {
 
             }
             // ================= PUERTA TRASERA =================
-            else {
+            else if (toInteger(data[indexdoor]) === 30 || toInteger(data[indexdoor]) === 31) {
 
               let fechaPuertaAbiertaT = null;
               let fechaPuertaCerradaT = null;
@@ -2006,18 +2044,6 @@ function onClientConnected(socket) {
                 );
               }
 
-              enviarALaravelPorWS({
-                type: 'unidad.alerta.puerta',
-                unidad_id: document._id,
-                imei: document.imei,
-                puerta: 'TRASERA',
-                estado: puerta,
-                fecha: fecha_gps,
-                cooperativa_id: document.cooperativa_id
-                  ? String(document.cooperativa_id).trim()
-                  : null,
-                _raw_message: message
-              });
             }
           }
         );

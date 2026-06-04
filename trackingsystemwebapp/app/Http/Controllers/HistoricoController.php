@@ -24,6 +24,8 @@ use Illuminate\Support\Facades\Cache;
 use App\User;
 use Excel;
 use App\Helper\FunctionsHelper;
+use App\PhotoUnidad;
+use App\Services\LocationIqReverseGeocodeService;
 
 
 class HistoricoController extends Controller
@@ -813,12 +815,28 @@ class HistoricoController extends Controller
                 }
             }
 
+            $imeisContadorImg = array();
+            if (isset($unidades) && count($unidades) > 0) {
+                foreach ($unidades as $_uCont) {
+                    $_imeiCont = trim((string) $_uCont->imei);
+                    if ($_imeiCont !== '') {
+                        $imeisContadorImg[] = $_imeiCont;
+                    }
+                }
+            }
+            $contadoresImgHoy = PhotoUnidad::contadoresMarcadasHoyPorImeis($imeisContadorImg);
+
             foreach($unidades as $unidad)
             {
                 $_uidK = (string) $unidad->_id;
                 $_nv = isset($vueltasNumByUnidad[$_uidK]) ? (int) $vueltasNumByUnidad[$_uidK] : 0;
                 $unidad->numvuelta = $_nv;
                 $unidad['numvuelta'] = $_nv;
+
+                $_imeiUnidad = trim((string) $unidad->imei);
+                $_contadorImgHoy = isset($contadoresImgHoy[$_imeiUnidad]) ? (int) $contadoresImgHoy[$_imeiUnidad] : 0;
+                $unidad->contador_img = $_contadorImgHoy;
+                $unidad['contador_img'] = $_contadorImgHoy;
 
                 if($unidad["fecha_gps"] != null && $unidad["fecha"] != null)
                 {
@@ -1083,7 +1101,8 @@ class HistoricoController extends Controller
                 $ubicacion= '';
                 $angulo_traducido='-';
                 $tipo='';
-                $user=Auth::user();
+                $geoService = app(LocationIqReverseGeocodeService::class);
+                $direccionPorCoordenadas = array();
                 foreach ($cursor as $documento) {
                         $fecha = $documento["fecha"];
                         $voltaje = (isset($documento["voltaje"])?$documento["voltaje"]:'-');
@@ -1248,49 +1267,45 @@ class HistoricoController extends Controller
                             }
                         }
 
-                        $ubicacion= '';
-                        $latitud_geo='--';
-                        $longitud_geo='--';
-                        if(isset($documento["latitud"]) && isset($documento["longitud"])){
-                            if($documento["latitud"] != null && $documento["longitud"] != null){
-                                $latitud_geo=$documento["latitud"];
-                                $longitud_geo=$documento["longitud"];
-                                if($user->tipo_usuario->valor==1 && !isset($documento['gps_address'])){//OSM DIRECCIONES SOLO DISTRIBUIDORES
-                                    try {
-                                        $client = new Client();
-                                        $urlFinal='https://nominatim.openstreetmap.org/reverse?format=json&lat='.$documento["latitud"]. '&lon='.$documento["longitud"];
-                                        $res = $client->get($urlFinal, [
-                                            'verify'          => false,
-                                            'timeout'         => 5,
-                                            'connect_timeout' => 3,
-                                        ]);
-
-                                        $code = $res->getStatusCode();
-                                        if ($code === 200) {
-                                            $json = json_decode($res->getBody());
-                                            if (!isset($json->error)) {
-                                                $ubicacion = $json->display_name;
-                                                $documento['gps_address'] = $ubicacion;
-                                                $documento->save();
-                                            } else {
-                                                $ubicacion = 'Ubicacion no disponible';
-                                            }
-                                        } else {
-                                            $ubicacion = 'Ubicacion no disponible';
-                                        }
-                                    } catch (\Exception $e) {
-                                        $ubicacion = 'Ubicacion no disponible';
+                        $ubicacion = '';
+                        $latitud_geo = '--';
+                        $longitud_geo = '--';
+                        if (isset($documento['latitud']) && isset($documento['longitud'])
+                            && $documento['latitud'] != null && $documento['longitud'] != null
+                            && $documento['latitud'] !== '' && $documento['longitud'] !== ''
+                            && is_numeric($documento['latitud']) && is_numeric($documento['longitud'])) {
+                            $latitud_geo = $documento['latitud'];
+                            $longitud_geo = $documento['longitud'];
+                            $latF = (float) $documento['latitud'];
+                            $lngF = (float) $documento['longitud'];
+                            $rounded = $geoService->roundCoordinates($latF, $lngF);
+                            if ($rounded !== null) {
+                                $coordCacheKey = $rounded[0] . ',' . $rounded[1];
+                                if (!array_key_exists($coordCacheKey, $direccionPorCoordenadas)) {
+                                    $direccionPorCoordenadas[$coordCacheKey] = $geoService->reverseDisplayName($latF, $lngF);
+                                }
+                                $dir = $direccionPorCoordenadas[$coordCacheKey];
+                                if ($dir !== null && trim((string) $dir) !== '') {
+                                    $ubicacion = trim((string) $dir);
+                                    $gpsPrev = isset($documento['gps_address']) ? trim((string) $documento['gps_address']) : '';
+                                    if ($gpsPrev === '') {
+                                        $documento['gps_address'] = $ubicacion;
+                                        $documento->save();
                                     }
                                 }
                             }
-                        } 
+                        }
+                        if ($ubicacion === '') {
+                            $gpsGuardada = isset($documento['gps_address']) ? trim((string) $documento['gps_address']) : '';
+                            $ubicacion = ($gpsGuardada !== '') ? $gpsGuardada : 'Ubicacion no disponible';
+                        }
                         array_push($array_historico, (Object)[
                             '_id' => $documento["_id"],
                             'fecha_servidor' => $fecha,
                             'fecha_gps' => $fecha_gps,
                             'evento' => $evento,
                             'tipo_marcacion' => isset($documento['origen'])?$documento['origen']:"-",
-                            'ubicacion' => isset($documento['gps_address']) ? $documento['gps_address'] : $ubicacion,
+                            'ubicacion' => $ubicacion,
                             'angulo' => $angulo_traducido,
                             'latitud'=>$latitud_geo,
                             'longitud'=>$longitud_geo,

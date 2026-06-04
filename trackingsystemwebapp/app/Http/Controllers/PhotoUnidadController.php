@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Cooperativa;
 use App\PhotoUnidad;
+use App\Services\LocationIqReverseGeocodeService;
 use App\Unidad;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -24,6 +25,44 @@ class PhotoUnidadController extends Controller
         }
 
         return $query;
+    }
+
+    /**
+     * Dirección por foto (id => texto) vía LocationIQ + caché geocache.
+     *
+     * @param \Illuminate\Contracts\Pagination\LengthAwarePaginator|\Illuminate\Support\Collection $items
+     * @param LocationIqReverseGeocodeService $geoService
+     * @return array
+     */
+    private function ubicacionesPorFotos($items, LocationIqReverseGeocodeService $geoService)
+    {
+        $direccionPorCoordenadas = array();
+        $ubicacionesPorId = array();
+
+        foreach ($items as $row) {
+            $id = (string) $row->getKey();
+            $latitud = isset($row->latitud) ? $row->latitud : null;
+            $longitud = isset($row->longitud) ? $row->longitud : null;
+            $direccion = null;
+
+            if ($latitud !== null && $longitud !== null && $latitud !== '' && $longitud !== ''
+                && is_numeric($latitud) && is_numeric($longitud)) {
+                $latF = (float) $latitud;
+                $lngF = (float) $longitud;
+                $rounded = $geoService->roundCoordinates($latF, $lngF);
+                if ($rounded !== null) {
+                    $coordCacheKey = $rounded[0] . ',' . $rounded[1];
+                    if (!array_key_exists($coordCacheKey, $direccionPorCoordenadas)) {
+                        $direccionPorCoordenadas[$coordCacheKey] = $geoService->reverseDisplayName($latF, $lngF);
+                    }
+                    $direccion = $direccionPorCoordenadas[$coordCacheKey];
+                }
+            }
+
+            $ubicacionesPorId[$id] = $direccion;
+        }
+
+        return $ubicacionesPorId;
     }
 
     public function __construct()
@@ -118,6 +157,12 @@ class PhotoUnidadController extends Controller
 
         $query->where('fecha', '>=', $desdeDate)->where('fecha', '<=', $hastaDate);
 
+        $tipoUsuario = isset($user->tipo_usuario) ? (string) $user->tipo_usuario->valor : '';
+        $esDistribuidor = $tipoUsuario === '1';
+        if (!$esDistribuidor) {
+            $query->where('marcada', true);
+        }
+
         $items = $query->paginate(50);
         $items->appends($request->query());
 
@@ -144,6 +189,9 @@ class PhotoUnidadController extends Controller
             }
         }
 
+        $geoService = app(LocationIqReverseGeocodeService::class);
+        $ubicacionesPorId = $this->ubicacionesPorFotos($items, $geoService);
+
         return view('panel.fotos.index', array(
             'items' => $items,
             'cooperativas' => $cooperativas,
@@ -153,6 +201,71 @@ class PhotoUnidadController extends Controller
             'desde' => $desde,
             'hasta' => $hasta,
             'unidades_por_imei' => $unidadesPorImei,
+            'ubicaciones_por_id' => $ubicacionesPorId,
+            'es_distribuidor' => $esDistribuidor,
+        ));
+    }
+
+    public function marcar(Request $request, $id)
+    {
+        $user = $request->user();
+        $tipoUsuario = isset($user->tipo_usuario) ? (string) $user->tipo_usuario->valor : '';
+        if ($tipoUsuario !== '1') {
+            return response()->json(array('success' => false, 'message' => 'No autorizado'), 403);
+        }
+
+        $marcadaInput = $request->input('marcada');
+        $marcar = null;
+        if (in_array($marcadaInput, array(1, '1', true, 'true', 'on'), true)) {
+            $marcar = true;
+        } elseif (in_array($marcadaInput, array(0, '0', false, 'false', 'off'), true)) {
+            $marcar = false;
+        }
+        if ($marcar === null) {
+            return response()->json(array('success' => false, 'message' => 'Valor de marcada no válido'), 422);
+        }
+
+        $item = PhotoUnidad::findOrFail($id);
+        $imei = trim((string) $item->imei);
+        $unidad = ($imei !== '') ? Unidad::where('imei', $imei)->first() : null;
+
+        if ($marcar) {
+            if (!empty($item->marcada)) {
+                return response()->json(array(
+                    'success' => true,
+                    'marcada' => true,
+                    'contador_img' => $unidad ? PhotoUnidad::contadorMarcadasHoyPorImei($imei) : 0,
+                ));
+            }
+
+            $item->marcada = true;
+            $item->fecha_marca = Carbon::now();
+            $item->save();
+        } else {
+            if (empty($item->marcada)) {
+                return response()->json(array(
+                    'success' => true,
+                    'marcada' => false,
+                    'contador_img' => $unidad ? PhotoUnidad::contadorMarcadasHoyPorImei($imei) : 0,
+                ));
+            }
+
+            $item->marcada = false;
+            $item->fecha_marca = null;
+            $item->save();
+        }
+
+        $contadorImg = 0;
+        if ($unidad) {
+            $contadorImg = PhotoUnidad::contadorMarcadasHoyPorImei($imei);
+            $unidad->contador_img = $contadorImg;
+            $unidad->save();
+        }
+
+        return response()->json(array(
+            'success' => true,
+            'marcada' => (bool) $item->marcada,
+            'contador_img' => $contadorImg,
         ));
     }
 

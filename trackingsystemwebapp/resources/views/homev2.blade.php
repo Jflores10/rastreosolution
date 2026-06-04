@@ -1424,11 +1424,15 @@ function conectarSSE(coopId) {
 
             setBuffBlink(msg.unidad_id, false);
 
-            if (msg.puerta === 'DELANTERA') {
-                li.currentU.puerta = msg.estado;
-            }
-            if (msg.puerta === 'TRASERA') {
-                li.currentU.puerta_trasera = msg.estado;
+            if (msg.puerta !== 'DELANTERAPR') return;
+
+            li.currentU.puerta_delanterapr = msg.estado;
+            if (msg.fecha) {
+                if (msg.estado === 'PUERTA ABIERTA (DELANTERAPR)') {
+                    li.currentU.fecha_puerta_abierta_delanterapr = msg.fecha;
+                } else if (msg.estado === 'PUERTA CERRADA (DELANTERAPR)') {
+                    li.currentU.fecha_puerta_cerrada_delanterapr = msg.fecha;
+                }
             }
             updateUnidadInList(li.currentU);
         } catch (e) {}
@@ -1761,6 +1765,31 @@ function contadorDiarioDispDesdeUnidad(unidad) {
     return contador_diario_disp;
 }
 
+/** contador_img en unidad = fotos marcadas hoy (PhotoUnidad marcada + fecha_marca del día actual). */
+function contadorImgDispDesdeUnidad(unidad) {
+    var n = Number(unidad && unidad.contador_img);
+    if (isNaN(n) || n < 0) n = 0;
+    return n;
+}
+
+function htmlContadorImgUnidadLi(estado, contadorImgOrUnidad) {
+    var n = (contadorImgOrUnidad && typeof contadorImgOrUnidad === 'object')
+        ? contadorImgDispDesdeUnidad(contadorImgOrUnidad)
+        : Number(contadorImgOrUnidad);
+    if (isNaN(n)) n = 0;
+    return '&nbsp&nbsp&nbsp|&nbsp&nbsp&nbsp<i class="fa fa-camera" style="color:#00BCD4"></i>&nbsp' + n;
+}
+
+/** Puerta delantera PR (GTDIS 10/11): mismo icono que puerta trasera. */
+function htmlPuertaDelanteraprLi(unidad, fechaAbiertaPr, fechaCerradaPr) {
+    var p = unidad && unidad.puerta_delanterapr;
+    var fa = (fechaAbiertaPr !== undefined && fechaAbiertaPr !== null && fechaAbiertaPr !== '') ? fechaAbiertaPr : '--';
+    var fc = (fechaCerradaPr !== undefined && fechaCerradaPr !== null && fechaCerradaPr !== '') ? fechaCerradaPr : '--';
+    return (p ? ((p === 'PUERTA ABIERTA (DELANTERAPR)') ? '<img src="../images/opendoor.png" height="20" width="20">' + fa
+        : ((p === 'PUERTA CERRADA (DELANTERAPR)') ? '<img src="../images/closedoor.png" height="20" width="20">' + fc
+            : '<font color="red"><strong>---</strong></font>')) : '<font color="red"><strong>---</strong></font>');
+}
+
 function computeEstadoMovilParaContador(unidad) {
     return estadoVistaListaUnidad(unidad);
 }
@@ -1827,6 +1856,7 @@ function updateUnidadInList(unidad, opts) {
             if (unidad.diferencia == null && prev.diferencia != null) unidad.diferencia = prev.diferencia;
             if (unidad.contador_total === undefined && prev.contador_total != null) unidad.contador_total = prev.contador_total;
             if (unidad.contador_diario === undefined && prev.contador_diario != null) unidad.contador_diario = prev.contador_diario;
+            if (unidad.contador_img === undefined && prev.contador_img != null) unidad.contador_img = prev.contador_img;
             if (typeof unidad.numvuelta === 'undefined' && typeof prev.numvuelta !== 'undefined') unidad.numvuelta = prev.numvuelta;
             
             // Preserve sentido (direction) if incoming payload lacks it
@@ -1839,6 +1869,7 @@ function updateUnidadInList(unidad, opts) {
             if (unidad.diferencia == null && pIcon.diferencia != null) unidad.diferencia = pIcon.diferencia;
             if (unidad.contador_total === undefined && pIcon.contador_total != null) unidad.contador_total = pIcon.contador_total;
             if (unidad.contador_diario === undefined && pIcon.contador_diario != null) unidad.contador_diario = pIcon.contador_diario;
+            if (unidad.contador_img === undefined && pIcon.contador_img != null) unidad.contador_img = pIcon.contador_img;
             if (typeof unidad.numvuelta === 'undefined' && typeof pIcon.numvuelta !== 'undefined') unidad.numvuelta = pIcon.numvuelta;
         }
     } catch (e) {
@@ -1954,10 +1985,8 @@ function updateUnidadInList(unidad, opts) {
     var ruta_conductor = formatRutaConductorDisplay(unidad.ruta_conductor || '');
     var ruta_hora_fin = unidad.ruta_hora_fin || '';
 
-    var fecha_puerta_abierta = '--';
-    var fecha_puerta_cerrada = '--';
-    var fecha_puerta_abierta_trasera =  '--';
-    var fecha_puerta_cerrada_trasera = '--';
+    var fecha_puerta_abierta_delanterapr = '--';
+    var fecha_puerta_cerrada_delanterapr = '--';
     /*
     var fecha_puerta_abierta = unidad.fecha_puerta_abierta || '';
     var fecha_puerta_cerrada = unidad.fecha_puerta_cerrada || '';
@@ -2027,11 +2056,7 @@ function updateUnidadInList(unidad, opts) {
                 '&nbsp&nbsp&nbsp' + ((unidad.is_atm !== undefined && unidad.is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'') +
                 '&nbsp&nbsp&nbsp|&nbsp&nbsp';
 
-            html += (unidad.puerta ? ((unidad.puerta==='PUERTA ABIERTA (DELANTERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta:
-                ((unidad.puerta==='PUERTA CERRADA (DELANTERA)')?'<img src="../images/closedoor.png" height="20" width="20">'+ fecha_puerta_cerrada :'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>');
-
-            html += (unidad.puerta_trasera ? ((unidad.puerta_trasera==='PUERTA ABIERTA (TRASERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta_trasera:
-                ((unidad.puerta_trasera==='PUERTA CERRADA (TRASERA)')?'<img src="../images/closedoor.png" height="20" width="20">'+ fecha_puerta_cerrada_trasera :'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>');
+            html += htmlPuertaDelanteraprLi(unidad, fecha_puerta_abierta_delanterapr, fecha_puerta_cerrada_delanterapr);
 
             html += '&nbsp&nbsp&nbsp|&nbsp&nbsp&nbsp<font color="black">' + ruta_actual + '</font>' + '&nbsp&nbsp<font color="black">(' + ruta_fecha + ')</font>-<font color="red">(' + ruta_hora_fin + ')</font>&nbsp&nbsp<font color="black">' + ruta_conductor + '</font>';
 
@@ -2050,11 +2075,7 @@ function updateUnidadInList(unidad, opts) {
                 '&nbsp&nbsp&nbsp<i id="bolt_' + unidad._id + '"' + boltTitleAttr + ' style="color:#f49a16"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#f49a16"></i>&nbsp' + contador_total_disp + " | " + contador_diario_disp +
                 '&nbsp&nbsp&nbsp|&nbsp&nbsp';
 
-            html += (unidad.puerta ? ((unidad.puerta==='PUERTA ABIERTA (DELANTERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta:
-                ((unidad.puerta==='PUERTA CERRADA (DELANTERA)')?'<img src="../images/closedoor.png" height="20" width="20">'+ fecha_puerta_cerrada :'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>');
-
-            html += (unidad.puerta_trasera ? ((unidad.puerta_trasera==='PUERTA ABIERTA (TRASERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta_trasera:
-                ((unidad.puerta_trasera==='PUERTA CERRADA (TRASERA)')?'<img src="../images/closedoor.png" height="20" width="20">'+ fecha_puerta_cerrada_trasera :'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>');
+            html += htmlPuertaDelanteraprLi(unidad, fecha_puerta_abierta_delanterapr, fecha_puerta_cerrada_delanterapr);
 
             html += '&nbsp&nbsp&nbsp|&nbsp&nbsp&nbsp<font color="black">' + ruta_actual + '</font>' + '&nbsp&nbsp<font color="black">(' + ruta_fecha + ')</font>-<font color="red">(' + ruta_hora_fin + ')</font>&nbsp&nbsp<font color="black">' + ruta_conductor + '</font>';
 
@@ -2073,11 +2094,7 @@ function updateUnidadInList(unidad, opts) {
                 '&nbsp&nbsp&nbsp<i id="bolt_' + unidad._id + '"' + boltTitleAttr + ' style="color:#00AA88"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#00AA88"></i>&nbsp' + contador_total_disp + " | " + contador_diario_disp +
                 '&nbsp&nbsp&nbsp|&nbsp&nbsp';
 
-            html += (unidad.puerta ? ((unidad.puerta==='PUERTA ABIERTA (DELANTERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta:
-                ((unidad.puerta==='PUERTA CERRADA (DELANTERA)')?'<img src="../images/closedoor.png" height="20" width="20">'+ fecha_puerta_cerrada :'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>');
-
-            html += (unidad.puerta_trasera ? ((unidad.puerta_trasera==='PUERTA ABIERTA (TRASERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta_trasera:
-                ((unidad.puerta_trasera==='PUERTA CERRADA (TRASERA)')?'<img src="../images/closedoor.png" height="20" width="20">'+ fecha_puerta_cerrada_trasera :'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>');
+            html += htmlPuertaDelanteraprLi(unidad, fecha_puerta_abierta_delanterapr, fecha_puerta_cerrada_delanterapr);
 
             html += '&nbsp&nbsp&nbsp|&nbsp&nbsp&nbsp<font color="black">' + ruta_actual + '</font>' + '&nbsp&nbsp<font color="black">(' + ruta_fecha + ')</font>-<font color="red">(' + ruta_hora_fin + ')</font>&nbsp&nbsp<font color="black">' + ruta_conductor + '</font>';
 
@@ -2096,11 +2113,7 @@ function updateUnidadInList(unidad, opts) {
                 '&nbsp&nbsp&nbsp<i id="bolt_' + unidad._id + '"' + boltTitleAttr + ' style="color:#990073"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#990073"></i>&nbsp' + contador_total_disp + " | " + contador_diario_disp +
                 '&nbsp&nbsp&nbsp|&nbsp&nbsp';
 
-            html += (unidad.puerta ? ((unidad.puerta==='PUERTA ABIERTA (DELANTERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta:
-                ((unidad.puerta==='PUERTA CERRADA (DELANTERA)')?'<img src="../images/closedoor.png" height="20" width="20">'+ fecha_puerta_cerrada :'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>');
-
-            html += (unidad.puerta_trasera ? ((unidad.puerta_trasera==='PUERTA ABIERTA (TRASERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta_trasera:
-                ((unidad.puerta_trasera==='PUERTA CERRADA (TRASERA)')?'<img src="../images/closedoor.png" height="20" width="20">'+ fecha_puerta_cerrada_trasera :'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>');
+            html += htmlPuertaDelanteraprLi(unidad, fecha_puerta_abierta_delanterapr, fecha_puerta_cerrada_delanterapr);
 
             html += '&nbsp&nbsp&nbsp|&nbsp&nbsp&nbsp<font color="black">' + ruta_actual + '</font>' + '&nbsp&nbsp<font color="black">(' + ruta_fecha + ')</font>-<font color="red">(' + ruta_hora_fin + ')</font>&nbsp&nbsp<font color="black">' + ruta_conductor + '</font>';
 
@@ -2110,6 +2123,8 @@ function updateUnidadInList(unidad, opts) {
             }
             break;
     }
+
+    html += htmlContadorImgUnidadLi(estado, contadorImgDispDesdeUnidad(unidad));
 
     // Insertar o actualizar el LI sin alterar la interfaz externa
     var li = document.getElementById(unidad._id);
@@ -4069,10 +4084,8 @@ $("#velocimetro").myfunc({divFact:10});
             var ubication;           
             
             var fecha_gps;
-            var fecha_puerta_abierta;
-            var fecha_puerta_cerrada;
-            var fecha_puerta_abierta_trasera;
-            var fecha_puerta_cerrada_trasera;
+            var fecha_puerta_abierta_delanterapr;
+            var fecha_puerta_cerrada_delanterapr;
             var voltaje;
             var estado;  
             var fecha_gps_marker;
@@ -4105,10 +4118,8 @@ $("#velocimetro").myfunc({divFact:10});
                 }
 
 
-                fecha_puerta_abierta='--';
-                fecha_puerta_cerrada='--';
-                fecha_puerta_abierta_trasera='--';
-                fecha_puerta_cerrada_trasera='--';
+                fecha_puerta_abierta_delanterapr='--';
+                fecha_puerta_cerrada_delanterapr='--';
 
                 ruta_actual='';
                 ruta_actual=data.array_rutas[i].ruta_actual;
@@ -4121,105 +4132,6 @@ $("#velocimetro").myfunc({divFact:10});
                 if(data.array_formatted_address[i].formatted_address!=null)
                     ubication=data.array_formatted_address[i].formatted_address;
                 
-                if(data.array_fechas[i].fecha_puerta_abierta!=null){
-                    var dia=new Date();
-                    var final=new Date(data.array_fechas[i].fecha_puerta_abierta.date);
-                // fecha_puerta_abierta=(new Date().getTime()- new Date(data.array_fechas[i].fecha_puerta_abierta.date).getTime());
-                    var starthour = parseInt(dia.getHours());
-                    var endhour = parseInt(final.getHours());
-                    var startminutes = parseInt(dia.getMinutes());
-                    var endminutes = parseInt(final.getMinutes());
-                    var startsecond = parseInt(dia.getSeconds());
-                    var endsecond = parseInt(final.getSeconds());
-
-                    var timeDiff = Math.abs(dia.getTime() - final.getTime());
-                    var diffDays = Math.ceil(timeDiff / (1000 * 3600 * 24))-1; 
-                    
-                    if(diffDays==0){
-                        fecha_puerta_abierta=Math.abs(parseInt(starthour-endhour)) + ':'+Math.abs(parseInt(startminutes-endminutes)) +
-                        ':'+Math.abs(parseInt(startsecond-endsecond));
-                    }else{
-                        fecha_puerta_abierta='D: '+diffDays+'  '+Math.abs(parseInt(starthour-endhour)) + ':'+Math.abs(parseInt(startminutes-endminutes)) +
-                        ':'+Math.abs(parseInt(startsecond-endsecond));
-                    }
-                
-                    
-                }
-
-                if(data.array_fechas[i].fecha_puerta_abierta_trasera!=null){
-                    var dia=new Date();
-                    var final=new Date(data.array_fechas[i].fecha_puerta_abierta_trasera.date);
-                // fecha_puerta_abierta=(new Date().getTime()- new Date(data.array_fechas[i].fecha_puerta_abierta.date).getTime());
-                    var starthour = parseInt(dia.getHours());
-                    var endhour = parseInt(final.getHours());
-                    var startminutes = parseInt(dia.getMinutes());
-                    var endminutes = parseInt(final.getMinutes());
-                    var startsecond = parseInt(dia.getSeconds());
-                    var endsecond = parseInt(final.getSeconds());
-
-                    var timeDiff = Math.abs(dia.getTime() - final.getTime());
-                    var diffDays = Math.ceil(timeDiff / (1000 * 3600 * 24))-1; 
-                    
-                    if(diffDays==0){
-                        fecha_puerta_abierta_trasera=Math.abs(parseInt(starthour-endhour)) + ':'+Math.abs(parseInt(startminutes-endminutes)) +
-                        ':'+Math.abs(parseInt(startsecond-endsecond));
-                    }else{
-                        fecha_puerta_abierta_trasera='D: '+diffDays+'  '+Math.abs(parseInt(starthour-endhour)) + ':'+Math.abs(parseInt(startminutes-endminutes)) +
-                        ':'+Math.abs(parseInt(startsecond-endsecond));
-                    }
-                
-                    
-                }
-                
-                if(data.array_fechas[i].fecha_puerta_cerrada!=null){                    
-                    var dia=new Date();
-                    var final=new Date(data.array_fechas[i].fecha_puerta_cerrada.date);
-                    var starthour = parseInt(dia.getHours());
-                    var endhour = parseInt(final.getHours());
-                    var startminutes = parseInt(dia.getMinutes());
-                    var endminutes = parseInt(final.getMinutes());
-                    var startsecond = parseInt(dia.getSeconds());
-                    var endsecond = parseInt(final.getSeconds());
-                    
-                    var timeDiff = Math.abs(dia.getTime() - final.getTime());
-                    var diffDays = Math.ceil(timeDiff / (1000 * 3600 * 24))-1; 
-                    
-                    if(diffDays==0){
-                        fecha_puerta_cerrada=Math.abs(parseInt(starthour-endhour)) + ':'+Math.abs(parseInt(startminutes-endminutes)) +
-                        ':'+Math.abs(parseInt(startsecond-endsecond));
-                    }else{
-                        fecha_puerta_cerrada='D: '+diffDays+'  '+Math.abs(parseInt(starthour-endhour)) + ':'+Math.abs(parseInt(startminutes-endminutes)) +
-                        ':'+Math.abs(parseInt(startsecond-endsecond));
-                    }
-                }
-
-                if(data.array_fechas[i].fecha_puerta_cerrada_trasera!=null){                    
-                    var dia=new Date();
-                    var final=new Date(data.array_fechas[i].fecha_puerta_cerrada_trasera.date);
-                    var starthour = parseInt(dia.getHours());
-                    var endhour = parseInt(final.getHours());
-                    var startminutes = parseInt(dia.getMinutes());
-                    var endminutes = parseInt(final.getMinutes());
-                    var startsecond = parseInt(dia.getSeconds());
-                    var endsecond = parseInt(final.getSeconds());
-                    
-                    var timeDiff = Math.abs(dia.getTime() - final.getTime());
-                    var diffDays = Math.ceil(timeDiff / (1000 * 3600 * 24))-1; 
-                    
-                    if(diffDays==0){
-                        fecha_puerta_cerrada_trasera=Math.abs(parseInt(starthour-endhour)) + ':'+Math.abs(parseInt(startminutes-endminutes)) +
-                        ':'+Math.abs(parseInt(startsecond-endsecond));
-                    }else{
-                        fecha_puerta_cerrada_trasera='D: '+diffDays+'  '+Math.abs(parseInt(starthour-endhour)) + ':'+Math.abs(parseInt(startminutes-endminutes)) +
-                        ':'+Math.abs(parseInt(startsecond-endsecond));
-                    }
-                }
-
-                fecha_puerta_abierta='--';
-                fecha_puerta_cerrada='--';
-                fecha_puerta_abierta_trasera='--';
-                fecha_puerta_cerrada_trasera='--';
-
                 if(data.unidades[i].voltaje!=null)
                     voltaje= data.unidades[i].voltaje;
 
@@ -4270,21 +4182,11 @@ $("#velocimetro").myfunc({divFact:10});
                                 +'&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#F44336"></i>&nbsp'+data.unidades[i].contador_total+" | "+data.unidades[i].contador_diario
                                 +'&nbsp&nbsp&nbsp'+((data.unidades[i].is_atm !== "undefined")?((data.unidades[i].is_atm===0)?'':((data.unidades[i].is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'')):'')
                                 +'&nbsp&nbsp&nbsp|&nbsp&nbsp'
-                                @if(true)
-                                    +((data.unidades[i].puerta !== 'undefined')?((data.unidades[i].puerta==='PUERTA ABIERTA (DELANTERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta:
-                                        ((data.unidades[i].puerta==='PUERTA CERRADA (DELANTERA)')?'<img src="../images/closedoor.png" height="20" width="20">'+ fecha_puerta_cerrada :'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>')    
-                                @else 
-                                    +((data.unidades[i].puerta !== 'undefined')?((data.unidades[i].puerta==='PUERTA ABIERTA (DELANTERA)')?'<img src="../images/opendoor.png" height="20" width="20">':((data.unidades[i].puerta==='PUERTA CERRADA (DELANTERA)')?'<img src="../images/closedoor.png" height="20" width="20">':'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>')
-                                @endif
-                                @if(true)//Auth::user()->tipo_usuario->valor==1
-                                    +((data.unidades[i].puerta_trasera !== 'undefined')?((data.unidades[i].puerta_trasera==='PUERTA ABIERTA (TRASERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta_trasera:
-                                        ((data.unidades[i].puerta_trasera==='PUERTA CERRADA (TRASERA)')?'<img src="../images/closedoor.png" height="20" width="20">'+ fecha_puerta_cerrada_trasera :'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>')    
-                                @else 
-                                    +((data.unidades[i].puerta_trasera !== 'undefined')?((data.unidades[i].puerta_trasera==='PUERTA ABIERTA (TRASERA)')?'<img src="../images/opendoor.png" height="20" width="20">':((data.unidades[i].puerta_trasera==='PUERTA CERRADA (TRASERA)')?'<img src="../images/closedoor.png" height="20" width="20">':'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>')
-                                @endif
+                                + htmlPuertaDelanteraprLi(data.unidades[i], fecha_puerta_abierta_delanterapr, fecha_puerta_cerrada_delanterapr)
                                 +'&nbsp&nbsp&nbsp|&nbsp&nbsp&nbsp<font color="black">'+ruta_actual+'</font>'
                                 +'&nbsp&nbsp<font color="black">('+ruta_fecha+')</font>-<font color="red">('+ruta_hora_fin+')</font>&nbsp&nbsp<font color="black">'+ruta_conductor+'</font>'
                                 +((data.array_bitacora[i].bitacora !="")?('&nbsp&nbsp&nbsp|&nbsp&nbsp <img id="' + bId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_Bitacora(\''+ data.unidades[i]._id+'\');" width="20" height="20" src="'+((data.array_bitacora[i].bitacora=="R")?'/images/police.png"':((data.array_bitacora[i].bitacora=="M")?'/images/mantenimiento.png"':((data.array_bitacora[i].bitacora=="O")?'/images/other.png"':'#"')))+'/>'):'&nbsp&nbsp&nbsp')
+                                + htmlContadorImgUnidadLi('D', data.unidades[i])
                                 +'</li>'
                         );
                         break;
@@ -4301,22 +4203,12 @@ $("#velocimetro").myfunc({divFact:10});
                                 +'&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#f49a16"></i>&nbsp'+data.unidades[i].contador_total+" | "+data.unidades[i].contador_diario
                                 +'&nbsp&nbsp&nbsp'+((data.unidades[i].is_atm !== "undefined")?((data.unidades[i].is_atm===0)?'':((data.unidades[i].is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'')):'')
                                 +'&nbsp&nbsp&nbsp|&nbsp&nbsp'
-                                @if(true)
-                                    +((data.unidades[i].puerta !== 'undefined')?((data.unidades[i].puerta==='PUERTA ABIERTA (DELANTERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta:
-                                        ((data.unidades[i].puerta==='PUERTA CERRADA (DELANTERA)')?'<img src="../images/closedoor.png" height="20" width="20">'+ fecha_puerta_cerrada :'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>')    
-                                @else 
-                                    +((data.unidades[i].puerta !== 'undefined')?((data.unidades[i].puerta==='PUERTA ABIERTA (DELANTERA)')?'<img src="../images/opendoor.png" height="20" width="20">':((data.unidades[i].puerta==='PUERTA CERRADA (DELANTERA)')?'<img src="../images/closedoor.png" height="20" width="20">':'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>')
-                                @endif
-                                @if(true)
-                                    +((data.unidades[i].puerta_trasera !== 'undefined')?((data.unidades[i].puerta_trasera==='PUERTA ABIERTA (TRASERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta_trasera:
-                                        ((data.unidades[i].puerta_trasera==='PUERTA CERRADA (TRASERA)')?'<img src="../images/closedoor.png" height="20" width="20">'+ fecha_puerta_cerrada_trasera :'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>')    
-                                @else 
-                                    +((data.unidades[i].puerta_trasera !== 'undefined')?((data.unidades[i].puerta_trasera==='PUERTA ABIERTA (TRASERA)')?'<img src="../images/opendoor.png" height="20" width="20">':((data.unidades[i].puerta_trasera==='PUERTA CERRADA (TRASERA)')?'<img src="../images/closedoor.png" height="20" width="20">':'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>')
-                                @endif
+                                + htmlPuertaDelanteraprLi(data.unidades[i], fecha_puerta_abierta_delanterapr, fecha_puerta_cerrada_delanterapr)
                                 +'&nbsp&nbsp&nbsp|&nbsp&nbsp&nbsp<font color="black">'+ruta_actual+'</font>'
                                 // +((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">':'')
                                 +'&nbsp&nbsp<font color="black">('+ruta_fecha+')</font>-<font color="red">('+ruta_hora_fin+')</font>&nbsp&nbsp<font color="black">'+ruta_conductor+'</font>'
                                 +((data.array_bitacora[i].bitacora !="")?('&nbsp&nbsp&nbsp|&nbsp&nbsp <img id="' + bId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_Bitacora(\''+ data.unidades[i]._id+'\');" width="20" height="20" src="'+((data.array_bitacora[i].bitacora=="R")?'/images/police.png"':((data.array_bitacora[i].bitacora=="M")?'/images/mantenimiento.png"':((data.array_bitacora[i].bitacora=="O")?'/images/other.png"':'#"')))+'/>'):'&nbsp&nbsp&nbsp')
+                                + htmlContadorImgUnidadLi('E', data.unidades[i])
                                 +'</li>'
                         );
                         break;
@@ -4332,22 +4224,12 @@ $("#velocimetro").myfunc({divFact:10});
                                 +data.unidades[i].contador_total+" | "+data.unidades[i].contador_diario
                                 +'&nbsp&nbsp&nbsp'+((data.unidades[i].is_atm !== "undefined")?((data.unidades[i].is_atm===0)?'':((data.unidades[i].is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'')):'')
                                 +'&nbsp&nbsp&nbsp|&nbsp&nbsp'
-                                @if(true)
-                                    +((data.unidades[i].puerta !== 'undefined')?((data.unidades[i].puerta==='PUERTA ABIERTA (DELANTERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta:
-                                        ((data.unidades[i].puerta==='PUERTA CERRADA (DELANTERA)')?'<img src="../images/closedoor.png" height="20" width="20">'+ fecha_puerta_cerrada :'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>')    
-                                @else 
-                                    +((data.unidades[i].puerta !== 'undefined')?((data.unidades[i].puerta==='PUERTA ABIERTA (DELANTERA)')?'<img src="../images/opendoor.png" height="20" width="20">':((data.unidades[i].puerta==='PUERTA CERRADA (DELANTERA)')?'<img src="../images/closedoor.png" height="20" width="20">':'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>')
-                                @endif
-                                @if(true)
-                                    +((data.unidades[i].puerta_trasera !== 'undefined')?((data.unidades[i].puerta_trasera==='PUERTA ABIERTA (TRASERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta_trasera:
-                                        ((data.unidades[i].puerta_trasera==='PUERTA CERRADA (TRASERA)')?'<img src="../images/closedoor.png" height="20" width="20">'+ fecha_puerta_cerrada_trasera :'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>')    
-                                @else 
-                                    +((data.unidades[i].puerta_trasera !== 'undefined')?((data.unidades[i].puerta_trasera==='PUERTA ABIERTA (TRASERA)')?'<img src="../images/opendoor.png" height="20" width="20">':((data.unidades[i].puerta_trasera==='PUERTA CERRADA (TRASERA)')?'<img src="../images/closedoor.png" height="20" width="20">':'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>')
-                                @endif
+                                + htmlPuertaDelanteraprLi(data.unidades[i], fecha_puerta_abierta_delanterapr, fecha_puerta_cerrada_delanterapr)
                                 +'&nbsp&nbsp&nbsp|&nbsp&nbsp&nbsp<font color="black">'+ruta_actual+'</font>'
                                 // +((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">':'')
                                 +'&nbsp&nbsp<font color="black">('+ruta_fecha+')</font>-<font color="red">('+ruta_hora_fin+')</font>&nbsp&nbsp<font color="black">'+ruta_conductor+'</font>'
                                 +((data.array_bitacora[i].bitacora !="")?('&nbsp&nbsp&nbsp|&nbsp&nbsp <img id="' + bId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_Bitacora(\''+ data.unidades[i]._id+'\');" width="20" height="20" src="'+((data.array_bitacora[i].bitacora=="R")?'/images/police.png"':((data.array_bitacora[i].bitacora=="M")?'/images/mantenimiento.png"':((data.array_bitacora[i].bitacora=="O")?'/images/other.png"':'#"')))+'/>'):'&nbsp&nbsp&nbsp')
+                                + htmlContadorImgUnidadLi('M', data.unidades[i])
                                 +'</li>'
                         );
                         break;
@@ -4365,22 +4247,12 @@ $("#velocimetro").myfunc({divFact:10});
                                 + " | " + data.unidades[i].contador_diario
                                 +'&nbsp&nbsp&nbsp'+((data.unidades[i].is_atm !== "undefined")?((data.unidades[i].is_atm===0)?'':((data.unidades[i].is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'')):'')
                                 +'&nbsp&nbsp&nbsp|&nbsp&nbsp'
-                                @if(true)
-                                    +((data.unidades[i].puerta !== 'undefined')?((data.unidades[i].puerta==='PUERTA ABIERTA (DELANTERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta:
-                                        ((data.unidades[i].puerta==='PUERTA CERRADA (DELANTERA)')?'<img src="../images/closedoor.png" height="20" width="20">'+ fecha_puerta_cerrada :'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>')    
-                                @else 
-                                    +((data.unidades[i].puerta !== 'undefined')?((data.unidades[i].puerta==='PUERTA ABIERTA (DELANTERA)')?'<img src="../images/opendoor.png" height="20" width="20">':((data.unidades[i].puerta==='PUERTA CERRADA (DELANTERA)')?'<img src="../images/closedoor.png" height="20" width="20">':'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>')
-                                @endif
-                                @if(true)
-                                    +((data.unidades[i].puerta_trasera !== 'undefined')?((data.unidades[i].puerta_trasera==='PUERTA ABIERTA (TRASERA)')?'<img src="../images/opendoor.png" height="20" width="20">'+fecha_puerta_abierta_trasera:
-                                        ((data.unidades[i].puerta_trasera==='PUERTA CERRADA (TRASERA)')?'<img src="../images/closedoor.png" height="20" width="20">'+ fecha_puerta_cerrada_trasera :'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>')    
-                                @else 
-                                    +((data.unidades[i].puerta_trasera !== 'undefined')?((data.unidades[i].puerta_trasera==='PUERTA ABIERTA (TRASERA)')?'<img src="../images/opendoor.png" height="20" width="20">':((data.unidades[i].puerta_trasera==='PUERTA CERRADA (TRASERA)')?'<img src="../images/closedoor.png" height="20" width="20">':'<font color="red"><strong>---</strong></font>')):'<font color="red"><strong>---</strong></font>')
-                                @endif
+                                + htmlPuertaDelanteraprLi(data.unidades[i], fecha_puerta_abierta_delanterapr, fecha_puerta_cerrada_delanterapr)
                                 +'&nbsp&nbsp&nbsp|&nbsp&nbsp&nbsp<font color="black">'+ruta_actual+'</font>'
                                 // +((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">':'')
                                 +'&nbsp&nbsp<font color="black">('+ruta_fecha+')</font>-<font color="red">('+ruta_hora_fin+')</font>&nbsp&nbsp<font color="black">'+ruta_conductor+'</font>'
                                 +((data.array_bitacora[i].bitacora !="")?('&nbsp&nbsp&nbsp|&nbsp&nbsp <img id="' + bId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_Bitacora(\''+ data.unidades[i]._id+'\');" width="20" height="20" src="'+((data.array_bitacora[i].bitacora=="R")?'/images/police.png"':((data.array_bitacora[i].bitacora=="M")?'/images/mantenimiento.png"':((data.array_bitacora[i].bitacora=="O")?'/images/other.png"':'#"')))+'/>'):'&nbsp&nbsp&nbsp')
+                                + htmlContadorImgUnidadLi(estado, data.unidades[i])
                                 +'</li>'
                         );
                         break;

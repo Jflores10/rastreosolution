@@ -19,12 +19,17 @@
         vertical-align: middle;
     }
     .fotos-thumb {
-        max-width: 140px;php 
+        max-width: 140px;
         max-height: 90px;
         border: 1px solid #ddd;
         padding: 2px;
         border-radius: 4px;
         background: #fff;
+    }
+    .fotos-ubicacion {
+        max-width: 280px;
+        word-wrap: break-word;
+        white-space: normal;
     }
 </style>
 @endsection
@@ -110,9 +115,11 @@
                                         <th>Unidad</th>
                                         <th>Fecha registro</th>
                                         <th>Fecha GPS</th>
-                                        <th>Latitud</th>
-                                        <th>Longitud</th>
+                                        <th>Ubicación</th>
                                         <th>Imagen</th>
+                                        @if (!empty($es_distribuidor))
+                                            <th>Marcada</th>
+                                        @endif
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -127,13 +134,24 @@
                                                     $fechaGpsVista = (string) $row->fecha_gps;
                                                 }
                                             }
+                                            $fotoId = (string) $row->getKey();
+                                            $ubicacionTexto = isset($ubicaciones_por_id[$fotoId]) ? trim((string) $ubicaciones_por_id[$fotoId]) : '';
+                                            $coordsTitulo = '';
+                                            if ($row->latitud !== null && $row->latitud !== '' && $row->longitud !== null && $row->longitud !== '') {
+                                                $coordsTitulo = (string) $row->latitud . ', ' . (string) $row->longitud;
+                                            }
                                         @endphp
                                         <tr>
                                             <td>{{ $unidadTexto }}</td>
                                             <td>{{ $row->fecha }}</td>
                                             <td>{{ $fechaGpsVista }}</td>
-                                            <td>{{ $row->latitud }}</td>
-                                            <td>{{ $row->longitud }}</td>
+                                            <td class="fotos-ubicacion" @if ($coordsTitulo !== '') title="{{ $coordsTitulo }}" @endif>
+                                                @if ($ubicacionTexto !== '')
+                                                    {{ $ubicacionTexto }}
+                                                @else
+                                                    <span class="text-muted">Sin ubicación</span>
+                                                @endif
+                                            </td>
                                             <td>
                                                 @if (!empty($row->imagen))
                                                     <a
@@ -151,6 +169,17 @@
                                                     <span class="text-muted">Sin imagen</span>
                                                 @endif
                                             </td>
+                                            @if (!empty($es_distribuidor))
+                                                <td class="text-center">
+                                                    <input
+                                                        type="checkbox"
+                                                        class="foto-marcada-check"
+                                                        data-id="{{ (string) $row->getKey() }}"
+                                                        {{ !empty($row->marcada) ? 'checked' : '' }}
+                                                        title="Marcar o desmarcar foto"
+                                                    >
+                                                </td>
+                                            @endif
                                         </tr>
                                     @endforeach
                                 </tbody>
@@ -230,6 +259,44 @@
         $('#unidad_id').val(seleccionadas).trigger('change.select2');
     }
 
+    function actualizarMarcadaFoto(checkbox) {
+        var $check = $(checkbox);
+        var id = $check.data('id');
+        if (!id) {
+            return;
+        }
+
+        var marcada = $check.prop('checked') ? 1 : 0;
+        var estadoAnterior = !marcada;
+
+        $check.prop('disabled', true);
+
+        $.ajax({
+            url: '{{ url('/fotos') }}/' + id + '/marcar',
+            type: 'POST',
+            dataType: 'json',
+            data: { marcada: marcada },
+            success: function (response) {
+                if (response && response.success) {
+                    $check.prop('checked', !!response.marcada);
+                } else {
+                    $check.prop('checked', estadoAnterior);
+                    alert((response && response.message) ? response.message : 'No se pudo actualizar la foto.');
+                }
+                $check.prop('disabled', false);
+            },
+            error: function (xhr) {
+                $check.prop('checked', estadoAnterior);
+                $check.prop('disabled', false);
+                var msg = 'No se pudo actualizar la foto.';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    msg = xhr.responseJSON.message;
+                }
+                alert(msg);
+            }
+        });
+    }
+
     function abrirModalFoto(urlImagen, imei) {
         document.getElementById('imagenModalFoto').src = urlImagen;
         document.getElementById('tituloModalFoto').textContent = 'Foto de unidad ' + (imei || '');
@@ -253,6 +320,10 @@
         $('#unidad_id').on('change', function () {
             // Si el usuario limpia unidad, volvemos a filtrar por cooperativa.
             renderUnidadesPorCooperativa();
+        });
+
+        $(document).on('change', '.foto-marcada-check', function () {
+            actualizarMarcadaFoto(this);
         });
     });
 </script>

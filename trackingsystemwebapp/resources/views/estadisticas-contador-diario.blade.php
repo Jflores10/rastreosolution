@@ -222,6 +222,12 @@ function statsClearCanvasAfterDestroy(canvas) {
     return nuevoCanvas;
 }
 
+function statsOrdenarItemsMayorMenor(items) {
+    return items.slice().sort(function (a, b) {
+        return (b.value || 0) - (a.value || 0);
+    });
+}
+
 function statsGetCooperativaId() {
     var el = document.getElementById('stats_cooperativa');
     return el ? String(el.value || '').trim() : '';
@@ -472,6 +478,7 @@ function statsRefrescarDatos(esPolling) {
 }
 
 function statsRenderChartContador(items, esPolling) {
+    items = statsOrdenarItemsMenorMayor(items);
     var labels = [];
     var values = [];
     var i;
@@ -539,6 +546,7 @@ function statsRenderChartContador(items, esPolling) {
 }
 
 function statsRenderChartParticipacion(items, esPolling) {
+    items = statsOrdenarItemsMenorMayor(items);
     var total = 0;
     var i;
     for (i = 0; i < items.length; i++) {
@@ -554,7 +562,7 @@ function statsRenderChartParticipacion(items, esPolling) {
         });
     }
     pctRows.sort(function (a, b) {
-        return b.percent - a.percent;
+        return b.raw - a.raw;
     });
 
     var labels = [];
