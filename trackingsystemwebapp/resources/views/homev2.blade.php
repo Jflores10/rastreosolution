@@ -1210,6 +1210,8 @@ setInterval(function () {
     }
 }, 60000);
 
+iniciarCronometroPuertaDelanterapr();
+
 /**
  * Activa o desactiva el parpadeo del fa-map-marker en el LI de una unidad.
  * isBuff=true  → agrega .marker-buff-blink al ícono y marca li._is_buff=true
@@ -1436,6 +1438,10 @@ function conectarSSE(coopId) {
                 }
             }
             updateUnidadInList(li.currentU);
+            try {
+                var spanPr = li.querySelector('.puerta-pr-cronometro');
+                if (spanPr) spanPr.textContent = textoCronometroPuertaDelanterapr(li.currentU);
+            } catch (ePr) {}
         } catch (e) {}
     });
 
@@ -1796,11 +1802,10 @@ function parseFechaPuertaDelanterapr(raw) {
     }
 }
 
-/** Tiempo transcurrido desde una fecha (H:MM:SS o D: n H:MM:SS). */
-function formatTiempoPuertaDelanteraprDesde(fechaInicio) {
-    var inicio = parseFechaPuertaDelanterapr(fechaInicio);
-    if (!inicio) return '--';
-    var ms = Date.now() - inicio.getTime();
+var PUERTA_PR_CRON_INTERVAL_MS = 1000;
+var _puertaPrCronIntervalId = null;
+
+function formatCronometroPuertaPrMs(ms) {
     if (ms < 0) ms = 0;
     var totalSec = Math.floor(ms / 1000);
     var days = Math.floor(totalSec / 86400);
@@ -1813,29 +1818,75 @@ function formatTiempoPuertaDelanteraprDesde(fechaInicio) {
     return hms;
 }
 
-/** Duración abierta/cerrada según estado y fechas de la unidad. */
-function tiempoPuertaDelanteraprTexto(unidad) {
-    if (!unidad || !unidad.puerta_delanterapr) return '--';
+/** Inicio del cronómetro vigente: abierta → fecha apertura; cerrada → fecha cierre; fallback alerta. */
+function fechaInicioCronometroPuertaDelanterapr(unidad) {
+    if (!unidad || !unidad.puerta_delanterapr) return null;
     var alerta = unidad.alerta_puerta_fecha_delanterapr;
     if (unidad.puerta_delanterapr === 'PUERTA ABIERTA (DELANTERAPR)') {
-        return formatTiempoPuertaDelanteraprDesde(unidad.fecha_puerta_abierta_delanterapr || alerta);
+        return parseFechaPuertaDelanterapr(unidad.fecha_puerta_abierta_delanterapr || alerta);
     }
     if (unidad.puerta_delanterapr === 'PUERTA CERRADA (DELANTERAPR)') {
-        return formatTiempoPuertaDelanteraprDesde(unidad.fecha_puerta_cerrada_delanterapr || alerta);
+        return parseFechaPuertaDelanterapr(unidad.fecha_puerta_cerrada_delanterapr || alerta);
     }
-    return '--';
+    return null;
 }
 
-/** Puerta delantera PR (GTDIS 10/11): icono + tiempo en estado actual. */
+function textoCronometroPuertaDelanterapr(unidad) {
+    var inicio = fechaInicioCronometroPuertaDelanterapr(unidad);
+    if (!inicio) return '--';
+    return formatCronometroPuertaPrMs(Date.now() - inicio.getTime());
+}
+
+function idSpanCronometroPuertaDelanterapr(unidadId) {
+    return 'puerta_pr_timer_' + String(unidadId || '').replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+var _puertaPrCronTickEnCurso = false;
+
+/** Solo actualiza spans .puerta-pr-cronometro; no toca SSE ni reconstruye filas. */
+function actualizarCronometrosPuertaDelanteraprEnLista() {
+    if (_puertaPrCronTickEnCurso) return;
+    _puertaPrCronTickEnCurso = true;
+    try {
+        var ul = document.getElementById('ul_unidades');
+        if (!ul) return;
+        var children = ul.children;
+        for (var i = 0; i < children.length; i++) {
+            var li = children[i];
+            if (li.style && li.style.display === 'none') continue;
+            var u = li.currentU;
+            if (!u || !u.puerta_delanterapr) continue;
+            var span = li.querySelector('.puerta-pr-cronometro');
+            if (!span) continue;
+            var texto = textoCronometroPuertaDelanterapr(u);
+            if (span.textContent !== texto) span.textContent = texto;
+        }
+    } finally {
+        _puertaPrCronTickEnCurso = false;
+    }
+}
+
+function iniciarCronometroPuertaDelanterapr() {
+    if (_puertaPrCronIntervalId != null) return;
+    _puertaPrCronIntervalId = setInterval(function () {
+        if (document.hidden) return;
+        actualizarCronometrosPuertaDelanteraprEnLista();
+    }, PUERTA_PR_CRON_INTERVAL_MS);
+}
+
+/** Puerta delantera PR (GTDIS 10/11): icono + cronómetro en vivo del estado actual. */
 function htmlPuertaDelanteraprLi(unidad) {
     var p = unidad && unidad.puerta_delanterapr;
-    var tiempo = tiempoPuertaDelanteraprTexto(unidad);
     if (!p) return '<font color="red"><strong>---</strong></font>';
+    var timerId = unidad && unidad._id ? idSpanCronometroPuertaDelanterapr(unidad._id) : '';
+    var timerHtml = timerId
+        ? '<span id="' + timerId + '" class="puerta-pr-cronometro">' + textoCronometroPuertaDelanterapr(unidad) + '</span>'
+        : '--';
     if (p === 'PUERTA ABIERTA (DELANTERAPR)') {
-        return '<img src="../images/opendoor.png" height="20" width="20">&nbsp' + tiempo;
+        return '<img src="../images/opendoor.png" height="20" width="20">&nbsp' + timerHtml;
     }
     if (p === 'PUERTA CERRADA (DELANTERAPR)') {
-        return '<img src="../images/closedoor.png" height="20" width="20">&nbsp' + tiempo;
+        return '<img src="../images/closedoor.png" height="20" width="20">&nbsp' + timerHtml;
     }
     return '<font color="red"><strong>---</strong></font>';
 }
@@ -1908,6 +1959,16 @@ function updateUnidadInList(unidad, opts) {
             if (unidad.contador_diario === undefined && prev.contador_diario != null) unidad.contador_diario = prev.contador_diario;
             if (unidad.contador_img === undefined && prev.contador_img != null) unidad.contador_img = prev.contador_img;
             if (typeof unidad.numvuelta === 'undefined' && typeof prev.numvuelta !== 'undefined') unidad.numvuelta = prev.numvuelta;
+            if (!unidad.puerta_delanterapr && prev.puerta_delanterapr) unidad.puerta_delanterapr = prev.puerta_delanterapr;
+            if (!unidad.fecha_puerta_abierta_delanterapr && prev.fecha_puerta_abierta_delanterapr) {
+                unidad.fecha_puerta_abierta_delanterapr = prev.fecha_puerta_abierta_delanterapr;
+            }
+            if (!unidad.fecha_puerta_cerrada_delanterapr && prev.fecha_puerta_cerrada_delanterapr) {
+                unidad.fecha_puerta_cerrada_delanterapr = prev.fecha_puerta_cerrada_delanterapr;
+            }
+            if (!unidad.alerta_puerta_fecha_delanterapr && prev.alerta_puerta_fecha_delanterapr) {
+                unidad.alerta_puerta_fecha_delanterapr = prev.alerta_puerta_fecha_delanterapr;
+            }
             
             // Preserve sentido (direction) if incoming payload lacks it
             //if ((!unidad.sentido || unidad.sentido === '') && prev.sentido) unidad.sentido = prev.sentido;
@@ -4413,6 +4474,7 @@ $("#velocimetro").myfunc({divFact:10});
                 }
                 refreshVisibleUnidadesMeta();
             }, 0);
+            try { actualizarCronometrosPuertaDelanteraprEnLista(); } catch (e) {}
         }
 
     }
