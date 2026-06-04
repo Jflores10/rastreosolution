@@ -1428,6 +1428,7 @@ function conectarSSE(coopId) {
 
             li.currentU.puerta_delanterapr = msg.estado;
             if (msg.fecha) {
+                li.currentU.alerta_puerta_fecha_delanterapr = msg.fecha;
                 if (msg.estado === 'PUERTA ABIERTA (DELANTERAPR)') {
                     li.currentU.fecha_puerta_abierta_delanterapr = msg.fecha;
                 } else if (msg.estado === 'PUERTA CERRADA (DELANTERAPR)') {
@@ -1780,14 +1781,63 @@ function htmlContadorImgUnidadLi(estado, contadorImgOrUnidad) {
     return '&nbsp&nbsp&nbsp|&nbsp&nbsp&nbsp<i class="fa fa-camera" style="color:#00BCD4"></i>&nbsp' + n;
 }
 
-/** Puerta delantera PR (GTDIS 10/11): mismo icono que puerta trasera. */
-function htmlPuertaDelanteraprLi(unidad, fechaAbiertaPr, fechaCerradaPr) {
+function parseFechaPuertaDelanterapr(raw) {
+    if (raw == null || raw === '' || raw === '--') return null;
+    try {
+        var candidate = raw;
+        if (typeof candidate === 'object') {
+            if (candidate.date != null) candidate = candidate.date;
+            else if (candidate.$date != null) candidate = candidate.$date;
+        }
+        var d = new Date(candidate);
+        return isNaN(d.getTime()) ? null : d;
+    } catch (e) {
+        return null;
+    }
+}
+
+/** Tiempo transcurrido desde una fecha (H:MM:SS o D: n H:MM:SS). */
+function formatTiempoPuertaDelanteraprDesde(fechaInicio) {
+    var inicio = parseFechaPuertaDelanterapr(fechaInicio);
+    if (!inicio) return '--';
+    var ms = Date.now() - inicio.getTime();
+    if (ms < 0) ms = 0;
+    var totalSec = Math.floor(ms / 1000);
+    var days = Math.floor(totalSec / 86400);
+    var h = Math.floor((totalSec % 86400) / 3600);
+    var m = Math.floor((totalSec % 3600) / 60);
+    var s = totalSec % 60;
+    var pad = function (n) { return n < 10 ? '0' + n : String(n); };
+    var hms = h + ':' + pad(m) + ':' + pad(s);
+    if (days > 0) return 'D: ' + days + '  ' + hms;
+    return hms;
+}
+
+/** Duración abierta/cerrada según estado y fechas de la unidad. */
+function tiempoPuertaDelanteraprTexto(unidad) {
+    if (!unidad || !unidad.puerta_delanterapr) return '--';
+    var alerta = unidad.alerta_puerta_fecha_delanterapr;
+    if (unidad.puerta_delanterapr === 'PUERTA ABIERTA (DELANTERAPR)') {
+        return formatTiempoPuertaDelanteraprDesde(unidad.fecha_puerta_abierta_delanterapr || alerta);
+    }
+    if (unidad.puerta_delanterapr === 'PUERTA CERRADA (DELANTERAPR)') {
+        return formatTiempoPuertaDelanteraprDesde(unidad.fecha_puerta_cerrada_delanterapr || alerta);
+    }
+    return '--';
+}
+
+/** Puerta delantera PR (GTDIS 10/11): icono + tiempo en estado actual. */
+function htmlPuertaDelanteraprLi(unidad) {
     var p = unidad && unidad.puerta_delanterapr;
-    var fa = (fechaAbiertaPr !== undefined && fechaAbiertaPr !== null && fechaAbiertaPr !== '') ? fechaAbiertaPr : '--';
-    var fc = (fechaCerradaPr !== undefined && fechaCerradaPr !== null && fechaCerradaPr !== '') ? fechaCerradaPr : '--';
-    return (p ? ((p === 'PUERTA ABIERTA (DELANTERAPR)') ? '<img src="../images/opendoor.png" height="20" width="20">' + fa
-        : ((p === 'PUERTA CERRADA (DELANTERAPR)') ? '<img src="../images/closedoor.png" height="20" width="20">' + fc
-            : '<font color="red"><strong>---</strong></font>')) : '<font color="red"><strong>---</strong></font>');
+    var tiempo = tiempoPuertaDelanteraprTexto(unidad);
+    if (!p) return '<font color="red"><strong>---</strong></font>';
+    if (p === 'PUERTA ABIERTA (DELANTERAPR)') {
+        return '<img src="../images/opendoor.png" height="20" width="20">&nbsp' + tiempo;
+    }
+    if (p === 'PUERTA CERRADA (DELANTERAPR)') {
+        return '<img src="../images/closedoor.png" height="20" width="20">&nbsp' + tiempo;
+    }
+    return '<font color="red"><strong>---</strong></font>';
 }
 
 function computeEstadoMovilParaContador(unidad) {
@@ -1985,8 +2035,6 @@ function updateUnidadInList(unidad, opts) {
     var ruta_conductor = formatRutaConductorDisplay(unidad.ruta_conductor || '');
     var ruta_hora_fin = unidad.ruta_hora_fin || '';
 
-    var fecha_puerta_abierta_delanterapr = '--';
-    var fecha_puerta_cerrada_delanterapr = '--';
     /*
     var fecha_puerta_abierta = unidad.fecha_puerta_abierta || '';
     var fecha_puerta_cerrada = unidad.fecha_puerta_cerrada || '';
@@ -2056,7 +2104,7 @@ function updateUnidadInList(unidad, opts) {
                 '&nbsp&nbsp&nbsp' + ((unidad.is_atm !== undefined && unidad.is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'') +
                 '&nbsp&nbsp&nbsp|&nbsp&nbsp';
 
-            html += htmlPuertaDelanteraprLi(unidad, fecha_puerta_abierta_delanterapr, fecha_puerta_cerrada_delanterapr);
+            html += htmlPuertaDelanteraprLi(unidad);
 
             html += '&nbsp&nbsp&nbsp|&nbsp&nbsp&nbsp<font color="black">' + ruta_actual + '</font>' + '&nbsp&nbsp<font color="black">(' + ruta_fecha + ')</font>-<font color="red">(' + ruta_hora_fin + ')</font>&nbsp&nbsp<font color="black">' + ruta_conductor + '</font>';
 
@@ -2075,7 +2123,7 @@ function updateUnidadInList(unidad, opts) {
                 '&nbsp&nbsp&nbsp<i id="bolt_' + unidad._id + '"' + boltTitleAttr + ' style="color:#f49a16"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#f49a16"></i>&nbsp' + contador_total_disp + " | " + contador_diario_disp +
                 '&nbsp&nbsp&nbsp|&nbsp&nbsp';
 
-            html += htmlPuertaDelanteraprLi(unidad, fecha_puerta_abierta_delanterapr, fecha_puerta_cerrada_delanterapr);
+            html += htmlPuertaDelanteraprLi(unidad);
 
             html += '&nbsp&nbsp&nbsp|&nbsp&nbsp&nbsp<font color="black">' + ruta_actual + '</font>' + '&nbsp&nbsp<font color="black">(' + ruta_fecha + ')</font>-<font color="red">(' + ruta_hora_fin + ')</font>&nbsp&nbsp<font color="black">' + ruta_conductor + '</font>';
 
@@ -2094,7 +2142,7 @@ function updateUnidadInList(unidad, opts) {
                 '&nbsp&nbsp&nbsp<i id="bolt_' + unidad._id + '"' + boltTitleAttr + ' style="color:#00AA88"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#00AA88"></i>&nbsp' + contador_total_disp + " | " + contador_diario_disp +
                 '&nbsp&nbsp&nbsp|&nbsp&nbsp';
 
-            html += htmlPuertaDelanteraprLi(unidad, fecha_puerta_abierta_delanterapr, fecha_puerta_cerrada_delanterapr);
+            html += htmlPuertaDelanteraprLi(unidad);
 
             html += '&nbsp&nbsp&nbsp|&nbsp&nbsp&nbsp<font color="black">' + ruta_actual + '</font>' + '&nbsp&nbsp<font color="black">(' + ruta_fecha + ')</font>-<font color="red">(' + ruta_hora_fin + ')</font>&nbsp&nbsp<font color="black">' + ruta_conductor + '</font>';
 
@@ -2113,7 +2161,7 @@ function updateUnidadInList(unidad, opts) {
                 '&nbsp&nbsp&nbsp<i id="bolt_' + unidad._id + '"' + boltTitleAttr + ' style="color:#990073"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#990073"></i>&nbsp' + contador_total_disp + " | " + contador_diario_disp +
                 '&nbsp&nbsp&nbsp|&nbsp&nbsp';
 
-            html += htmlPuertaDelanteraprLi(unidad, fecha_puerta_abierta_delanterapr, fecha_puerta_cerrada_delanterapr);
+            html += htmlPuertaDelanteraprLi(unidad);
 
             html += '&nbsp&nbsp&nbsp|&nbsp&nbsp&nbsp<font color="black">' + ruta_actual + '</font>' + '&nbsp&nbsp<font color="black">(' + ruta_fecha + ')</font>-<font color="red">(' + ruta_hora_fin + ')</font>&nbsp&nbsp<font color="black">' + ruta_conductor + '</font>';
 
@@ -4125,8 +4173,6 @@ $("#velocimetro").myfunc({divFact:10});
             var ubication;           
             
             var fecha_gps;
-            var fecha_puerta_abierta_delanterapr;
-            var fecha_puerta_cerrada_delanterapr;
             var voltaje;
             var estado;  
             var fecha_gps_marker;
@@ -4158,9 +4204,6 @@ $("#velocimetro").myfunc({divFact:10});
                     fecha_servidor='-';
                 }
 
-
-                fecha_puerta_abierta_delanterapr='--';
-                fecha_puerta_cerrada_delanterapr='--';
 
                 ruta_actual='';
                 ruta_actual=data.array_rutas[i].ruta_actual;
@@ -4223,7 +4266,7 @@ $("#velocimetro").myfunc({divFact:10});
                                 +'&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#F44336"></i>&nbsp'+data.unidades[i].contador_total+" | "+data.unidades[i].contador_diario
                                 +'&nbsp&nbsp&nbsp'+((data.unidades[i].is_atm !== "undefined")?((data.unidades[i].is_atm===0)?'':((data.unidades[i].is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'')):'')
                                 +'&nbsp&nbsp&nbsp|&nbsp&nbsp'
-                                + htmlPuertaDelanteraprLi(data.unidades[i], fecha_puerta_abierta_delanterapr, fecha_puerta_cerrada_delanterapr)
+                                + htmlPuertaDelanteraprLi(data.unidades[i])
                                 +'&nbsp&nbsp&nbsp|&nbsp&nbsp&nbsp<font color="black">'+ruta_actual+'</font>'
                                 +'&nbsp&nbsp<font color="black">('+ruta_fecha+')</font>-<font color="red">('+ruta_hora_fin+')</font>&nbsp&nbsp<font color="black">'+ruta_conductor+'</font>'
                                 +((data.array_bitacora[i].bitacora !="")?('&nbsp&nbsp&nbsp|&nbsp&nbsp <img id="' + bId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_Bitacora(\''+ data.unidades[i]._id+'\');" width="20" height="20" src="'+((data.array_bitacora[i].bitacora=="R")?'/images/police.png"':((data.array_bitacora[i].bitacora=="M")?'/images/mantenimiento.png"':((data.array_bitacora[i].bitacora=="O")?'/images/other.png"':'#"')))+'/>'):'&nbsp&nbsp&nbsp')
@@ -4244,7 +4287,7 @@ $("#velocimetro").myfunc({divFact:10});
                                 +'&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#f49a16"></i>&nbsp'+data.unidades[i].contador_total+" | "+data.unidades[i].contador_diario
                                 +'&nbsp&nbsp&nbsp'+((data.unidades[i].is_atm !== "undefined")?((data.unidades[i].is_atm===0)?'':((data.unidades[i].is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'')):'')
                                 +'&nbsp&nbsp&nbsp|&nbsp&nbsp'
-                                + htmlPuertaDelanteraprLi(data.unidades[i], fecha_puerta_abierta_delanterapr, fecha_puerta_cerrada_delanterapr)
+                                + htmlPuertaDelanteraprLi(data.unidades[i])
                                 +'&nbsp&nbsp&nbsp|&nbsp&nbsp&nbsp<font color="black">'+ruta_actual+'</font>'
                                 // +((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">':'')
                                 +'&nbsp&nbsp<font color="black">('+ruta_fecha+')</font>-<font color="red">('+ruta_hora_fin+')</font>&nbsp&nbsp<font color="black">'+ruta_conductor+'</font>'
@@ -4265,7 +4308,7 @@ $("#velocimetro").myfunc({divFact:10});
                                 +data.unidades[i].contador_total+" | "+data.unidades[i].contador_diario
                                 +'&nbsp&nbsp&nbsp'+((data.unidades[i].is_atm !== "undefined")?((data.unidades[i].is_atm===0)?'':((data.unidades[i].is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'')):'')
                                 +'&nbsp&nbsp&nbsp|&nbsp&nbsp'
-                                + htmlPuertaDelanteraprLi(data.unidades[i], fecha_puerta_abierta_delanterapr, fecha_puerta_cerrada_delanterapr)
+                                + htmlPuertaDelanteraprLi(data.unidades[i])
                                 +'&nbsp&nbsp&nbsp|&nbsp&nbsp&nbsp<font color="black">'+ruta_actual+'</font>'
                                 // +((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">':'')
                                 +'&nbsp&nbsp<font color="black">('+ruta_fecha+')</font>-<font color="red">('+ruta_hora_fin+')</font>&nbsp&nbsp<font color="black">'+ruta_conductor+'</font>'
@@ -4288,7 +4331,7 @@ $("#velocimetro").myfunc({divFact:10});
                                 + " | " + data.unidades[i].contador_diario
                                 +'&nbsp&nbsp&nbsp'+((data.unidades[i].is_atm !== "undefined")?((data.unidades[i].is_atm===0)?'':((data.unidades[i].is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'')):'')
                                 +'&nbsp&nbsp&nbsp|&nbsp&nbsp'
-                                + htmlPuertaDelanteraprLi(data.unidades[i], fecha_puerta_abierta_delanterapr, fecha_puerta_cerrada_delanterapr)
+                                + htmlPuertaDelanteraprLi(data.unidades[i])
                                 +'&nbsp&nbsp&nbsp|&nbsp&nbsp&nbsp<font color="black">'+ruta_actual+'</font>'
                                 // +((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">':'')
                                 +'&nbsp&nbsp<font color="black">('+ruta_fecha+')</font>-<font color="red">('+ruta_hora_fin+')</font>&nbsp&nbsp<font color="black">'+ruta_conductor+'</font>'
