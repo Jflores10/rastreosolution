@@ -3065,6 +3065,57 @@ $("#velocimetro").myfunc({divFact:10});
 
     var guayaquil = {lat: -2.1775151734461176, lng: -79.91094589233398};
 
+    /** Límites aproximados de Ecuador (continental + Galápagos). Solo centrado inicial. */
+    var ECUADOR_LAT_MIN = -5.02;
+    var ECUADOR_LAT_MAX = 1.46;
+    var ECUADOR_LNG_MIN = -92.01;
+    var ECUADOR_LNG_MAX = -75.18;
+
+    /** Solo para centrado del mapa al cargar todas las unidades (carga inicial). */
+    function coordenadasValidasParaCentradoInicial(latRaw, lngRaw) {
+        if (latRaw === null || latRaw === undefined || lngRaw === null || lngRaw === undefined) return null;
+        if (typeof latRaw === 'string' && latRaw.trim() === '') return null;
+        if (typeof lngRaw === 'string' && lngRaw.trim() === '') return null;
+        var lat = parseFloat(latRaw);
+        var lng = parseFloat(lngRaw);
+        if (!isFinite(lat) || !isFinite(lng)) return null;
+        if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+        if (lat === 0 && lng === 0) return null;
+        if (lat < ECUADOR_LAT_MIN || lat > ECUADOR_LAT_MAX
+            || lng < ECUADOR_LNG_MIN || lng > ECUADOR_LNG_MAX) {
+            return null;
+        }
+        return { lat: lat, lng: lng };
+    }
+
+    function centrarMapaCargaInicialUnidades(unidades) {
+        if (!map) return;
+        var bounds = new google.maps.LatLngBounds();
+        var count = 0;
+        if (unidades && unidades.length) {
+            for (var i = 0; i < unidades.length; i++) {
+                var c = coordenadasValidasParaCentradoInicial(unidades[i].latitud, unidades[i].longitud);
+                if (c) {
+                    bounds.extend(c);
+                    count++;
+                }
+            }
+        }
+        if (count === 0) {
+            map.setCenter(guayaquil);
+            map.setZoom(13);
+            return;
+        }
+        if (count === 1) {
+            map.setCenter(bounds.getCenter());
+            map.setZoom(13);
+            return;
+        }
+        map.fitBounds(bounds);
+        google.maps.event.addListenerOnce(map, 'bounds_changed', function () {
+            if (map.getZoom() > 15) map.setZoom(15);
+        });
+    }
 
     function initMap() {
         // === Mapa base de Google (ROADMAP) ===
@@ -3853,26 +3904,16 @@ $("#velocimetro").myfunc({divFact:10});
 
                 if(load)
                  $('#progress').modal('hide');
-                 let mapaCentrado = false;
 				for(var j=0;j<data.unidades.length;j++)
 				{
 					if(data.unidades[j].latitud!=null && data.unidades[j].longitud!=null 
                         && data.unidades[j].latitud!=undefined && data.unidades[j].longitud!=undefined){
 						setMarcadorUnidad(data.unidades[j],data.array_fechas[j],data.array_fechas[j],0);
-
-                        if (!mapaCentrado && load) {
-                            let lat = parseFloat( data.unidades[j].latitud);
-                            let lng = parseFloat( data.unidades[j].longitud);
-
-                            if (!isNaN(lat) && !isNaN(lng)) {
-                                map.setCenter({ lat: lat, lng: lng });
-                                map.setZoom(13);
-                                mapaCentrado = true;
-                            }
-                        }
-
                     }
 				}
+                if (load) {
+                    centrarMapaCargaInicialUnidades(data.unidades);
+                }
 
 			}, "json");
 		}
