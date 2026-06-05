@@ -1099,6 +1099,7 @@ function refreshVisibleUnidadesMeta() {
                 unidadesMetaCache[uid] = { data: m, ts: Date.now() };
                 applyMetaToLi(uid, m, 'batch');
             }
+            try { actualizarCronometrosPuertaDelanteraprEnLista(); } catch (eCronMeta) {}
         });
     } catch (e) {
         console.warn('refreshVisibleUnidadesMeta failed', e);
@@ -4083,6 +4084,7 @@ $("#velocimetro").myfunc({divFact:10});
                 if (load) {
                     centrarMapaCargaInicialUnidades(data.unidades);
                 }
+                try { actualizarCronometrosPuertaDelanteraprEnLista(); } catch (eCronLoad) {}
 
 			}, "json");
 		}
@@ -4302,6 +4304,8 @@ $("#velocimetro").myfunc({divFact:10});
             
             for (var i = 0, len = data.unidades.length; i < len; i++)
             {
+                var uidAppend = normalizarUnidadId(data.unidades[i]._id);
+                if (uidAppend) data.unidades[i]._id = uidAppend;
                 normalizarCamposPuertaDelanteraprEnUnidad(data.unidades[i]);
                 fecha_gps=' - ';
                 voltaje=' - ';
@@ -4541,6 +4545,9 @@ $("#velocimetro").myfunc({divFact:10});
                 refreshVisibleUnidadesMeta();
             }, 0);
             try { actualizarCronometrosPuertaDelanteraprEnLista(); } catch (e) {}
+            setTimeout(function () {
+                try { actualizarCronometrosPuertaDelanteraprEnLista(); } catch (e2) {}
+            }, 0);
         }
 
     }
