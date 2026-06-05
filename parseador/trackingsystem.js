@@ -1855,8 +1855,8 @@ function onClientConnected(socket) {
         let data = message.split(',');
 
         let puerta = '';
-        if (toInteger(data[indexdoor]) === 10) puerta = 'PUERTA ABIERTA (DELANTERAPR)';
-        if (toInteger(data[indexdoor]) === 11) puerta = 'PUERTA CERRADA (DELANTERAPR)';
+        if (toInteger(data[indexdoor]) === 10) puerta = 'PUERTA CERRADA (DELANTERAPR)';
+        if (toInteger(data[indexdoor]) === 11) puerta = 'PUERTA ABIERTA (DELANTERAPR)';
         if (toInteger(data[indexdoor]) === 20) puerta = 'PUERTA ABIERTA (DELANTERA)';
         if (toInteger(data[indexdoor]) === 21) puerta = 'PUERTA CERRADA (DELANTERA)';
         if (toInteger(data[indexdoor]) === 30) puerta = 'PUERTA ABIERTA (TRASERA)';

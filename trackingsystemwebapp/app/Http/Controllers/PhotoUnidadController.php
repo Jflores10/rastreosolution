@@ -81,7 +81,13 @@ class PhotoUnidadController extends Controller
         $user = $request->user();
         $query = PhotoUnidad::orderBy('fecha', 'desc');
 
+        $tipoUsuario = isset($user->tipo_usuario) ? (string) $user->tipo_usuario->valor : '';
+        $esDistribuidor = $tipoUsuario === '1';
+
         $cooperativaId = trim((string) $request->query('cooperativa_id', ''));
+        if (!$esDistribuidor && $cooperativaId === '' && !empty($user->cooperativa_id)) {
+            $cooperativaId = (string) $user->cooperativa_id;
+        }
         $unidadIds = $request->query('unidad_id', array());
         if (!is_array($unidadIds)) {
             $unidadIds = array_filter(array(trim((string) $unidadIds)));
@@ -116,7 +122,11 @@ class PhotoUnidadController extends Controller
             $hasta = $hastaDate->format('Y-m-d');
         }
 
-        $cooperativas = Cooperativa::orderBy('descripcion', 'asc')->where('estado', 'A')->permitida()->get();
+        $cooperativasQuery = Cooperativa::orderBy('descripcion', 'asc')->where('estado', 'A')->permitida();
+        if (!$esDistribuidor && !empty($user->cooperativa_id)) {
+            $cooperativasQuery->where('_id', $user->cooperativa_id);
+        }
+        $cooperativas = $cooperativasQuery->get();
         $unidadesQuery = Unidad::orderBy('descripcion', 'asc')->where('estado', 'A');
         $unidades = $this->aplicarPermisosUnidades($unidadesQuery, $user)->get();
 
@@ -157,8 +167,6 @@ class PhotoUnidadController extends Controller
 
         $query->where('fecha', '>=', $desdeDate)->where('fecha', '<=', $hastaDate);
 
-        $tipoUsuario = isset($user->tipo_usuario) ? (string) $user->tipo_usuario->valor : '';
-        $esDistribuidor = $tipoUsuario === '1';
         if (!$esDistribuidor) {
             $query->where('marcada', true);
         }

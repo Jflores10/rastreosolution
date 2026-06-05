@@ -50,8 +50,10 @@
                     <form method="GET" action="{{ route('fotos.index') }}" class="form-inline fotos-toolbar" style="margin-bottom: 15px;">
                         <div class="form-group" style="margin-right: 8px;">
                             <label for="cooperativa_id">Cooperativa</label>
-                            <select id="cooperativa_id" name="cooperativa_id" class="form-control select2" style="margin-left: 8px; min-width: 200px;">
-                                <option value="">Todas</option>
+                            <select id="cooperativa_id" name="cooperativa_id" class="form-control select2" style="margin-left: 8px; min-width: 200px;" @if (empty($es_distribuidor)) disabled @endif>
+                                @if (!empty($es_distribuidor))
+                                    <option value="">Todas</option>
+                                @endif
                                 @foreach ($cooperativas as $cooperativa)
                                     <option value="{{ $cooperativa->_id }}" {{ (string) $cooperativa_id === (string) $cooperativa->_id ? 'selected' : '' }}>
                                         {{ $cooperativa->descripcion }}
@@ -102,6 +104,9 @@
                         <button type="submit" class="btn btn-primary" style="margin-left: 8px;">
                             <i class="fa fa-search"></i> Buscar
                         </button>
+                        @if (empty($es_distribuidor) && !empty($cooperativa_id))
+                            <input type="hidden" name="cooperativa_id" value="{{ $cooperativa_id }}">
+                        @endif
                         <a href="{{ route('fotos.index') }}" class="btn btn-default" style="margin-left: 4px;" title="Limpiar filtros">
                             <i class="fa fa-eraser"></i>
                         </a>
