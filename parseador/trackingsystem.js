@@ -209,6 +209,46 @@ function gtpHdPartialIdleMs(st) {
   return Math.max(PHOTO_PARTIAL_IDLE_MIN_MS, Math.round(avgGap * 5), PHOTO_PARTIAL_IDLE_MIN_MS + (total * PHOTO_PARTIAL_IDLE_MS_PER_FRAME));
 }
 
+function gtpHdMsSinceLastFrame(st) {
+  return Date.now() - (st.lastFrameAt || st.updatedAt || Date.now());
+}
+
+/** Tiempo de silencio requerido antes de cerrar (crece si aún no llega el último número de frame). */
+function gtpHdPersistIdleMs(st) {
+  const total = gtpHdTotalFrames(st);
+  const maxFrame = st.maxFrameReceived || 0;
+  const avgGap = Math.max(PHOTO_FRAME_GAP_ESTIMATE_MS, toInteger(st && st.avgFrameGapMs) || PHOTO_FRAME_GAP_ESTIMATE_MS);
+  const baseIdle = gtpHdPartialIdleMs(st);
+
+  if (maxFrame >= total) {
+    return baseIdle;
+  }
+
+  const remaining = Math.max(0, total - maxFrame);
+  return baseIdle + (remaining * avgGap * 2);
+}
+
+/** ¿Ya dejó de llegar tráfico de esta foto? Evita guardar 49/124 mientras aún vienen frames. */
+function gtpHdReadyToPersistPartial(st, opts) {
+  opts = opts || {};
+  if (!st || st.frames.size === 0) return false;
+  if (gtpHdFramesComplete(st)) return true;
+  if (!opts.forcePartial) return false;
+
+  const silentMs = gtpHdMsSinceLastFrame(st);
+  const idleNeeded = gtpHdPersistIdleMs(st);
+  if (silentMs < idleNeeded) return false;
+
+  const maxFrame = st.maxFrameReceived || 0;
+  const total = gtpHdTotalFrames(st);
+
+  if (maxFrame >= total) return true;
+
+  const avgGap = Math.max(PHOTO_FRAME_GAP_ESTIMATE_MS, toInteger(st && st.avgFrameGapMs) || PHOTO_FRAME_GAP_ESTIMATE_MS);
+  const abortIdle = idleNeeded + (Math.max(0, total - maxFrame) * avgGap * 3);
+  return silentMs >= abortIdle;
+}
+
 function gtpHdMaxAssemblyAgeMs(st) {
   const total = gtpHdTotalFrames(st);
   return Math.max(PHOTO_PARTIALS_MAX_AGE_MS, 120000 + (total * PHOTO_ASSEMBLY_MS_PER_FRAME));
@@ -321,6 +361,12 @@ function gtpHdTryPersistPhoto(assemblyKey, opts) {
   const complete = gtpHdFramesComplete(st);
   if (!complete && !forcePartial) return;
   if (st.frames.size === 0) return;
+  if (!complete && forcePartial && !opts.finalize && !gtpHdReadyToPersistPartial(st, opts)) return;
+  if (!complete && st._partialPersistedFrames != null) {
+    const hasNewFrames = st.frames.size > st._partialPersistedFrames
+      || (st.maxFrameReceived || 0) > (st._partialPersistedMaxFrame || 0);
+    if (!hasNewFrames && !opts.finalize) return;
+  }
 
   const locationCacheKey = st.imei + '_' + st.photoTime;
   const imeiValue = st.imei;
@@ -373,12 +419,15 @@ function gtpHdTryPersistPhoto(assemblyKey, opts) {
       return;
     }
 
-    stNow._persisted = true;
-
     let imeiSafe = String(imeiValue || '').replace(/[^0-9A-Za-z_-]/g, '');
     let fileName = photoTimeValue + '_' + Date.now() + (isComplete ? '' : '_parcial') + '.jpg';
     let dir = path.join(PHOTO_EVENTS_DIR, imeiSafe);
     let filePath = path.join(dir, fileName);
+
+    if (!isComplete && stNow._partialPersistFilePath) {
+      filePath = stNow._partialPersistFilePath;
+      fileName = path.basename(filePath);
+    }
 
     try {
       fs.mkdirSync(dir, { recursive: true, mode: 0o775 });
@@ -434,9 +483,19 @@ function gtpHdTryPersistPhoto(assemblyKey, opts) {
     }
 
     console.log((isComplete ? '📸 Imagen guardada:' : '📸 Imagen parcial guardada:'), storagePath,
-      '(' + framesReported + '/' + (stNow.totalFrames || '?') + ' frames)');
+      '(' + framesReported + '/' + (stNow.totalFrames || '?') + ' frames, max#' + (stNow.maxFrameReceived || 0) + ')');
 
-    gtpHdCleanupAssembly(assemblyKey, locationCacheKey);
+    if (isComplete) {
+      stNow._persisted = true;
+      gtpHdCleanupAssembly(assemblyKey, locationCacheKey);
+      return;
+    }
+
+    stNow._partialPersistPath = storagePath;
+    stNow._partialPersistFilePath = filePath;
+    stNow._partialPersistedFrames = framesReported;
+    stNow._partialPersistedMaxFrame = stNow.maxFrameReceived || 0;
+    gtpHdScheduleIdlePersist(assemblyKey);
   }
 
   if (gtpHdNeedCoords(st)) {
@@ -473,10 +532,24 @@ function gtpHdScheduleIdlePersist(assemblyKey) {
   const st = photoAssemblies.get(assemblyKey);
   if (!st || st._persisted) return;
   gtpHdClearIdleTimer(st);
-  const idleMs = gtpHdPartialIdleMs(st);
-  st.idlePersistTimer = setTimeout(function () {
-    gtpHdTryPersistPhoto(assemblyKey, { forcePartial: true });
-  }, idleMs);
+
+  const checkDelay = Math.min(5000, Math.max(1000, Math.round(gtpHdPersistIdleMs(st) / 4)));
+  st.idlePersistTimer = setTimeout(function gtpHdIdlePersistTick() {
+    const st2 = photoAssemblies.get(assemblyKey);
+    if (!st2 || st2._persisted) return;
+
+    if (gtpHdFramesComplete(st2)) {
+      gtpHdTryPersistPhoto(assemblyKey, { forcePartial: false });
+      return;
+    }
+
+    if (gtpHdReadyToPersistPartial(st2, { forcePartial: true })) {
+      gtpHdTryPersistPhoto(assemblyKey, { forcePartial: true });
+      return;
+    }
+
+    gtpHdScheduleIdlePersist(assemblyKey);
+  }, checkDelay);
 }
 
 function flushTramas() {
@@ -501,13 +574,12 @@ function limpiarBufferFotosParciales() {
       const lastUpdate = state.updatedAt || state.createdAt || now;
       const age = now - lastUpdate;
       const maxAgeMs = gtpHdMaxAssemblyAgeMs(state);
-      const idleMs = gtpHdPartialIdleMs(state);
-      if (age > idleMs && state.frames && state.frames.size > 0) {
+      if (gtpHdReadyToPersistPartial(state, { forcePartial: true })) {
         gtpHdTryPersistPhoto(key, { forcePartial: true });
       }
       if (age > maxAgeMs) {
         if (photoAssemblies.has(key)) {
-          gtpHdTryPersistPhoto(key, { forcePartial: true });
+          gtpHdTryPersistPhoto(key, { forcePartial: true, finalize: true });
         }
         const locKey = state.imei && state.photoTime ? (state.imei + '_' + state.photoTime) : null;
         if (photoAssemblies.has(key)) photoAssemblies.delete(key);
