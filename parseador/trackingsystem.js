@@ -188,13 +188,31 @@ const TRAMAS_BUFFER = [];
 const TRAMAS_FLUSH_MS = 250;  // cada 250ms
 const TRAMAS_BATCH_MAX = 300; // o por tamaño
 const PHOTO_EVENTS_DIR = path.resolve(__dirname, '../trackingsystemwebapp/storage/app/images');
-const PHOTO_PARTIALS_MAX_AGE_MS = 60000; // fallback mínimo
-/** Sin nuevos frames, guardar ensamblaje parcial. */
-const PHOTO_PARTIAL_IDLE_MS = 20000;
+const PHOTO_PARTIALS_MAX_AGE_MS = 60000;
+const PHOTO_PARTIAL_IDLE_MIN_MS = 20000;
+const PHOTO_FRAME_GAP_ESTIMATE_MS = 4000;
+/** Escalado por totalFrames del dispositivo (20, 120, 200, etc.). */
+const PHOTO_ASSEMBLY_MS_PER_FRAME = 6000;
+const PHOTO_PARTIAL_IDLE_MS_PER_FRAME = 400;
+const PHOTO_LOCATION_CACHE_MAX_AGE_MS = 120000 + (300 * PHOTO_ASSEMBLY_MS_PER_FRAME);
 const photoAssemblies = new Map();
 const lastPhotoLocationByImei = new Map();
-/** Evita picos de RAM si muchas fotos multipart llegan a la vez (cada una acumula frames en memoria). */
 const MAX_ACTIVE_PHOTO_ASSEMBLIES = 100;
+
+function gtpHdTotalFrames(st) {
+  return Math.max(1, toInteger(st && st.totalFrames) || 1);
+}
+
+function gtpHdPartialIdleMs(st) {
+  const total = gtpHdTotalFrames(st);
+  const avgGap = Math.max(PHOTO_FRAME_GAP_ESTIMATE_MS, toInteger(st && st.avgFrameGapMs) || PHOTO_FRAME_GAP_ESTIMATE_MS);
+  return Math.max(PHOTO_PARTIAL_IDLE_MIN_MS, Math.round(avgGap * 5), PHOTO_PARTIAL_IDLE_MIN_MS + (total * PHOTO_PARTIAL_IDLE_MS_PER_FRAME));
+}
+
+function gtpHdMaxAssemblyAgeMs(st) {
+  const total = gtpHdTotalFrames(st);
+  return Math.max(PHOTO_PARTIALS_MAX_AGE_MS, 120000 + (total * PHOTO_ASSEMBLY_MS_PER_FRAME));
+}
 
 function gtpHdFramesComplete(st) {
   if (!st || !st.totalFrames || st.totalFrames <= 0) return false;
@@ -205,17 +223,31 @@ function gtpHdFramesComplete(st) {
   return true;
 }
 
-function gtpHdMaxAssemblyAgeMs(st) {
-  const total = Math.max(1, toInteger(st && st.totalFrames) || 1);
-  return Math.max(PHOTO_PARTIALS_MAX_AGE_MS, 60000 + (total * 5000));
+function gtpHdTrackFrameArrival(st, currentFrameValue) {
+  const now = Date.now();
+  if (st.lastFrameAt) {
+    const gap = now - st.lastFrameAt;
+    if (gap > 0 && gap < 120000) {
+      st.avgFrameGapMs = st.avgFrameGapMs
+        ? Math.round(st.avgFrameGapMs * 0.65 + gap * 0.35)
+        : gap;
+    }
+  }
+  st.lastFrameAt = now;
+  st.updatedAt = now;
+  st.maxFrameReceived = Math.max(st.maxFrameReceived || 0, toInteger(currentFrameValue));
+}
+
+function gtpHdClearIdleTimer(st) {
+  if (st && st.idlePersistTimer) {
+    clearTimeout(st.idlePersistTimer);
+    st.idlePersistTimer = null;
+  }
 }
 
 function gtpHdCleanupAssembly(assemblyKey, locationCacheKey) {
   const st = photoAssemblies.get(assemblyKey);
-  if (st && st.partialIdleTimer) {
-    clearTimeout(st.partialIdleTimer);
-    st.partialIdleTimer = null;
-  }
+  gtpHdClearIdleTimer(st);
   if (locationCacheKey) lastPhotoLocationByImei.delete(locationCacheKey);
   photoAssemblies.delete(assemblyKey);
 }
@@ -224,6 +256,62 @@ function gtpHdNeedCoords(st) {
   return toFloat(st.latitud) === 0 && toFloat(st.longitud) === 0;
 }
 
+function gtpHdContiguousFrameCount(st) {
+  if (!st || !st.frames || !st.frames.has(1)) return 0;
+  let count = 0;
+  const total = gtpHdTotalFrames(st);
+  for (let i = 1; i <= total; i++) {
+    if (!st.frames.has(i)) break;
+    count++;
+  }
+  return count;
+}
+
+function gtpHdAssemblePartialBuffer(st) {
+  if (!st || !st.frames || st.frames.size === 0) return null;
+  const pushFrames = function (indices) {
+    const buffers = [];
+    for (let j = 0; j < indices.length; j++) {
+      try {
+        buffers.push(Buffer.from(st.frames.get(indices[j]), 'base64'));
+      } catch (e) {
+        return null;
+      }
+    }
+    return buffers.length ? Buffer.concat(buffers) : null;
+  };
+
+  if (st.frames.has(1)) {
+    const contiguous = [];
+    const total = gtpHdTotalFrames(st);
+    for (let i = 1; i <= total; i++) {
+      if (!st.frames.has(i)) break;
+      contiguous.push(i);
+    }
+    if (contiguous.length > 0) {
+      const buf = pushFrames(contiguous);
+      if (buf) return buf;
+    }
+  }
+
+  const indices = Array.from(st.frames.keys()).filter(function (n) { return n > 0; }).sort(function (a, b) { return a - b; });
+  return pushFrames(indices);
+}
+
+function gtpHdPrepareJpegBuffer(buffer, isComplete) {
+  if (!buffer || buffer.length < 2) return null;
+  let out = buffer;
+  if (out[0] !== 0xFF || out[1] !== 0xD8) {
+    out = Buffer.concat([Buffer.from([0xFF, 0xD8]), out]);
+  }
+  if (!isComplete) {
+    const hasEoi = out.length >= 2 && out[out.length - 2] === 0xFF && out[out.length - 1] === 0xD9;
+    if (!hasEoi) out = Buffer.concat([out, Buffer.from([0xFF, 0xD9])]);
+  }
+  return out;
+}
+
+/** Guarda foto cuando está completa o cuando dejó de llegar tramas (forcePartial). */
 function gtpHdTryPersistPhoto(assemblyKey, opts) {
   opts = opts || {};
   const forcePartial = !!opts.forcePartial;
@@ -243,8 +331,11 @@ function gtpHdTryPersistPhoto(assemblyKey, opts) {
     if (!stNow || stNow._persisted) return;
 
     const isComplete = gtpHdFramesComplete(stNow);
-    const buffers = [];
+    let buffer = null;
+    let framesReported = stNow.frames.size;
+
     if (isComplete) {
+      const buffers = [];
       for (let i = 1; i <= stNow.totalFrames; i++) {
         try {
           buffers.push(Buffer.from(stNow.frames.get(i), 'base64'));
@@ -254,43 +345,30 @@ function gtpHdTryPersistPhoto(assemblyKey, opts) {
           return;
         }
       }
+      buffer = gtpHdPrepareJpegBuffer(Buffer.concat(buffers), true);
+      framesReported = stNow.totalFrames;
     } else {
-      const indices = Array.from(stNow.frames.keys()).filter(function (n) { return n > 0; }).sort(function (a, b) { return a - b; });
-      for (let j = 0; j < indices.length; j++) {
-        try {
-          buffers.push(Buffer.from(stNow.frames.get(indices[j]), 'base64'));
-        } catch (e) {
-          console.error('❌ Error base64 GTPHD (chunk parcial):', e);
-          if (!forcePartial) gtpHdCleanupAssembly(assemblyKey, locationCacheKey);
-          return;
-        }
-      }
+      const partialBuf = gtpHdAssemblePartialBuffer(stNow);
+      if (!partialBuf) return;
+      buffer = gtpHdPrepareJpegBuffer(partialBuf, false);
+      framesReported = stNow.frames.size;
     }
 
-    const buffer = buffers.length ? Buffer.concat(buffers) : null;
-    const minLen = isComplete ? 1000 : 200;
+    const minLen = isComplete ? 1000 : 64;
     if (!buffer || buffer.length < minLen) {
       if (debug) {
         console.log('GTPHD buffer invalido o pequeño', {
           key: assemblyKey,
           len: buffer ? buffer.length : 0,
           complete: isComplete,
-          frames: stNow.frames.size,
+          frames: framesReported,
           totalFrames: stNow.totalFrames
         });
       }
-      if (!forcePartial) gtpHdCleanupAssembly(assemblyKey, locationCacheKey);
       return;
     }
 
     if (isComplete && (buffer[0] !== 0xFF || buffer[1] !== 0xD8)) {
-      if (debug) {
-        console.log('GTPHD buffer invalido, pequeño o no JPEG', {
-          key: assemblyKey,
-          len: buffer.length,
-          soi: [buffer[0], buffer[1]]
-        });
-      }
       gtpHdCleanupAssembly(assemblyKey, locationCacheKey);
       return;
     }
@@ -316,6 +394,13 @@ function gtpHdTryPersistPhoto(assemblyKey, opts) {
         }
       }
       fs.writeFileSync(filePath, buffer);
+      if (process.platform === 'linux') {
+        try {
+          const uid = Number(String(execSync('id -u www-data')).trim());
+          const gid = Number(String(execSync('id -g www-data')).trim());
+          if (!Number.isNaN(uid) && !Number.isNaN(gid)) fs.chownSync(filePath, uid, gid);
+        } catch (e) { }
+      }
     } catch (e) {
       console.error('❌ Error guardando imagen GTPHD:', e);
       stNow._persisted = false;
@@ -326,24 +411,30 @@ function gtpHdTryPersistPhoto(assemblyKey, opts) {
     let storagePath = 'images/' + imeiSafe + '/' + fileName;
 
     if (dbTrackingSystem) {
-      dbTrackingSystem.collection('photos_unidad').insertOne({
+      const photoDoc = {
         imei: imeiValue,
         tipo: GTPHD,
         tipo_evento: 'foto',
+        photo_time: photoTimeValue,
         fecha_gps: stNow.fechaGps || new Date(),
         latitud: stNow.latitud,
         longitud: stNow.longitud,
         imagen: storagePath,
         fecha: new Date(),
         js: true,
-        frames_recibidos: stNow.frames.size,
+        frames_recibidos: framesReported,
         frames_esperados: stNow.totalFrames || null,
         ensamblaje_parcial: !isComplete
-      }, { writeConcern: { w: 0 } });
+      };
+      dbTrackingSystem.collection('photos_unidad').updateOne(
+        { imei: imeiValue, tipo: GTPHD, photo_time: photoTimeValue },
+        { $set: photoDoc },
+        { upsert: true, writeConcern: { w: 0 } }
+      );
     }
 
     console.log((isComplete ? '📸 Imagen guardada:' : '📸 Imagen parcial guardada:'), storagePath,
-      '(' + stNow.frames.size + '/' + (stNow.totalFrames || '?') + ' frames)');
+      '(' + framesReported + '/' + (stNow.totalFrames || '?') + ' frames)');
 
     gtpHdCleanupAssembly(assemblyKey, locationCacheKey);
   }
@@ -363,23 +454,13 @@ function gtpHdTryPersistPhoto(assemblyKey, opts) {
             st2.longitud = toFloat(doc.longitud);
             st2.fechaGps = doc.fecha_gps || new Date();
           }
-          if (gtpHdNeedCoords(st2) && !forcePartial) {
-            if (debug) console.log('GTPHD sin coordenadas tras lookup unidad', { key: assemblyKey, imei: imeiValue });
-            gtpHdCleanupAssembly(assemblyKey, locationCacheKey);
-            return;
-          }
+          if (gtpHdNeedCoords(st2) && !forcePartial) return;
           writePhoto();
         });
         return;
       }
-      if (!forcePartial) {
-        if (debug) console.log('GTPHD sin coordenadas tras lookup unidad', { key: assemblyKey, imei: imeiValue });
-        gtpHdCleanupAssembly(assemblyKey, locationCacheKey);
-        return;
-      }
+      if (!forcePartial) return;
     } else if (!forcePartial) {
-      if (debug) console.log('GTPHD sin coordenadas y sin DB', { key: assemblyKey, imei: imeiValue });
-      gtpHdCleanupAssembly(assemblyKey, locationCacheKey);
       return;
     }
   }
@@ -387,13 +468,15 @@ function gtpHdTryPersistPhoto(assemblyKey, opts) {
   writePhoto();
 }
 
-function gtpHdSchedulePartialPersist(assemblyKey) {
+/** Programa guardado cuando dejen de llegar frames (tiempo dinámico según totalFrames). */
+function gtpHdScheduleIdlePersist(assemblyKey) {
   const st = photoAssemblies.get(assemblyKey);
   if (!st || st._persisted) return;
-  if (st.partialIdleTimer) clearTimeout(st.partialIdleTimer);
-  st.partialIdleTimer = setTimeout(function () {
+  gtpHdClearIdleTimer(st);
+  const idleMs = gtpHdPartialIdleMs(st);
+  st.idlePersistTimer = setTimeout(function () {
     gtpHdTryPersistPhoto(assemblyKey, { forcePartial: true });
-  }, PHOTO_PARTIAL_IDLE_MS);
+  }, idleMs);
 }
 
 function flushTramas() {
@@ -418,7 +501,8 @@ function limpiarBufferFotosParciales() {
       const lastUpdate = state.updatedAt || state.createdAt || now;
       const age = now - lastUpdate;
       const maxAgeMs = gtpHdMaxAssemblyAgeMs(state);
-      if (age > PHOTO_PARTIAL_IDLE_MS && state.frames && state.frames.size > 0) {
+      const idleMs = gtpHdPartialIdleMs(state);
+      if (age > idleMs && state.frames && state.frames.size > 0) {
         gtpHdTryPersistPhoto(key, { forcePartial: true });
       }
       if (age > maxAgeMs) {
@@ -433,7 +517,7 @@ function limpiarBufferFotosParciales() {
     for (const [locKey, payload] of lastPhotoLocationByImei.entries()) {
       const storedAt = Number(payload && payload.storedAt) || 0;
       const ageLoc = storedAt ? (now - storedAt) : PHOTO_PARTIALS_MAX_AGE_MS + 1;
-      if (ageLoc > PHOTO_PARTIALS_MAX_AGE_MS) {
+      if (ageLoc > PHOTO_LOCATION_CACHE_MAX_AGE_MS) {
         lastPhotoLocationByImei.delete(locKey);
       }
     }
@@ -1582,16 +1666,17 @@ function onClientConnected(socket) {
           photoAssemblies.set(key, state);
         }
 
-        state.updatedAt = Date.now();
-
         if (totalFramesValue > 0) {
           state.totalFrames = totalFramesValue;
         }
 
         if (state.frames.has(currentFrameValue)) {
+          gtpHdTrackFrameArrival(state, currentFrameValue);
+          gtpHdScheduleIdlePersist(key);
           return;
         }
         state.frames.set(currentFrameValue, base64Payload);
+        gtpHdTrackFrameArrival(state, currentFrameValue);
 
         const locationInfo = lastPhotoLocationByImei.get(locationCacheKey);
         if (locationInfo) {
@@ -1601,13 +1686,7 @@ function onClientConnected(socket) {
         }
 
         gtpHdTryPersistPhoto(key, { forcePartial: false });
-        gtpHdSchedulePartialPersist(key);
-
-        if (currentFrameValue >= state.totalFrames) {
-          setTimeout(function () {
-            gtpHdTryPersistPhoto(key, { forcePartial: true });
-          }, PHOTO_PARTIAL_IDLE_MS);
-        }
+        gtpHdScheduleIdlePersist(key);
       }
       // ================== GTGOT / GTGIN ==================
       else if (!message.includes(ADMIN) && (message.includes(GTGOT) || message.includes(GTGIN)) && !message.includes(ACK)) {
