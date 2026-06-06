@@ -189,198 +189,10 @@ const TRAMAS_FLUSH_MS = 250;  // cada 250ms
 const TRAMAS_BATCH_MAX = 300; // o por tamaño
 const PHOTO_EVENTS_DIR = path.resolve(__dirname, '../trackingsystemwebapp/storage/app/images');
 const PHOTO_PARTIALS_MAX_AGE_MS = 60000; // 1 minuto
-/** Sin nuevos frames, ensamblar y guardar lo recibido (aunque falten partes). */
-const PHOTO_PARTIAL_IDLE_MS = 15000;
 const photoAssemblies = new Map();
 const lastPhotoLocationByImei = new Map();
 /** Evita picos de RAM si muchas fotos multipart llegan a la vez (cada una acumula frames en memoria). */
 const MAX_ACTIVE_PHOTO_ASSEMBLIES = 100;
-
-function gtpHdFramesComplete(st) {
-  if (!st || !st.totalFrames || st.totalFrames <= 0) return false;
-  if (st.frames.size < st.totalFrames) return false;
-  for (let i = 1; i <= st.totalFrames; i++) {
-    if (!st.frames.has(i)) return false;
-  }
-  return true;
-}
-
-function gtpHdCleanupAssembly(assemblyKey, locationCacheKey) {
-  if (locationCacheKey) lastPhotoLocationByImei.delete(locationCacheKey);
-  photoAssemblies.delete(assemblyKey);
-}
-
-function gtpHdAssembleBuffer(st, allowPartial) {
-  if (!st || !st.frames || st.frames.size === 0) return null;
-  const buffers = [];
-  const complete = gtpHdFramesComplete(st);
-
-  if (complete && !allowPartial) {
-    for (let i = 1; i <= st.totalFrames; i++) {
-      try {
-        buffers.push(Buffer.from(st.frames.get(i), 'base64'));
-      } catch (e) {
-        if (debug) console.log('GTPHD base64 error frame', i, e.message || e);
-        return null;
-      }
-    }
-  } else {
-    const indices = Array.from(st.frames.keys()).filter(function (n) { return n > 0; }).sort(function (a, b) { return a - b; });
-    for (let j = 0; j < indices.length; j++) {
-      try {
-        buffers.push(Buffer.from(st.frames.get(indices[j]), 'base64'));
-      } catch (e) {
-        if (debug) console.log('GTPHD base64 error partial frame', indices[j], e.message || e);
-        return null;
-      }
-    }
-  }
-
-  if (buffers.length === 0) return null;
-  return Buffer.concat(buffers);
-}
-
-function gtpHdNeedCoords(st) {
-  return toFloat(st.latitud) === 0 && toFloat(st.longitud) === 0;
-}
-
-function gtpHdWritePhotoFile(st, assemblyKey, locationCacheKey) {
-  const complete = gtpHdFramesComplete(st);
-  const buffer = gtpHdAssembleBuffer(st, !complete);
-  if (!buffer) {
-    gtpHdCleanupAssembly(assemblyKey, locationCacheKey);
-    return;
-  }
-
-  const minLen = complete ? 1000 : 200;
-  if (buffer.length < minLen) {
-    if (debug) {
-      console.log('GTPHD buffer demasiado pequeño', {
-        key: assemblyKey,
-        len: buffer.length,
-        complete: complete,
-        frames: st.frames.size,
-        totalFrames: st.totalFrames
-      });
-    }
-    gtpHdCleanupAssembly(assemblyKey, locationCacheKey);
-    return;
-  }
-
-  if (complete && (buffer[0] !== 0xFF || buffer[1] !== 0xD8)) {
-    if (debug) {
-      console.log('GTPHD buffer no JPEG (completo)', {
-        key: assemblyKey,
-        len: buffer.length,
-        soi: [buffer[0], buffer[1]]
-      });
-    }
-    gtpHdCleanupAssembly(assemblyKey, locationCacheKey);
-    return;
-  }
-
-  const imeiValue = st.imei;
-  const photoTimeValue = st.photoTime;
-  let imeiSafe = String(imeiValue || '').replace(/[^0-9A-Za-z_-]/g, '');
-  let fileName = photoTimeValue + '_' + Date.now() + (complete ? '' : '_parcial') + '.jpg';
-  let dir = path.join(PHOTO_EVENTS_DIR, imeiSafe);
-  let filePath = path.join(dir, fileName);
-
-  try {
-    fs.mkdirSync(dir, { recursive: true, mode: 0o775 });
-    if (process.platform === 'linux') {
-      try {
-        const uid = Number(String(execSync('id -u www-data')).trim());
-        const gid = Number(String(execSync('id -g www-data')).trim());
-        if (!Number.isNaN(uid) && !Number.isNaN(gid)) {
-          fs.chownSync(dir, uid, gid);
-        }
-      } catch (ownerErr) {
-        if (debug) console.log('No se pudo asignar owner www-data:www-data:', ownerErr.message || ownerErr);
-      }
-    }
-    fs.writeFileSync(filePath, buffer);
-  } catch (e) {
-    console.error('❌ Error guardando imagen GTPHD:', e);
-    gtpHdCleanupAssembly(assemblyKey, locationCacheKey);
-    return;
-  }
-
-  const storagePath = 'images/' + imeiSafe + '/' + fileName;
-  if (dbTrackingSystem) {
-    dbTrackingSystem.collection('photos_unidad').insertOne({
-      imei: imeiValue,
-      tipo: GTPHD,
-      tipo_evento: 'foto',
-      fecha_gps: st.fechaGps || new Date(),
-      latitud: st.latitud,
-      longitud: st.longitud,
-      imagen: storagePath,
-      fecha: new Date(),
-      js: true,
-      frames_recibidos: st.frames.size,
-      frames_esperados: st.totalFrames || null,
-      ensamblaje_parcial: !complete
-    }, { writeConcern: { w: 0 } });
-  }
-
-  console.log((complete ? '📸 Imagen guardada:' : '📸 Imagen parcial guardada:'), storagePath,
-    '(' + st.frames.size + '/' + (st.totalFrames || '?') + ' frames)');
-
-  gtpHdCleanupAssembly(assemblyKey, locationCacheKey);
-}
-
-/** Persiste foto GTPHD. forcePartial=true guarda frames recibidos aunque falten partes. */
-function gtpHdTryPersistAssembly(assemblyKey, opts) {
-  opts = opts || {};
-  const forcePartial = !!opts.forcePartial;
-  const st = photoAssemblies.get(assemblyKey);
-  if (!st || st._persisted) return;
-
-  const complete = gtpHdFramesComplete(st);
-  if (!complete && !forcePartial) return;
-  if (st.frames.size === 0) return;
-
-  const locationCacheKey = st.imei + '_' + st.photoTime;
-  const imeiValue = st.imei;
-
-  if (gtpHdNeedCoords(st)) {
-    if (!dbTrackingSystem) {
-      if (debug) console.log('GTPHD sin coordenadas y sin DB', { key: assemblyKey, imei: imeiValue });
-      gtpHdCleanupAssembly(assemblyKey, locationCacheKey);
-      return;
-    }
-    if (st._resolviendoCoords) return;
-    if (!st._gtpHdUnidadFetchAttempted) {
-      st._gtpHdUnidadFetchAttempted = true;
-      st._resolviendoCoords = true;
-      dbTrackingSystem.collection('unidads').findOne({ imei: imeiValue, estado: 'A' }, function (err, doc) {
-        const st2 = photoAssemblies.get(assemblyKey);
-        if (st2) st2._resolviendoCoords = false;
-        if (!st2 || st2._persisted) return;
-        if (!err && doc) {
-          st2.latitud = toFloat(doc.latitud);
-          st2.longitud = toFloat(doc.longitud);
-          st2.fechaGps = doc.fecha_gps || new Date();
-        }
-        if (gtpHdNeedCoords(st2)) {
-          if (debug) console.log('GTPHD sin coordenadas tras lookup unidad', { key: assemblyKey, imei: imeiValue });
-          gtpHdCleanupAssembly(assemblyKey, locationCacheKey);
-          return;
-        }
-        st2._persisted = true;
-        gtpHdWritePhotoFile(st2, assemblyKey, locationCacheKey);
-      });
-      return;
-    }
-    if (debug) console.log('GTPHD sin coordenadas tras lookup unidad', { key: assemblyKey, imei: imeiValue });
-    gtpHdCleanupAssembly(assemblyKey, locationCacheKey);
-    return;
-  }
-
-  st._persisted = true;
-  gtpHdWritePhotoFile(st, assemblyKey, locationCacheKey);
-}
 
 function flushTramas() {
   try {
@@ -403,15 +215,9 @@ function limpiarBufferFotosParciales() {
     for (const [key, state] of photoAssemblies.entries()) {
       const lastUpdate = state.updatedAt || state.createdAt || now;
       const age = now - lastUpdate;
-      if (age > PHOTO_PARTIAL_IDLE_MS && state.frames && state.frames.size > 0) {
-        gtpHdTryPersistAssembly(key, { forcePartial: true });
-      }
       if (age > PHOTO_PARTIALS_MAX_AGE_MS) {
-        if (photoAssemblies.has(key)) {
-          gtpHdTryPersistAssembly(key, { forcePartial: true });
-        }
         const locKey = state.imei && state.photoTime ? (state.imei + '_' + state.photoTime) : null;
-        if (photoAssemblies.has(key)) photoAssemblies.delete(key);
+        photoAssemblies.delete(key);
         if (locKey) lastPhotoLocationByImei.delete(locKey);
       }
     }
@@ -1585,10 +1391,132 @@ function onClientConnected(socket) {
           state.fechaGps = locationInfo.fecha_gps;
         }
 
-        gtpHdTryPersistAssembly(key, { forcePartial: false });
-        if (currentFrameValue >= state.totalFrames) {
-          gtpHdTryPersistAssembly(key, { forcePartial: true });
+        function gtpHdCleanupAssembly() {
+          lastPhotoLocationByImei.delete(locationCacheKey);
+          photoAssemblies.delete(key);
         }
+
+        function gtpHdFramesComplete(st) {
+          if (!st.totalFrames || st.totalFrames <= 0) return false;
+          if (st.frames.size < st.totalFrames) return false;
+          for (let i = 1; i <= st.totalFrames; i++) {
+            if (!st.frames.has(i)) return false;
+          }
+          return true;
+        }
+
+        function gtpHdNeedCoords(st) {
+          return toFloat(st.latitud) === 0 && toFloat(st.longitud) === 0;
+        }
+
+        function tryPersistGtpHdPhoto() {
+          const st = photoAssemblies.get(key);
+          if (!st) return;
+          if (!gtpHdFramesComplete(st)) return;
+
+          if (gtpHdNeedCoords(st)) {
+            if (dbTrackingSystem) {
+              if (st._resolviendoCoords) return;
+              if (!st._gtpHdUnidadFetchAttempted) {
+                st._gtpHdUnidadFetchAttempted = true;
+                st._resolviendoCoords = true;
+                dbTrackingSystem.collection('unidads').findOne({ imei: imeiValue, estado: 'A' }, function (err, doc) {
+                  const st2 = photoAssemblies.get(key);
+                  if (st2) st2._resolviendoCoords = false;
+                  if (!st2) return;
+                  if (!err && doc) {
+                    st2.latitud = toFloat(doc.latitud);
+                    st2.longitud = toFloat(doc.longitud);
+                    st2.fechaGps = doc.fecha_gps || new Date();
+                  }
+                  tryPersistGtpHdPhoto();
+                });
+                return;
+              }
+              if (debug) console.log('GTPHD sin coordenadas tras lookup unidad', { key: key, imei: imeiValue });
+              gtpHdCleanupAssembly();
+              return;
+            }
+            if (debug) console.log('GTPHD sin coordenadas y sin DB', { key: key, imei: imeiValue });
+            gtpHdCleanupAssembly();
+            return;
+          }
+
+          const buffers = [];
+          for (let i = 1; i <= st.totalFrames; i++) {
+            try {
+              buffers.push(Buffer.from(st.frames.get(i), 'base64'));
+            } catch (e) {
+              console.error('❌ Error base64 GTPHD (chunk):', e);
+              gtpHdCleanupAssembly();
+              return;
+            }
+          }
+          const buffer = Buffer.concat(buffers);
+
+          if (!buffer || buffer.length < 1000 || buffer[0] !== 0xFF || buffer[1] !== 0xD8) {
+            if (debug) {
+              console.log('GTPHD buffer invalido, pequeño o no JPEG', {
+                key: key,
+                len: buffer ? buffer.length : 0,
+                soi: buffer && buffer.length >= 2 ? [buffer[0], buffer[1]] : null
+              });
+            }
+            gtpHdCleanupAssembly();
+            return;
+          }
+
+          let imeiSafe = imeiValue.replace(/[^0-9A-Za-z_-]/g, '');
+          let fileName = photoTimeValue + '_' + Date.now() + '.jpg';
+
+          let dir = path.join(PHOTO_EVENTS_DIR, imeiSafe);
+          let filePath = path.join(dir, fileName);
+
+          try {
+            fs.mkdirSync(dir, { recursive: true, mode: 0o775 });
+            if (process.platform === 'linux') {
+              try {
+                const uid = Number(String(execSync('id -u www-data')).trim());
+                const gid = Number(String(execSync('id -g www-data')).trim());
+                if (!Number.isNaN(uid) && !Number.isNaN(gid)) {
+                  fs.chownSync(dir, uid, gid);
+                }
+              } catch (ownerErr) {
+                if (debug) console.log('No se pudo asignar owner www-data:www-data:', ownerErr.message || ownerErr);
+              }
+            }
+            fs.writeFileSync(filePath, buffer);
+          } catch (e) {
+            console.error('❌ Error guardando imagen GTPHD:', e);
+            gtpHdCleanupAssembly();
+            return;
+          }
+
+          let storagePath = 'images/' + imeiSafe + '/' + fileName;
+
+          if (!dbTrackingSystem) {
+            gtpHdCleanupAssembly();
+            return;
+          }
+
+          dbTrackingSystem.collection('photos_unidad').insertOne({
+            imei: imeiValue,
+            tipo: GTPHD,
+            tipo_evento: 'foto',
+            fecha_gps: st.fechaGps || new Date(),
+            latitud: st.latitud,
+            longitud: st.longitud,
+            imagen: storagePath,
+            fecha: new Date(),
+            js: true
+          }, { writeConcern: { w: 0 } });
+
+          console.log('📸 Imagen guardada:', storagePath);
+
+          gtpHdCleanupAssembly();
+        }
+
+        tryPersistGtpHdPhoto();
       }
       // ================== GTGOT / GTGIN ==================
       else if (!message.includes(ADMIN) && (message.includes(GTGOT) || message.includes(GTGIN)) && !message.includes(ACK)) {
