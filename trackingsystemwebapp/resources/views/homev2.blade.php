@@ -369,6 +369,11 @@ footer {
   position: relative;
   bottom: 0;
 }
+
+.puerta-delanterapr-crono-expirado {
+  opacity: 0.45;
+  color: #9e9e9e;
+}
 </style>
 @endsection
 @section('title')
@@ -1857,6 +1862,21 @@ function calcularSegundosCronometroPuerta(baseDate) {
     return diff;
 }
 
+function cronometroPuertaDelanteraprExpirado(baseDate) {
+    if (!baseDate) return false;
+    var diff = Math.floor((Date.now() - baseDate.getTime()) / 1000);
+    return diff >= 86400;
+}
+
+function aplicarEstiloCronometroPuertaExpirado(el, expirado) {
+    if (!el) return;
+    if (expirado) {
+        el.classList.add('puerta-delanterapr-crono-expirado');
+    } else {
+        el.classList.remove('puerta-delanterapr-crono-expirado');
+    }
+}
+
 function syncPuertaDelanteraprCronometroLi(li, unidad) {
     if (!li || !unidad) return;
     var uid = normalizarUnidadId(unidad._id || li.id);
@@ -1867,19 +1887,22 @@ function syncPuertaDelanteraprCronometroLi(li, unidad) {
     if (!el) return;
     var seg = calcularSegundosCronometroPuerta(base);
     el.textContent = (seg == null) ? '--:--:--' : formatCronometroPuerta(seg);
+    aplicarEstiloCronometroPuertaExpirado(el, cronometroPuertaDelanteraprExpirado(base));
 }
 
 function tickPuertaDelanteraprCronometros() {
     var lis = document.querySelectorAll('#ul_unidades li');
-    var i, li, el, seg;
+    var i, li, el, seg, base;
     for (i = 0; i < lis.length; i++) {
         li = lis[i];
         if (!li.id || li._puerta_delanterapr_base_ms == null) continue;
         el = document.getElementById('puerta_delanterapr_crono_' + li.id);
         if (!el) continue;
-        seg = calcularSegundosCronometroPuerta(new Date(li._puerta_delanterapr_base_ms));
+        base = new Date(li._puerta_delanterapr_base_ms);
+        seg = calcularSegundosCronometroPuerta(base);
         if (seg == null) continue;
         el.textContent = formatCronometroPuerta(seg);
+        aplicarEstiloCronometroPuertaExpirado(el, cronometroPuertaDelanteraprExpirado(base));
     }
 }
 
