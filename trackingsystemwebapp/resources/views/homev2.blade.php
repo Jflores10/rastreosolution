@@ -1852,7 +1852,9 @@ function getPuertaDelanteraprCronometroBase(unidad) {
 function calcularSegundosCronometroPuerta(baseDate) {
     if (!baseDate) return null;
     var diff = Math.floor((Date.now() - baseDate.getTime()) / 1000);
-    return diff < 0 ? 0 : diff;
+    if (diff < 0) return 0;
+    if (diff >= 86400) return 0; // tope 24 h → 00:00:00
+    return diff;
 }
 
 function syncPuertaDelanteraprCronometroLi(li, unidad) {
@@ -1875,8 +1877,8 @@ function tickPuertaDelanteraprCronometros() {
         if (!li.id || li._puerta_delanterapr_base_ms == null) continue;
         el = document.getElementById('puerta_delanterapr_crono_' + li.id);
         if (!el) continue;
-        seg = Math.floor((Date.now() - li._puerta_delanterapr_base_ms) / 1000);
-        if (seg < 0) seg = 0;
+        seg = calcularSegundosCronometroPuerta(new Date(li._puerta_delanterapr_base_ms));
+        if (seg == null) continue;
         el.textContent = formatCronometroPuerta(seg);
     }
 }
