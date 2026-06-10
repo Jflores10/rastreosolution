@@ -357,21 +357,14 @@ class HistoricoController extends Controller
             // Batch fetch ignicionf from unidades (single query, only the field we need)
             $unidadesIgnicion = Unidad::whereIn('_id', $toFetch)
                 ->where('estado', 'A')
-                ->get(['_id', 'ignicionf', 'tiempo_power', 'tiempo_power_update', 'puerta_delanterapr', 'fecha_puerta_abierta_delanterapr', 'fecha_puerta_cerrada_delanterapr']);
+                ->get(['_id', 'ignicionf', 'tiempo_power', 'tiempo_power_update']);
             $ignicionByUnidad = [];
             $tiempoPowerByUnidad = [];
-            $puertaDelanteraprByUnidad = [];
             foreach ($unidadesIgnicion as $u) {
-                $uidStr = (string)$u->_id;
-                $ignicionByUnidad[$uidStr] = $u->ignicionf ?? null;
-                $tiempoPowerByUnidad[$uidStr] = [
+                $ignicionByUnidad[(string)$u->_id] = $u->ignicionf ?? null;
+                $tiempoPowerByUnidad[(string)$u->_id] = [
                     'tiempo_power'        => $u->tiempo_power ?? 0,
                     'tiempo_power_update' => $u->tiempo_power_update ?? null,
-                ];
-                $puertaDelanteraprByUnidad[$uidStr] = [
-                    'puerta_delanterapr' => $u->puerta_delanterapr ?? null,
-                    'fecha_puerta_abierta_delanterapr' => $u->fecha_puerta_abierta_delanterapr ?? null,
-                    'fecha_puerta_cerrada_delanterapr' => $u->fecha_puerta_cerrada_delanterapr ?? null,
                 ];
             }
 
@@ -521,23 +514,6 @@ class HistoricoController extends Controller
                 $meta['tiempo_power']        = $tp;
                 $meta['tiempo_power_update'] = $tpu_iso;
                 $meta['bolt_activo']         = $bolt_activo;
-
-                $pdData = $puertaDelanteraprByUnidad[$uid] ?? null;
-                if ($pdData) {
-                    if (!empty($pdData['puerta_delanterapr'])) {
-                        $meta['puerta_delanterapr'] = $pdData['puerta_delanterapr'];
-                    }
-                    foreach (array('fecha_puerta_abierta_delanterapr', 'fecha_puerta_cerrada_delanterapr') as $pdField) {
-                        $pdVal = $pdData[$pdField] ?? null;
-                        if ($pdVal !== null) {
-                            try {
-                                $meta[$pdField] = $pdVal->toDateTime()->format('Y-m-d\TH:i:s\Z');
-                            } catch (\Exception $e) {
-                                // ignorar fechas inválidas
-                            }
-                        }
-                    }
-                }
 
                 $listaVueltas = isset($vueltasPorUnidad[(string) $uid]) ? $vueltasPorUnidad[(string) $uid] : array();
                 $meta['numvuelta'] = $this->numVueltaDesdeDespachosOrdenados($listaVueltas);
