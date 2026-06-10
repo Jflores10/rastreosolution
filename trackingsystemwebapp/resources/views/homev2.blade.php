@@ -984,6 +984,19 @@ function applyMetaToLi(uid, meta, source) {
         li._meta_from_sse = (source === 'sse');
         li._meta_ts = Date.now();
 
+        // puerta delantera PR: meta batch (/unidades-meta) para persistencia en carga/recarga
+        if (source !== 'sse') {
+            if (meta.puerta_delanterapr) {
+                li.currentU.puerta_delanterapr = meta.puerta_delanterapr;
+            }
+            if (meta.fecha_puerta_abierta_delanterapr) {
+                li.currentU.fecha_puerta_abierta_delanterapr = meta.fecha_puerta_abierta_delanterapr;
+            }
+            if (meta.fecha_puerta_cerrada_delanterapr) {
+                li.currentU.fecha_puerta_cerrada_delanterapr = meta.fecha_puerta_cerrada_delanterapr;
+            }
+        }
+
         // tiempo_power / bolt_activo: aplicar desde meta batch (getUnidadesMeta)
         // Misma lógica que ruta_actual: se guarda en currentU para que updateUnidadInList
         // lo lea directamente, igual que lee ruta_actual desde currentU.
@@ -1209,6 +1222,9 @@ setInterval(function () {
         }
     }
 }, 60000);
+
+// Cronómetro puerta delantera PR: incrementa cada segundo según fecha abierta/cerrada
+setInterval(tickPuertaDelanteraprCronometros, 1000);
 
 /**
  * Activa o desactiva el parpadeo del fa-map-marker en el LI de una unidad.
@@ -1781,12 +1797,91 @@ function htmlContadorImgUnidadLi(estado, contadorImgOrUnidad) {
 }
 
 /** Puerta delantera PR (GTDIS 10/11): mismo icono que puerta trasera. */
+function parseFechaPuertaDelanterapr(raw) {
+    if (raw == null || raw === '' || raw === '--') return null;
+    try {
+        if (typeof raw === 'object') {
+            if (raw.$date !== undefined && raw.$date !== null) {
+                return new Date(raw.$date);
+            }
+            if (typeof raw.getTime === 'function') {
+                return isNaN(raw.getTime()) ? null : raw;
+            }
+        }
+        var d = new Date(raw);
+        return isNaN(d.getTime()) ? null : d;
+    } catch (e) {
+        return null;
+    }
+}
+
+function formatCronometroPuerta(totalSegundos) {
+    if (totalSegundos == null || isNaN(totalSegundos) || totalSegundos < 0) return '--:--:--';
+    var h = Math.floor(totalSegundos / 3600);
+    var m = Math.floor((totalSegundos % 3600) / 60);
+    var s = Math.floor(totalSegundos % 60);
+    var pad = function (n) { return n < 10 ? '0' + n : String(n); };
+    return pad(h) + ':' + pad(m) + ':' + pad(s);
+}
+
+function getPuertaDelanteraprCronometroBase(unidad) {
+    if (!unidad || !unidad.puerta_delanterapr) return null;
+    if (unidad.puerta_delanterapr === 'PUERTA ABIERTA (DELANTERAPR)') {
+        return parseFechaPuertaDelanterapr(unidad.fecha_puerta_abierta_delanterapr);
+    }
+    if (unidad.puerta_delanterapr === 'PUERTA CERRADA (DELANTERAPR)') {
+        return parseFechaPuertaDelanterapr(unidad.fecha_puerta_cerrada_delanterapr);
+    }
+    return null;
+}
+
+function calcularSegundosCronometroPuerta(baseDate) {
+    if (!baseDate) return null;
+    var diff = Math.floor((Date.now() - baseDate.getTime()) / 1000);
+    return diff < 0 ? 0 : diff;
+}
+
+function syncPuertaDelanteraprCronometroLi(li, unidad) {
+    if (!li || !unidad) return;
+    li._puerta_delanterapr_estado = unidad.puerta_delanterapr || null;
+    li._puerta_delanterapr_fecha_abierta = unidad.fecha_puerta_abierta_delanterapr || null;
+    li._puerta_delanterapr_fecha_cerrada = unidad.fecha_puerta_cerrada_delanterapr || null;
+    var uid = unidad._id;
+    if (!uid) return;
+    var el = document.getElementById('puerta_delanterapr_crono_' + uid);
+    if (!el) return;
+    var base = getPuertaDelanteraprCronometroBase(unidad);
+    var seg = calcularSegundosCronometroPuerta(base);
+    el.textContent = (seg == null) ? '--:--:--' : formatCronometroPuerta(seg);
+}
+
+function tickPuertaDelanteraprCronometros() {
+    var lis = document.querySelectorAll('#ul_unidades li');
+    var i, li, el, base, seg, u;
+    for (i = 0; i < lis.length; i++) {
+        li = lis[i];
+        if (!li.id || !li._puerta_delanterapr_estado) continue;
+        el = document.getElementById('puerta_delanterapr_crono_' + li.id);
+        if (!el) continue;
+        u = {
+            puerta_delanterapr: li._puerta_delanterapr_estado,
+            fecha_puerta_abierta_delanterapr: li._puerta_delanterapr_fecha_abierta,
+            fecha_puerta_cerrada_delanterapr: li._puerta_delanterapr_fecha_cerrada
+        };
+        base = getPuertaDelanteraprCronometroBase(u);
+        seg = calcularSegundosCronometroPuerta(base);
+        el.textContent = (seg == null) ? '--:--:--' : formatCronometroPuerta(seg);
+    }
+}
+
 function htmlPuertaDelanteraprLi(unidad, fechaAbiertaPr, fechaCerradaPr) {
     var p = unidad && unidad.puerta_delanterapr;
-    var fa = (fechaAbiertaPr !== undefined && fechaAbiertaPr !== null && fechaAbiertaPr !== '') ? fechaAbiertaPr : '--';
-    var fc = (fechaCerradaPr !== undefined && fechaCerradaPr !== null && fechaCerradaPr !== '') ? fechaCerradaPr : '--';
-    return (p ? ((p === 'PUERTA ABIERTA (DELANTERAPR)') ? '<img src="../images/opendoor.png" height="20" width="20">' + fa
-        : ((p === 'PUERTA CERRADA (DELANTERAPR)') ? '<img src="../images/closedoor.png" height="20" width="20">' + fc
+    var uid = (unidad && unidad._id) ? unidad._id : '';
+    var cronoHtml = uid
+        ? '<span id="puerta_delanterapr_crono_' + uid + '" class="puerta-delanterapr-crono">--:--:--</span>'
+        : '<span class="puerta-delanterapr-crono">--:--:--</span>';
+    return (p ? ((p === 'PUERTA ABIERTA (DELANTERAPR)') ? '<img src="../images/opendoor.png" height="20" width="20">' + cronoHtml
+        : ((p === 'PUERTA CERRADA (DELANTERAPR)') ? '<img src="../images/closedoor.png" height="20" width="20">' + cronoHtml
             : '<font color="red"><strong>---</strong></font>')) : '<font color="red"><strong>---</strong></font>');
 }
 
@@ -1852,6 +1947,9 @@ function updateUnidadInList(unidad, opts) {
             // Preserve tiempo_power: igual que ruta_actual, se mantiene en currentU entre updates
             if ((unidad.tiempo_power == null || unidad.tiempo_power === 0) && prev.tiempo_power) unidad.tiempo_power = prev.tiempo_power;
             if (!unidad.tiempo_power_update && prev.tiempo_power_update) unidad.tiempo_power_update = prev.tiempo_power_update;
+            if (!unidad.puerta_delanterapr && prev.puerta_delanterapr) unidad.puerta_delanterapr = prev.puerta_delanterapr;
+            if (!unidad.fecha_puerta_abierta_delanterapr && prev.fecha_puerta_abierta_delanterapr) unidad.fecha_puerta_abierta_delanterapr = prev.fecha_puerta_abierta_delanterapr;
+            if (!unidad.fecha_puerta_cerrada_delanterapr && prev.fecha_puerta_cerrada_delanterapr) unidad.fecha_puerta_cerrada_delanterapr = prev.fecha_puerta_cerrada_delanterapr;
             if ((unidad.fecha_gps == null || unidad.fecha_gps === '') && prev.fecha_gps) unidad.fecha_gps = prev.fecha_gps;
             if (unidad.diferencia == null && prev.diferencia != null) unidad.diferencia = prev.diferencia;
             if (unidad.contador_total === undefined && prev.contador_total != null) unidad.contador_total = prev.contador_total;
@@ -1985,8 +2083,8 @@ function updateUnidadInList(unidad, opts) {
     var ruta_conductor = formatRutaConductorDisplay(unidad.ruta_conductor || '');
     var ruta_hora_fin = unidad.ruta_hora_fin || '';
 
-    var fecha_puerta_abierta_delanterapr = '--';
-    var fecha_puerta_cerrada_delanterapr = '--';
+    var fecha_puerta_abierta_delanterapr = unidad.fecha_puerta_abierta_delanterapr || null;
+    var fecha_puerta_cerrada_delanterapr = unidad.fecha_puerta_cerrada_delanterapr || null;
     /*
     var fecha_puerta_abierta = unidad.fecha_puerta_abierta || '';
     var fecha_puerta_cerrada = unidad.fecha_puerta_cerrada || '';
@@ -2193,6 +2291,8 @@ function updateUnidadInList(unidad, opts) {
     li.onclick = function () {
         selectUnidad(this.currentU,this.currentFechagpsC,this.currentFecha,1); 
     };
+
+    try { syncPuertaDelanteraprCronometroLi(li, unidad); } catch (e) {}
 
     if (!opts || !opts.skipContadores) {
         try { refreshContadoresEstadoUnidades(); } catch (e) {}
@@ -4159,8 +4259,8 @@ $("#velocimetro").myfunc({divFact:10});
                 }
 
 
-                fecha_puerta_abierta_delanterapr='--';
-                fecha_puerta_cerrada_delanterapr='--';
+                fecha_puerta_abierta_delanterapr = data.unidades[i].fecha_puerta_abierta_delanterapr || null;
+                fecha_puerta_cerrada_delanterapr = data.unidades[i].fecha_puerta_cerrada_delanterapr || null;
 
                 ruta_actual='';
                 ruta_actual=data.array_rutas[i].ruta_actual;
@@ -4354,6 +4454,10 @@ $("#velocimetro").myfunc({divFact:10});
                 var _rowEstadoVista = document.getElementById(data.unidades[i]._id);
                 if (_rowEstadoVista) {
                     _rowEstadoVista._estado_vista = (estado === 'no_envia_trama') ? 'no_envia_trama' : estado;
+                }
+                var _rowPuerta = document.getElementById(data.unidades[i]._id);
+                if (_rowPuerta) {
+                    try { syncPuertaDelanteraprCronometroLi(_rowPuerta, currentU); } catch (ePuerta) {}
                 }
             }
 
