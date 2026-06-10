@@ -1797,15 +1797,47 @@ function htmlContadorImgUnidadLi(estado, contadorImgOrUnidad) {
 }
 
 /** Puerta delantera PR (GTDIS 10/11): mismo icono que puerta trasera. */
+function normalizarPuertaDelanteraprUnidad(unidad) {
+    if (!unidad) return unidad;
+    var keys = ['fecha_puerta_abierta_delanterapr', 'fecha_puerta_cerrada_delanterapr', 'alerta_puerta_fecha_delanterapr'];
+    for (var k = 0; k < keys.length; k++) {
+        var raw = unidad[keys[k]];
+        if (raw == null || raw === '') continue;
+        if (typeof raw === 'object') {
+            if (raw.$date != null) {
+                if (typeof raw.$date === 'object' && raw.$date.$numberLong != null) {
+                    unidad[keys[k]] = new Date(parseInt(raw.$date.$numberLong, 10)).toISOString();
+                } else {
+                    unidad[keys[k]] = raw.$date;
+                }
+            } else if (raw.date != null) {
+                unidad[keys[k]] = raw.date;
+            }
+        }
+    }
+    return unidad;
+}
+
 function parsePuertaDelanteraprFecha(raw) {
     if (raw == null || raw === '') return null;
     try {
         if (typeof raw === 'object') {
-            if (raw.$date != null) raw = raw.$date;
-            else if (raw.date != null) raw = raw.date;
-            else return null;
+            if (raw.$date != null) {
+                raw = (typeof raw.$date === 'object' && raw.$date.$numberLong != null)
+                    ? parseInt(raw.$date.$numberLong, 10)
+                    : raw.$date;
+            } else if (raw.date != null) {
+                raw = raw.date;
+            } else if (typeof raw.getTime === 'function') {
+                return raw.getTime();
+            } else {
+                return null;
+            }
         }
         var d = new Date(raw);
+        if (isNaN(d.getTime()) && typeof raw === 'string') {
+            d = new Date(String(raw).replace(' ', 'T'));
+        }
         if (isNaN(d.getTime())) return null;
         return d.getTime();
     } catch (e) {
@@ -2071,6 +2103,7 @@ function updateUnidadInList(unidad, opts) {
 
     var fecha_puerta_abierta_delanterapr = '--';
     var fecha_puerta_cerrada_delanterapr = '--';
+    normalizarPuertaDelanteraprUnidad(unidad);
     var _prCron = calcPuertaDelanteraprCronometro(unidad);
     fecha_puerta_abierta_delanterapr = _prCron.abierta;
     fecha_puerta_cerrada_delanterapr = _prCron.cerrada;
@@ -4250,6 +4283,7 @@ $("#velocimetro").myfunc({divFact:10});
 
                 fecha_puerta_abierta_delanterapr='--';
                 fecha_puerta_cerrada_delanterapr='--';
+                normalizarPuertaDelanteraprUnidad(data.unidades[i]);
                 var _prCronInit = calcPuertaDelanteraprCronometro(data.unidades[i]);
                 fecha_puerta_abierta_delanterapr = _prCronInit.abierta;
                 fecha_puerta_cerrada_delanterapr = _prCronInit.cerrada;
@@ -4391,7 +4425,7 @@ $("#velocimetro").myfunc({divFact:10});
                         break;
                 }
 
-                var currentLi = document.getElementById(iId);
+                var currentLi = document.getElementById(data.unidades[i]._id);
                 var currentU = data.unidades[i];
                 try {
                     var _afU = data.array_fechas[i];
@@ -4442,11 +4476,8 @@ $("#velocimetro").myfunc({divFact:10});
                             if (_boltElI) _boltElI.classList.add('bolt-power-blink');
                         }
                     }
-                }
-                var _rowLiPr = document.getElementById(data.unidades[i]._id);
-                if (_rowLiPr) {
-                    _rowLiPr._puerta_pr_timer_anchor = _prCronInit.anchorMs;
-                    _rowLiPr._puerta_pr_timer_estado = _prCronInit.estado;
+                    currentLi._puerta_pr_timer_anchor = _prCronInit.anchorMs;
+                    currentLi._puerta_pr_timer_estado = _prCronInit.estado;
                 }
                 var _rowEstadoVista = document.getElementById(data.unidades[i]._id);
                 if (_rowEstadoVista) {
