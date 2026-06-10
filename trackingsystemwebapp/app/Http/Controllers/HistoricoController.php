@@ -860,19 +860,6 @@ class HistoricoController extends Controller
                 $unidad->contador_img = $_contadorImgHoy;
                 $unidad['contador_img'] = $_contadorImgHoy;
 
-                // Puerta delantera PR (GTDIS): fechas ISO para cronómetro en primera carga (getUnidades)
-                foreach (['fecha_puerta_abierta_delanterapr', 'fecha_puerta_cerrada_delanterapr'] as $_pfPr) {
-                    if ($unidad[$_pfPr] != null) {
-                        try {
-                            $_pfIso = $unidad[$_pfPr]->toDateTime()->format('Y-m-d\TH:i:s\Z');
-                            $unidad[$_pfPr] = $_pfIso;
-                            $unidad->{$_pfPr} = $_pfIso;
-                        } catch (\Exception $e) {
-                            // mantener valor original
-                        }
-                    }
-                }
-
                 if($unidad["fecha_gps"] != null && $unidad["fecha"] != null)
                 {
 
