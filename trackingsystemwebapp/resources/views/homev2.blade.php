@@ -1009,18 +1009,20 @@ function applyMetaToLi(uid, meta, source) {
 
         // Puerta delantera PR: estado y fechas para cronómetro persistente
         if (source !== 'sse') {
-            if (meta.puerta_delanterapr) {
+            if (Object.prototype.hasOwnProperty.call(meta, 'puerta_delanterapr') && meta.puerta_delanterapr) {
                 li.currentU.puerta_delanterapr = meta.puerta_delanterapr;
             }
-            if (meta.fecha_puerta_abierta_delanterapr) {
+            if (Object.prototype.hasOwnProperty.call(meta, 'fecha_puerta_abierta_delanterapr') && meta.fecha_puerta_abierta_delanterapr) {
                 li.currentU.fecha_puerta_abierta_delanterapr = meta.fecha_puerta_abierta_delanterapr;
             }
-            if (meta.fecha_puerta_cerrada_delanterapr) {
+            if (Object.prototype.hasOwnProperty.call(meta, 'fecha_puerta_cerrada_delanterapr') && meta.fecha_puerta_cerrada_delanterapr) {
                 li.currentU.fecha_puerta_cerrada_delanterapr = meta.fecha_puerta_cerrada_delanterapr;
             }
         }
 
+        li.currentU._id = normalizarUnidadId(uid) || String(uid);
         updateUnidadInList(li.currentU);
+        syncPuertaDelanteraprCronometroEnLi(li);
     } catch (e) {
         console.warn('applyMetaToLi failed', e);
     }
@@ -1876,6 +1878,25 @@ function calcPuertaDelanteraprCronometro(unidad) {
     return result;
 }
 
+/** Sincroniza texto del cronómetro y ancla en el LI (carga inicial, meta batch, SSE). */
+function syncPuertaDelanteraprCronometroEnLi(li) {
+    if (!li || !li.currentU) return;
+    normalizarPuertaDelanteraprUnidad(li.currentU);
+    var cron = calcPuertaDelanteraprCronometro(li.currentU);
+    li._puerta_pr_timer_anchor = cron.anchorMs;
+    li._puerta_pr_timer_estado = cron.estado;
+    var uid = normalizarUnidadId(li.id || li.currentU._id);
+    if (!uid) return;
+    var el = document.getElementById('puerta_pr_timer_' + uid);
+    if (!el) return;
+    var p = String(li.currentU.puerta_delanterapr || '');
+    if (p === 'PUERTA ABIERTA (DELANTERAPR)') {
+        el.textContent = cron.abierta;
+    } else if (p === 'PUERTA CERRADA (DELANTERAPR)') {
+        el.textContent = cron.cerrada;
+    }
+}
+
 function tickPuertaDelanteraprCronometros() {
     var lis = document.querySelectorAll('#ul_unidades li');
     var now = Date.now();
@@ -1889,7 +1910,7 @@ function tickPuertaDelanteraprCronometros() {
 }
 
 function htmlPuertaDelanteraprLi(unidad, fechaAbiertaPr, fechaCerradaPr) {
-    var uid = unidad && unidad._id ? unidad._id : '';
+    var uid = normalizarUnidadId(unidad && unidad._id) || '';
     var p = unidad && unidad.puerta_delanterapr;
     var fa = (fechaAbiertaPr !== undefined && fechaAbiertaPr !== null && fechaAbiertaPr !== '') ? fechaAbiertaPr : '--';
     var fc = (fechaCerradaPr !== undefined && fechaCerradaPr !== null && fechaCerradaPr !== '') ? fechaCerradaPr : '--';
@@ -2150,8 +2171,9 @@ function updateUnidadInList(unidad, opts) {
     // Tooltip profesional del bolt (siempre presente en todos los LI)
     var boltTipText = 'Sin datos';
     try {
+        var liBoltRef = document.getElementById(uidList);
         var _tpuRaw = unidad.tiempo_power_update ||
-                      (li._tiempo_power_update ? li._tiempo_power_update.toISOString() : null);
+                      (liBoltRef && liBoltRef._tiempo_power_update ? liBoltRef._tiempo_power_update.toISOString() : null);
         if (_tpuRaw) {
             var _tpuD = new Date(_tpuRaw);
             if (!isNaN(_tpuD.getTime())) {
@@ -2294,6 +2316,7 @@ function updateUnidadInList(unidad, opts) {
     li.currentFechagpsC = fecha_gps_marker_c;
     li._puerta_pr_timer_anchor = _prCron.anchorMs;
     li._puerta_pr_timer_estado = _prCron.estado;
+    syncPuertaDelanteraprCronometroEnLi(li);
 
     li.currentFecha = fecha_servidor;
     li._estado_vista = estado;
@@ -4478,6 +4501,7 @@ $("#velocimetro").myfunc({divFact:10});
                     }
                     currentLi._puerta_pr_timer_anchor = _prCronInit.anchorMs;
                     currentLi._puerta_pr_timer_estado = _prCronInit.estado;
+                    syncPuertaDelanteraprCronometroEnLi(currentLi);
                 }
                 var _rowEstadoVista = document.getElementById(data.unidades[i]._id);
                 if (_rowEstadoVista) {
