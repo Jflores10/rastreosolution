@@ -903,6 +903,14 @@ function applyMetaToLi(uid, meta, source) {
         var li = document.getElementById(uid);
         if (!li) return;
         if (!li.currentU) li.currentU = {};
+        try {
+            var _icMeta = document.getElementById('i' + uid);
+            if (_icMeta && _icMeta.currentU) {
+                var _prevMeta = li.currentU;
+                li.currentU = Object.assign({}, _icMeta.currentU, _prevMeta);
+            }
+        } catch (eMetaMerge) {}
+        li.currentU._id = uid;
 
         // Ruta de despacho: meta batch (/unidades-meta) siempre trae ruta_* (vacíos si el despacho ya no está P)
         if (source !== 'sse' && Object.prototype.hasOwnProperty.call(meta, 'ruta_actual')) {
@@ -995,6 +1003,21 @@ function applyMetaToLi(uid, meta, source) {
             if (meta.fecha_puerta_cerrada_delanterapr) {
                 li.currentU.fecha_puerta_cerrada_delanterapr = meta.fecha_puerta_cerrada_delanterapr;
             }
+            try {
+                var _icPuerta = document.getElementById('i' + uid);
+                if (_icPuerta) {
+                    if (!_icPuerta.currentU) _icPuerta.currentU = {};
+                    if (li.currentU.puerta_delanterapr) {
+                        _icPuerta.currentU.puerta_delanterapr = li.currentU.puerta_delanterapr;
+                    }
+                    if (li.currentU.fecha_puerta_abierta_delanterapr) {
+                        _icPuerta.currentU.fecha_puerta_abierta_delanterapr = li.currentU.fecha_puerta_abierta_delanterapr;
+                    }
+                    if (li.currentU.fecha_puerta_cerrada_delanterapr) {
+                        _icPuerta.currentU.fecha_puerta_cerrada_delanterapr = li.currentU.fecha_puerta_cerrada_delanterapr;
+                    }
+                }
+            } catch (ePuertaIc) {}
         }
 
         // tiempo_power / bolt_activo: aplicar desde meta batch (getUnidadesMeta)
@@ -1800,15 +1823,32 @@ function htmlContadorImgUnidadLi(estado, contadorImgOrUnidad) {
 function parseFechaPuertaDelanterapr(raw) {
     if (raw == null || raw === '' || raw === '--') return null;
     try {
+        var str = raw;
         if (typeof raw === 'object') {
             if (raw.$date !== undefined && raw.$date !== null) {
-                return new Date(raw.$date);
-            }
-            if (typeof raw.getTime === 'function') {
+                str = raw.$date;
+            } else if (raw.date !== undefined && raw.date !== null) {
+                str = raw.date;
+            } else if (typeof raw.getTime === 'function') {
                 return isNaN(raw.getTime()) ? null : raw;
             }
         }
-        var d = new Date(raw);
+        if (typeof str !== 'string') str = String(str);
+        str = str.trim();
+        // Comparar como hora local (misma lógica que el ejemplo del usuario: fecha actual vs fecha puerta)
+        var m = str.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/);
+        if (m) {
+            var dLocal = new Date(
+                parseInt(m[1], 10),
+                parseInt(m[2], 10) - 1,
+                parseInt(m[3], 10),
+                parseInt(m[4], 10),
+                parseInt(m[5], 10),
+                m[6] ? parseInt(m[6], 10) : 0
+            );
+            return isNaN(dLocal.getTime()) ? null : dLocal;
+        }
+        var d = new Date(str);
         return isNaN(d.getTime()) ? null : d;
     } catch (e) {
         return null;
@@ -1841,13 +1881,26 @@ function calcularSegundosCronometroPuerta(baseDate) {
     return diff < 0 ? 0 : diff;
 }
 
+function getCurrentUPuertaDelanterapr(row) {
+    if (!row || !row.id) return null;
+    var uRow = row.currentU || null;
+    var uIcon = null;
+    try {
+        var ic = document.getElementById('i' + row.id);
+        if (ic && ic.currentU) uIcon = ic.currentU;
+    } catch (e) {}
+    if (!uIcon && !uRow) return null;
+    return Object.assign({}, uIcon || {}, uRow || {}, { _id: row.id });
+}
+
 function syncPuertaDelanteraprCronometroLi(li, unidad) {
     if (!li || !unidad) return;
+    var uid = normalizarUnidadId(unidad._id || li.id);
+    if (!uid) return;
+    unidad._id = uid;
     li._puerta_delanterapr_estado = unidad.puerta_delanterapr || null;
     li._puerta_delanterapr_fecha_abierta = unidad.fecha_puerta_abierta_delanterapr || null;
     li._puerta_delanterapr_fecha_cerrada = unidad.fecha_puerta_cerrada_delanterapr || null;
-    var uid = unidad._id;
-    if (!uid) return;
     var el = document.getElementById('puerta_delanterapr_crono_' + uid);
     if (!el) return;
     var base = getPuertaDelanteraprCronometroBase(unidad);
@@ -1857,26 +1910,19 @@ function syncPuertaDelanteraprCronometroLi(li, unidad) {
 
 function tickPuertaDelanteraprCronometros() {
     var lis = document.querySelectorAll('#ul_unidades li');
-    var i, li, el, base, seg, u;
+    var i, li, u;
     for (i = 0; i < lis.length; i++) {
         li = lis[i];
-        if (!li.id || !li._puerta_delanterapr_estado) continue;
-        el = document.getElementById('puerta_delanterapr_crono_' + li.id);
-        if (!el) continue;
-        u = {
-            puerta_delanterapr: li._puerta_delanterapr_estado,
-            fecha_puerta_abierta_delanterapr: li._puerta_delanterapr_fecha_abierta,
-            fecha_puerta_cerrada_delanterapr: li._puerta_delanterapr_fecha_cerrada
-        };
-        base = getPuertaDelanteraprCronometroBase(u);
-        seg = calcularSegundosCronometroPuerta(base);
-        el.textContent = (seg == null) ? '--:--:--' : formatCronometroPuerta(seg);
+        if (!li.id) continue;
+        u = getCurrentUPuertaDelanterapr(li);
+        if (!u || !u.puerta_delanterapr) continue;
+        syncPuertaDelanteraprCronometroLi(li, u);
     }
 }
 
 function htmlPuertaDelanteraprLi(unidad, fechaAbiertaPr, fechaCerradaPr) {
     var p = unidad && unidad.puerta_delanterapr;
-    var uid = (unidad && unidad._id) ? unidad._id : '';
+    var uid = normalizarUnidadId(unidad && unidad._id) || '';
     var cronoHtml = uid
         ? '<span id="puerta_delanterapr_crono_' + uid + '" class="puerta-delanterapr-crono">--:--:--</span>'
         : '<span class="puerta-delanterapr-crono">--:--:--</span>';
@@ -2268,6 +2314,21 @@ function updateUnidadInList(unidad, opts) {
         }
     } catch (e) {}
     li.currentU = unidad;
+    try {
+        var _icPuertaUpd = document.getElementById('i' + unidad._id);
+        if (_icPuertaUpd) {
+            if (!_icPuertaUpd.currentU) _icPuertaUpd.currentU = {};
+            if (unidad.puerta_delanterapr) {
+                _icPuertaUpd.currentU.puerta_delanterapr = unidad.puerta_delanterapr;
+            }
+            if (unidad.fecha_puerta_abierta_delanterapr) {
+                _icPuertaUpd.currentU.fecha_puerta_abierta_delanterapr = unidad.fecha_puerta_abierta_delanterapr;
+            }
+            if (unidad.fecha_puerta_cerrada_delanterapr) {
+                _icPuertaUpd.currentU.fecha_puerta_cerrada_delanterapr = unidad.fecha_puerta_cerrada_delanterapr;
+            }
+        }
+    } catch (ePuertaUpd) {}
     li.currentFechagps = fecha_gps_marker;
     li.currentFechagpsC = fecha_gps_marker_c;
 
@@ -4416,6 +4477,10 @@ $("#velocimetro").myfunc({divFact:10});
                 currentU.estado_movil = (estado === 'no_envia_trama') ? 'NS' : estado;
                 var currentFechagps = fecha_gps_marker;
                 var currentFecha = fecha_servidor;
+                var _rowLiInit = document.getElementById(data.unidades[i]._id);
+                if (_rowLiInit) {
+                    _rowLiInit.currentU = currentU;
+                }
                 if (currentLi != null && currentLi != undefined)
                 {
                     currentLi.currentU = currentU;
