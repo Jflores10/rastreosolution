@@ -197,43 +197,6 @@ class HistoricoController extends Controller
         return count($ordenados);
     }
 
-    /** ISO 8601 para fechas puerta delantera PR en JSON (getUnidades); no altera fecha_gps. */
-    private function serializarFechaPuertaDelanteraprParaJson($valor)
-    {
-        if ($valor === null) {
-            return null;
-        }
-        try {
-            if (is_object($valor) && method_exists($valor, 'toDateTime')) {
-                return $valor->toDateTime()->format('Y-m-d\TH:i:s\Z');
-            }
-            if ($valor instanceof \DateTimeInterface) {
-                return $valor->format('Y-m-d\TH:i:s\Z');
-            }
-
-            return (string) $valor;
-        } catch (\Exception $e) {
-            return null;
-        }
-    }
-
-    /** Adjunta campos puerta delantera PR tras procesar fecha_gps (snapshot previo). */
-    private function adjuntarPuertaDelanteraprEnUnidad($unidad, array $snap)
-    {
-        if (!empty($snap['puerta_delanterapr'])) {
-            $unidad['puerta_delanterapr'] = $snap['puerta_delanterapr'];
-        }
-        if (!empty($snap['alerta_puerta_message_delanterapr'])) {
-            $unidad['alerta_puerta_message_delanterapr'] = $snap['alerta_puerta_message_delanterapr'];
-        }
-        foreach (['alerta_puerta_fecha_delanterapr', 'fecha_puerta_abierta_delanterapr', 'fecha_puerta_cerrada_delanterapr'] as $key) {
-            $iso = $this->serializarFechaPuertaDelanteraprParaJson($snap[$key] ?? null);
-            if ($iso !== null) {
-                $unidad[$key] = $iso;
-            }
-        }
-    }
-
     // New: return metadata (ruta_actual, ruta_fecha, ruta_conductor, tipo_bitacora) for one or many unidades
     public function getUnidadesMeta(Request $request)
     {
@@ -897,14 +860,6 @@ class HistoricoController extends Controller
                 $unidad->contador_img = $_contadorImgHoy;
                 $unidad['contador_img'] = $_contadorImgHoy;
 
-                $_snapPuertaPr = [
-                    'puerta_delanterapr'                => $unidad['puerta_delanterapr'] ?? null,
-                    'alerta_puerta_message_delanterapr' => $unidad['alerta_puerta_message_delanterapr'] ?? null,
-                    'alerta_puerta_fecha_delanterapr'   => $unidad['alerta_puerta_fecha_delanterapr'] ?? null,
-                    'fecha_puerta_abierta_delanterapr'  => $unidad['fecha_puerta_abierta_delanterapr'] ?? null,
-                    'fecha_puerta_cerrada_delanterapr'  => $unidad['fecha_puerta_cerrada_delanterapr'] ?? null,
-                ];
-
                 if($unidad["fecha_gps"] != null && $unidad["fecha"] != null)
                 {
 
@@ -1125,8 +1080,6 @@ class HistoricoController extends Controller
                     "alerta_fecha_cortetubo"=>$unidad["alerta_fecha_cortetubo"],
                     "alerta_cortetubo"=>$unidad["alerta_cortetubo"]
                 ]);
-
-                $this->adjuntarPuertaDelanteraprEnUnidad($unidad, $_snapPuertaPr);
 
             }
             return response()->json(['unidades'=>$unidades,'array_fechas'=>$array,'diferencia'=>$diff,'uni'=>$aa,
