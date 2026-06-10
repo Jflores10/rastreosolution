@@ -984,7 +984,7 @@ function applyMetaToLi(uid, meta, source) {
         li._meta_from_sse = (source === 'sse');
         li._meta_ts = Date.now();
 
-        // puerta delantera PR: meta batch (/unidades-meta) para persistencia en carga/recarga
+        // puerta delantera PR: meta batch (/unidades-meta) — solo cronómetro, sin re-render de la fila
         if (source !== 'sse') {
             if (meta.puerta_delanterapr) {
                 li.currentU.puerta_delanterapr = meta.puerta_delanterapr;
@@ -995,6 +995,14 @@ function applyMetaToLi(uid, meta, source) {
             if (meta.fecha_puerta_cerrada_delanterapr) {
                 li.currentU.fecha_puerta_cerrada_delanterapr = meta.fecha_puerta_cerrada_delanterapr;
             }
+            try {
+                syncPuertaDelanteraprCronometroLi(li, {
+                    _id: uid,
+                    puerta_delanterapr: li.currentU.puerta_delanterapr,
+                    fecha_puerta_abierta_delanterapr: li.currentU.fecha_puerta_abierta_delanterapr,
+                    fecha_puerta_cerrada_delanterapr: li.currentU.fecha_puerta_cerrada_delanterapr
+                });
+            } catch (ePuertaMeta) {}
         }
 
         // tiempo_power / bolt_activo: aplicar desde meta batch (getUnidadesMeta)
@@ -1020,7 +1028,6 @@ function applyMetaToLi(uid, meta, source) {
             }
         }
 
-        li.currentU._id = uid;
         updateUnidadInList(li.currentU);
     } catch (e) {
         console.warn('applyMetaToLi failed', e);
