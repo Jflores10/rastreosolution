@@ -31,6 +31,11 @@
         animation: blink-bolt 0.65s ease-in-out infinite;
     }
 
+    .voltaje-alerta-blink {
+        animation: blink-marker 0.65s ease-in-out infinite;
+        font-weight: bold;
+    }
+
     /* ── Tooltip bolt: se pinta en #pw-bolt-tooltip-floater (body, fixed) porque
        #div-unidad tiene overflow-y:auto y recorta cualquier ::after del <i>. ─ */
     .bolt-tip {
@@ -1906,6 +1911,34 @@ function tickPuertaDelanteraprCronometros() {
     }
 }
 
+function voltajeDebeTitilar(voltajeRaw) {
+    if (voltajeRaw == null || voltajeRaw === '') return false;
+    var v = parseInt(String(voltajeRaw).trim(), 10);
+    if (isNaN(v)) return false;
+    return v === 11 || v === 10 || v === 8 || v === 9;
+}
+
+function htmlVoltajeUnidadLi(unidadId, voltajeDisp) {
+    var uid = normalizarUnidadId(unidadId);
+    if (!uid) return String(voltajeDisp);
+    return '<span id="voltaje_' + uid + '" class="unidad-voltaje-disp">' + voltajeDisp + '</span>';
+}
+
+function aplicarTitileoVoltajeUnidad(unidadId, voltajeRaw) {
+    var uid = normalizarUnidadId(unidadId);
+    if (!uid) return;
+    var el = document.getElementById('voltaje_' + uid);
+    if (!el) return;
+    var titilar = voltajeDebeTitilar(voltajeRaw);
+    if (titilar) {
+        el.classList.add('voltaje-alerta-blink');
+    } else {
+        el.classList.remove('voltaje-alerta-blink');
+    }
+    var rowLi = document.getElementById(uid);
+    if (rowLi) rowLi._voltaje_alerta_blink = titilar;
+}
+
 function htmlPuertaDelanteraprLi(unidad, fechaAbiertaPr, fechaCerradaPr) {
     var p = unidad && unidad.puerta_delanterapr;
     var uid = normalizarUnidadId(unidad && unidad._id) || '';
@@ -2182,7 +2215,7 @@ function updateUnidadInList(unidad, opts) {
                 ((unidad.rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                 vueltaHtml + sentido + ignicionHtml + '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#F44336"></i>&nbsp' +
                 (unidad.descripcion || '') + '&nbsp&nbsp <i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ (unidad.latitud||'') +'\',\''+ (unidad.longitud||'') +'\');" class="fa fa-map-marker" style="color:#F44336"></i>&nbsp' + (fecha_gps_marker || '-') + '  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(velocidad_num) + '' +
-                '&nbsp&nbsp&nbsp<i id="bolt_' + unidad._id + '"' + boltTitleAttr + ' style="color:#F44336"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#F44336"></i>&nbsp' + contador_total_disp + " | " + contador_diario_disp +
+                '&nbsp&nbsp&nbsp<i id="bolt_' + unidad._id + '"' + boltTitleAttr + ' style="color:#F44336"></i>&nbsp' + htmlVoltajeUnidadLi(unidad._id, voltaje) + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#F44336"></i>&nbsp' + contador_total_disp + " | " + contador_diario_disp +
                 '&nbsp&nbsp&nbsp' + ((unidad.is_atm !== undefined && unidad.is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'') +
                 '&nbsp&nbsp&nbsp|&nbsp&nbsp';
 
@@ -2202,7 +2235,7 @@ function updateUnidadInList(unidad, opts) {
                 ((unidad.rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                 vueltaHtml + ignicionHtml + '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#f49a16"></i>&nbsp' + (unidad.descripcion||'') +
                 '&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ (unidad.latitud||'') +'\',\''+ (unidad.longitud||'') +'\');" class="fa fa-map-marker" style="color:#f49a16"></i>&nbsp' + (fecha_gps_marker || '-') + '  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(velocidad_num) + '' +
-                '&nbsp&nbsp&nbsp<i id="bolt_' + unidad._id + '"' + boltTitleAttr + ' style="color:#f49a16"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#f49a16"></i>&nbsp' + contador_total_disp + " | " + contador_diario_disp +
+                '&nbsp&nbsp&nbsp<i id="bolt_' + unidad._id + '"' + boltTitleAttr + ' style="color:#f49a16"></i>&nbsp' + htmlVoltajeUnidadLi(unidad._id, voltaje) + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#f49a16"></i>&nbsp' + contador_total_disp + " | " + contador_diario_disp +
                 '&nbsp&nbsp&nbsp|&nbsp&nbsp';
 
             html += htmlPuertaDelanteraprLi(unidad, fecha_puerta_abierta_delanterapr, fecha_puerta_cerrada_delanterapr);
@@ -2221,7 +2254,7 @@ function updateUnidadInList(unidad, opts) {
                 ((unidad.rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                 vueltaHtml + sentido + ignicionHtml + '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#00AA88"></i>&nbsp' + (unidad.descripcion||'') +
                 '&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ (unidad.latitud||'') +'\',\''+ (unidad.longitud||'') +'\');" class="fa fa-map-marker" style="color:#00AA88"></i>&nbsp' + (fecha_gps_marker || '-') + '  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(velocidad_num) + '' +
-                '&nbsp&nbsp&nbsp<i id="bolt_' + unidad._id + '"' + boltTitleAttr + ' style="color:#00AA88"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#00AA88"></i>&nbsp' + contador_total_disp + " | " + contador_diario_disp +
+                '&nbsp&nbsp&nbsp<i id="bolt_' + unidad._id + '"' + boltTitleAttr + ' style="color:#00AA88"></i>&nbsp' + htmlVoltajeUnidadLi(unidad._id, voltaje) + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#00AA88"></i>&nbsp' + contador_total_disp + " | " + contador_diario_disp +
                 '&nbsp&nbsp&nbsp|&nbsp&nbsp';
 
             html += htmlPuertaDelanteraprLi(unidad, fecha_puerta_abierta_delanterapr, fecha_puerta_cerrada_delanterapr);
@@ -2240,7 +2273,7 @@ function updateUnidadInList(unidad, opts) {
                 ((unidad.rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                 vueltaHtml + ignicionHtml + '<i id="' + iId + '" onclick="velocimetro_change('+ (unidad.velocidad_actual || 0) +');" class="fa fa-bus" style="color:#990073"></i>&nbsp' + (unidad.descripcion||'') +
                 '&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ (unidad.latitud||'') +'\',\''+ (unidad.longitud||'') +'\');" class="fa fa-map-marker" style="color:#990073"></i>&nbsp' + (fecha_gps_marker || '-') + '  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(velocidad_num) + '' +
-                '&nbsp&nbsp&nbsp<i id="bolt_' + unidad._id + '"' + boltTitleAttr + ' style="color:#990073"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#990073"></i>&nbsp' + contador_total_disp + " | " + contador_diario_disp +
+                '&nbsp&nbsp&nbsp<i id="bolt_' + unidad._id + '"' + boltTitleAttr + ' style="color:#990073"></i>&nbsp' + htmlVoltajeUnidadLi(unidad._id, voltaje) + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#990073"></i>&nbsp' + contador_total_disp + " | " + contador_diario_disp +
                 '&nbsp&nbsp&nbsp|&nbsp&nbsp';
 
             html += htmlPuertaDelanteraprLi(unidad, fecha_puerta_abierta_delanterapr, fecha_puerta_cerrada_delanterapr);
@@ -2299,6 +2332,7 @@ function updateUnidadInList(unidad, opts) {
             }
         }
     } catch (e) {}
+    try { aplicarTitileoVoltajeUnidad(unidad._id, unidad.voltaje); } catch (e) {}
     li.currentU = unidad;
     li.currentFechagps = fecha_gps_marker;
     li.currentFechagpsC = fecha_gps_marker_c;
@@ -4351,7 +4385,7 @@ $("#velocimetro").myfunc({divFact:10});
                                     ((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                                     ((data.unidades[i].rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                                 vueltaHtmlI+sentido+ignicionHtmlI+'<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1);" class="fa fa-bus" style="color:#F44336"></i>&nbsp'+ 
-                                data.unidades[i].descripcion+'&nbsp&nbsp <i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ data.unidades[i].latitud+'\',\''+ data.unidades[i].longitud+'\');" class="fa fa-map-marker" style="color:#F44336"></i>&nbsp'+fecha_gps+'  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp'+  Math.round(data.unidades[i].velocidad_actual)+''+'&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#F44336"></i>&nbsp'+voltaje
+                                data.unidades[i].descripcion+'&nbsp&nbsp <i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ data.unidades[i].latitud+'\',\''+ data.unidades[i].longitud+'\');" class="fa fa-map-marker" style="color:#F44336"></i>&nbsp'+fecha_gps+'  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp'+  Math.round(data.unidades[i].velocidad_actual)+''+'&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#F44336"></i>&nbsp'+htmlVoltajeUnidadLi(data.unidades[i]._id, voltaje)
                                 +'&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#F44336"></i>&nbsp'+data.unidades[i].contador_total+" | "+data.unidades[i].contador_diario
                                 +'&nbsp&nbsp&nbsp'+((data.unidades[i].is_atm !== "undefined")?((data.unidades[i].is_atm===0)?'':((data.unidades[i].is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'')):'')
                                 +'&nbsp&nbsp&nbsp|&nbsp&nbsp'
@@ -4372,7 +4406,7 @@ $("#velocimetro").myfunc({divFact:10});
                                     ((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                                     ((data.unidades[i].rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                                 vueltaHtmlI+ignicionHtmlI+'<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1);" class="fa fa-bus" style="color:#f49a16"></i>&nbsp'+ data.unidades[i].descripcion
-                                +'&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ data.unidades[i].latitud+'\',\''+ data.unidades[i].longitud+'\');" class="fa fa-map-marker" style="color:#f49a16"></i>&nbsp'+fecha_gps+'  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp'+ Math.round(data.unidades[i].velocidad_actual)+''+'&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#f49a16"></i>&nbsp'+voltaje
+                                +'&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ data.unidades[i].latitud+'\',\''+ data.unidades[i].longitud+'\');" class="fa fa-map-marker" style="color:#f49a16"></i>&nbsp'+fecha_gps+'  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp'+ Math.round(data.unidades[i].velocidad_actual)+''+'&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#f49a16"></i>&nbsp'+htmlVoltajeUnidadLi(data.unidades[i]._id, voltaje)
                                 +'&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#f49a16"></i>&nbsp'+data.unidades[i].contador_total+" | "+data.unidades[i].contador_diario
                                 +'&nbsp&nbsp&nbsp'+((data.unidades[i].is_atm !== "undefined")?((data.unidades[i].is_atm===0)?'':((data.unidades[i].is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'')):'')
                                 +'&nbsp&nbsp&nbsp|&nbsp&nbsp'
@@ -4393,7 +4427,7 @@ $("#velocimetro").myfunc({divFact:10});
                                     ((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                                     ((data.unidades[i].rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                                 vueltaHtmlI+sentido+ignicionHtmlI+'<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1);" class="fa fa-bus" style="color:#00AA88"></i>&nbsp'+ data.unidades[i].descripcion
-                                +'&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ data.unidades[i].latitud+'\',\''+ data.unidades[i].longitud+'\');" class="fa fa-map-marker" style="color:#00AA88"></i>&nbsp'+fecha_gps+'  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp'+ Math.round(data.unidades[i].velocidad_actual)+''+'&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#00AA88"></i>&nbsp'+voltaje+'&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#00AA88"></i>&nbsp'
+                                +'&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ data.unidades[i].latitud+'\',\''+ data.unidades[i].longitud+'\');" class="fa fa-map-marker" style="color:#00AA88"></i>&nbsp'+fecha_gps+'  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp'+ Math.round(data.unidades[i].velocidad_actual)+''+'&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#00AA88"></i>&nbsp'+htmlVoltajeUnidadLi(data.unidades[i]._id, voltaje)+'&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#00AA88"></i>&nbsp'
                                 +data.unidades[i].contador_total+" | "+data.unidades[i].contador_diario
                                 +'&nbsp&nbsp&nbsp'+((data.unidades[i].is_atm !== "undefined")?((data.unidades[i].is_atm===0)?'':((data.unidades[i].is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'')):'')
                                 +'&nbsp&nbsp&nbsp|&nbsp&nbsp'
@@ -4416,7 +4450,7 @@ $("#velocimetro").myfunc({divFact:10});
                                 ((data.unidades[i].climatizada==true)?'<img src="../images/snowflake.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                                 ((data.unidades[i].rampa==true)?'<img src="../images/disabled.png" height="20" width="20">&nbsp&nbsp':'&nbsp&nbsp')+
                                 vueltaHtmlI+ignicionHtmlI+'<i id="' + iId + '" onclick="velocimetro_change('+data.unidades[i].velocidad_actual+');$(\'#progress\').modal(\'show\');selectUnidad(\''+ data.unidades[i]._id+'\',\''+fecha_gps_marker+'\',\''+fecha_servidor+'\',1);" class="fa fa-bus" style="color:#990073"></i>&nbsp' + data.unidades[i].descripcion 
-                                + '&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ data.unidades[i].latitud+'\',\''+ data.unidades[i].longitud+'\');" class="fa fa-map-marker" style="color:#990073"></i>&nbsp' + fecha_gps + '  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(data.unidades[i].velocidad_actual) + '' + '&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#990073"></i>&nbsp' + voltaje + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#990073"></i>&nbsp' + data.unidades[i].contador_total 
+                                + '&nbsp&nbsp<i id="' + gId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_GEOCODE(\''+ data.unidades[i].latitud+'\',\''+ data.unidades[i].longitud+'\');" class="fa fa-map-marker" style="color:#990073"></i>&nbsp' + fecha_gps + '  <i class="fa fa-tachometer" style="color:#000E4C"></i>&nbsp' + Math.round(data.unidades[i].velocidad_actual) + '' + '&nbsp&nbsp&nbsp<i class="fa fa-bolt" style="color:#990073"></i>&nbsp' + htmlVoltajeUnidadLi(data.unidades[i]._id, voltaje) + '&nbsp&nbsp&nbsp<i class="fa fa-users" style="color:#990073"></i>&nbsp' + data.unidades[i].contador_total 
                                 + " | " + data.unidades[i].contador_diario
                                 +'&nbsp&nbsp&nbsp'+((data.unidades[i].is_atm !== "undefined")?((data.unidades[i].is_atm===0)?'':((data.unidades[i].is_atm===1)?'<font color="green"><strong>ATM</strong></font>':'')):'')
                                 +'&nbsp&nbsp&nbsp|&nbsp&nbsp'
@@ -4491,6 +4525,7 @@ $("#velocimetro").myfunc({divFact:10});
                 if (_rowPuerta) {
                     try { syncPuertaDelanteraprCronometroLi(_rowPuerta, currentU); } catch (ePuerta) {}
                 }
+                try { aplicarTitileoVoltajeUnidad(data.unidades[i]._id, data.unidades[i].voltaje); } catch (eVolt) {}
             }
 
             $('#cantidad_no').text(unidad_no);
