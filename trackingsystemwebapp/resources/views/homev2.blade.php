@@ -37,9 +37,7 @@
     }
     .unidad-voltaje-disp.voltaje-alerta-blink {
         display: inline-block;
-        min-width: 1.1em;
         animation: blink-voltaje-valor 0.65s ease-in-out infinite;
-        font-weight: bold;
     }
 
     /* ── Tooltip bolt: se pinta en #pw-bolt-tooltip-floater (body, fixed) porque
