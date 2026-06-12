@@ -1042,6 +1042,22 @@ function applyMetaToLi(uid, meta, source) {
             }
         }
 
+        // tiempo_voltaje / voltaje_activo: parpadeo del valor voltaje por 24h (11,10,9,8)
+        if (source !== 'sse' && meta.voltaje_activo !== undefined) {
+            var _tvMeta  = (meta.tiempo_voltaje != null) ? parseFloat(meta.tiempo_voltaje) : 0;
+            var _tvuMeta = (meta.tiempo_voltaje_update != null) ? meta.tiempo_voltaje_update : null;
+
+            var _noTieneVoltaje = !li.currentU.tiempo_voltaje || !li.currentU.tiempo_voltaje_update;
+            var _debeApagarV    = !meta.voltaje_activo;
+            if (_noTieneVoltaje || _debeApagarV) {
+                li.currentU.tiempo_voltaje        = _tvMeta;
+                li.currentU.tiempo_voltaje_update = _tvuMeta;
+                li._tiempo_voltaje        = _tvMeta;
+                li._tiempo_voltaje_update = _tvuMeta ? new Date(_tvuMeta) : null;
+                li._is_voltaje_blink      = !!meta.voltaje_activo;
+            }
+        }
+
         updateUnidadInList(li.currentU);
     } catch (e) {
         console.warn('applyMetaToLi failed', e);
@@ -1225,22 +1241,39 @@ window.addEventListener('pageshow', function (ev) {
 });
 
 // Timer periódico: cada 60 s verifica si algún bolt con tiempo_power activo ya expiró
-// y detiene el parpadeo automáticamente.
+// y detiene el parpadeo automáticamente. Igual para tiempo_voltaje.
 setInterval(function () {
     var _lisBolt = document.querySelectorAll('#ul_unidades li');
     var _bi, _blen = _lisBolt.length;
     for (_bi = 0; _bi < _blen; _bi++) {
         var _li = _lisBolt[_bi];
-        if (!_li._is_power_blink) continue;
-        if (!_li._tiempo_power_update || !_li._tiempo_power) {
-            _li._is_power_blink = false;
-            continue;
+        if (_li._is_power_blink) {
+            if (!_li._tiempo_power_update || !_li._tiempo_power) {
+                _li._is_power_blink = false;
+                var _boltOff = _li.querySelector('.fa-bolt');
+                if (_boltOff) _boltOff.classList.remove('bolt-power-blink');
+            } else {
+                var _horasRest = _li._tiempo_power - ((Date.now() - new Date(_li._tiempo_power_update).getTime()) / 3600000);
+                if (_horasRest <= 0) {
+                    _li._is_power_blink = false;
+                    var _boltEl = _li.querySelector('.fa-bolt');
+                    if (_boltEl) _boltEl.classList.remove('bolt-power-blink');
+                }
+            }
         }
-        var _horasRest = _li._tiempo_power - ((Date.now() - new Date(_li._tiempo_power_update).getTime()) / 3600000);
-        if (_horasRest <= 0) {
-            _li._is_power_blink = false;
-            var _boltEl = _li.querySelector('.fa-bolt');
-            if (_boltEl) _boltEl.classList.remove('bolt-power-blink');
+        if (_li._is_voltaje_blink) {
+            if (!_li._tiempo_voltaje_update || !_li._tiempo_voltaje) {
+                _li._is_voltaje_blink = false;
+                var _voltOff = _li.querySelector('.unidad-voltaje-disp');
+                if (_voltOff) _voltOff.classList.remove('voltaje-alerta-blink');
+            } else {
+                var _horasRestV = _li._tiempo_voltaje - ((Date.now() - new Date(_li._tiempo_voltaje_update).getTime()) / 3600000);
+                if (_horasRestV <= 0) {
+                    _li._is_voltaje_blink = false;
+                    var _voltEl = _li.querySelector('.unidad-voltaje-disp');
+                    if (_voltEl) _voltEl.classList.remove('voltaje-alerta-blink');
+                }
+            }
         }
     }
 }, 60000);
@@ -1920,34 +1953,33 @@ function voltajeDisplayUnidad(voltajeRaw) {
     return String(voltajeRaw).substring(0, 2);
 }
 
-function voltajeDebeTitilar(voltajeRaw) {
-    var disp = voltajeDisplayUnidad(voltajeRaw);
-    if (!disp || disp === '--' || disp === ' - ') return false;
-    var v = parseInt(disp, 10);
-    if (isNaN(v)) return false;
-    return v === 11 || v === 10 || v === 9 || v === 8;
-}
-
-function htmlVoltajeUnidadLi(unidadId, voltajeDisp, voltajeRaw) {
+function htmlVoltajeUnidadLi(unidadId, voltajeDisp) {
     var uid = normalizarUnidadId(unidadId);
     if (!uid) return String(voltajeDisp);
-    var cls = 'unidad-voltaje-disp';
-    if (voltajeDebeTitilar(voltajeRaw != null ? voltajeRaw : voltajeDisp)) {
-        cls += ' voltaje-alerta-blink';
-    }
-    return '<span id="voltaje_' + uid + '" class="' + cls + '">' + voltajeDisp + '</span>';
+    return '<span id="voltaje_' + uid + '" class="unidad-voltaje-disp">' + voltajeDisp + '</span>';
 }
 
-function aplicarTitileoVoltajeUnidad(unidadId, voltajeRaw) {
+function aplicarTitileoVoltajeUnidad(unidadId, unidad) {
     var uid = normalizarUnidadId(unidadId);
     if (!uid) return;
+    var li = document.getElementById(uid);
     var el = document.getElementById('voltaje_' + uid);
-    if (!el) {
-        var rowLi = document.getElementById(uid);
-        if (rowLi) el = rowLi.querySelector('.unidad-voltaje-disp');
-    }
+    if (!el && li) el = li.querySelector('.unidad-voltaje-disp');
     if (!el) return;
-    if (voltajeDebeTitilar(voltajeRaw != null ? voltajeRaw : el.textContent)) {
+
+    var _tv  = (unidad && unidad.tiempo_voltaje != null) ? parseFloat(unidad.tiempo_voltaje) : (li && li._tiempo_voltaje || 0);
+    var _tvu = (unidad && unidad.tiempo_voltaje_update) || (li && li._tiempo_voltaje_update ? new Date(li._tiempo_voltaje_update).toISOString() : null);
+    var _voltajeActivo = false;
+    if (_tv > 0 && _tvu) {
+        var _horasRestV = _tv - ((Date.now() - new Date(_tvu).getTime()) / 3600000);
+        _voltajeActivo = _horasRestV > 0;
+    }
+    if (li) {
+        li._tiempo_voltaje        = _tv;
+        li._tiempo_voltaje_update = _tvu ? new Date(_tvu) : null;
+        li._is_voltaje_blink      = _voltajeActivo;
+    }
+    if (_voltajeActivo) {
         el.classList.add('voltaje-alerta-blink');
     } else {
         el.classList.remove('voltaje-alerta-blink');
@@ -2027,6 +2059,9 @@ function updateUnidadInList(unidad, opts) {
             // Preserve tiempo_power: igual que ruta_actual, se mantiene en currentU entre updates
             if ((unidad.tiempo_power == null || unidad.tiempo_power === 0) && prev.tiempo_power) unidad.tiempo_power = prev.tiempo_power;
             if (!unidad.tiempo_power_update && prev.tiempo_power_update) unidad.tiempo_power_update = prev.tiempo_power_update;
+            // tiempo_voltaje: solo preservar si el payload no trae el campo (GTFRI siempre envía 0 o 24)
+            if (unidad.tiempo_voltaje == null && prev.tiempo_voltaje != null) unidad.tiempo_voltaje = prev.tiempo_voltaje;
+            if (!unidad.tiempo_voltaje_update && prev.tiempo_voltaje_update) unidad.tiempo_voltaje_update = prev.tiempo_voltaje_update;
             if (unidad.voltaje == null && prev.voltaje != null) unidad.voltaje = prev.voltaje;
             if (!unidad.puerta_delanterapr && prev.puerta_delanterapr) unidad.puerta_delanterapr = prev.puerta_delanterapr;
             if (!unidad.fecha_puerta_abierta_delanterapr && prev.fecha_puerta_abierta_delanterapr) unidad.fecha_puerta_abierta_delanterapr = prev.fecha_puerta_abierta_delanterapr;
@@ -2348,6 +2383,28 @@ function updateUnidadInList(unidad, opts) {
             }
         }
     } catch (e) {}
+    // Evaluar voltaje-alerta-blink leyendo tiempo_voltaje desde currentU (igual que bolt-power-blink).
+    try {
+        var _tv  = (unidad.tiempo_voltaje != null) ? parseFloat(unidad.tiempo_voltaje) : (li._tiempo_voltaje || 0);
+        var _tvu = unidad.tiempo_voltaje_update || (li._tiempo_voltaje_update ? new Date(li._tiempo_voltaje_update).toISOString() : null);
+        var _voltajeActivo = false;
+        if (_tv > 0 && _tvu) {
+            var _horasRestV = _tv - ((Date.now() - new Date(_tvu).getTime()) / 3600000);
+            _voltajeActivo = _horasRestV > 0;
+        }
+        li._tiempo_voltaje        = _tv;
+        li._tiempo_voltaje_update = _tvu ? new Date(_tvu) : null;
+        li._is_voltaje_blink      = _voltajeActivo;
+        var voltajeEl = document.getElementById('voltaje_' + unidad._id);
+        if (!voltajeEl) voltajeEl = li.querySelector('.unidad-voltaje-disp');
+        if (voltajeEl) {
+            if (_voltajeActivo) {
+                voltajeEl.classList.add('voltaje-alerta-blink');
+            } else {
+                voltajeEl.classList.remove('voltaje-alerta-blink');
+            }
+        }
+    } catch (e) {}
     li.currentU = unidad;
     li.currentFechagps = fecha_gps_marker;
     li.currentFechagpsC = fecha_gps_marker_c;
@@ -2374,7 +2431,6 @@ function updateUnidadInList(unidad, opts) {
     };
 
     try { syncPuertaDelanteraprCronometroLi(li, unidad); } catch (e) {}
-    try { aplicarTitileoVoltajeUnidad(unidad._id, unidad.voltaje); } catch (e) {}
 
     if (!opts || !opts.skipContadores) {
         try { refreshContadoresEstadoUnidades(); } catch (e) {}
@@ -4532,6 +4588,30 @@ $("#velocimetro").myfunc({divFact:10});
                             if (_boltElI) _boltElI.classList.add('bolt-power-blink');
                         }
                     }
+                    // Estado inicial voltaje blink según tiempo_voltaje guardado en BD
+                    var _tv  = (currentU.tiempo_voltaje != null) ? parseFloat(currentU.tiempo_voltaje) : 0;
+                    var _tvuRaw = currentU.tiempo_voltaje_update;
+                    var _tvu = null;
+                    if (_tvuRaw) {
+                        try {
+                            if (typeof _tvuRaw === 'object' && _tvuRaw.$date) {
+                                _tvu = new Date(_tvuRaw.$date);
+                            } else {
+                                _tvu = new Date(_tvuRaw);
+                            }
+                            if (isNaN(_tvu.getTime())) _tvu = null;
+                        } catch(eTv) { _tvu = null; }
+                    }
+                    if (_tv > 0 && _tvu) {
+                        var _horasRestVI = _tv - ((Date.now() - _tvu.getTime()) / 3600000);
+                        if (_horasRestVI > 0) {
+                            currentLi._is_voltaje_blink        = true;
+                            currentLi._tiempo_voltaje          = _tv;
+                            currentLi._tiempo_voltaje_update   = _tvu;
+                            var _voltElI = currentLi.querySelector('.unidad-voltaje-disp');
+                            if (_voltElI) _voltElI.classList.add('voltaje-alerta-blink');
+                        }
+                    }
                 }
                 var _rowEstadoVista = document.getElementById(data.unidades[i]._id);
                 if (_rowEstadoVista) {
@@ -4541,7 +4621,7 @@ $("#velocimetro").myfunc({divFact:10});
                 if (_rowPuerta) {
                     try { syncPuertaDelanteraprCronometroLi(_rowPuerta, currentU); } catch (ePuerta) {}
                 }
-                try { aplicarTitileoVoltajeUnidad(data.unidades[i]._id, data.unidades[i].voltaje); } catch (eVolt) {}
+                try { aplicarTitileoVoltajeUnidad(data.unidades[i]._id, data.unidades[i]); } catch (eVolt) {}
             }
 
             $('#cantidad_no').text(unidad_no);

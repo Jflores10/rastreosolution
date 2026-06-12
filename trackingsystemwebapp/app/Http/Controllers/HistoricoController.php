@@ -357,9 +357,10 @@ class HistoricoController extends Controller
             // Batch fetch ignicionf from unidades (single query, only the field we need)
             $unidadesIgnicion = Unidad::whereIn('_id', $toFetch)
                 ->where('estado', 'A')
-                ->get(['_id', 'ignicionf', 'tiempo_power', 'tiempo_power_update', 'puerta_delanterapr', 'fecha_puerta_abierta_delanterapr', 'fecha_puerta_cerrada_delanterapr']);
+                ->get(['_id', 'ignicionf', 'tiempo_power', 'tiempo_power_update', 'tiempo_voltaje', 'tiempo_voltaje_update', 'puerta_delanterapr', 'fecha_puerta_abierta_delanterapr', 'fecha_puerta_cerrada_delanterapr']);
             $ignicionByUnidad = [];
             $tiempoPowerByUnidad = [];
+            $tiempoVoltajeByUnidad = [];
             $puertaDelanteraprByUnidad = [];
             foreach ($unidadesIgnicion as $u) {
                 $uidStr = (string)$u->_id;
@@ -367,6 +368,10 @@ class HistoricoController extends Controller
                 $tiempoPowerByUnidad[$uidStr] = [
                     'tiempo_power'        => $u->tiempo_power ?? 0,
                     'tiempo_power_update' => $u->tiempo_power_update ?? null,
+                ];
+                $tiempoVoltajeByUnidad[$uidStr] = [
+                    'tiempo_voltaje'        => $u->tiempo_voltaje ?? 0,
+                    'tiempo_voltaje_update' => $u->tiempo_voltaje_update ?? null,
                 ];
                 $puertaDelanteraprByUnidad[$uidStr] = [
                     'puerta_delanterapr'                => $u->puerta_delanterapr ?? null,
@@ -521,6 +526,30 @@ class HistoricoController extends Controller
                 $meta['tiempo_power']        = $tp;
                 $meta['tiempo_power_update'] = $tpu_iso;
                 $meta['bolt_activo']         = $bolt_activo;
+
+                // tiempo_voltaje: parpadeo del valor voltaje (11,10,9,8) por 24h
+                $tvData = $tiempoVoltajeByUnidad[$uid] ?? ['tiempo_voltaje' => 0, 'tiempo_voltaje_update' => null];
+                $tv  = (float)($tvData['tiempo_voltaje'] ?? 0);
+                $tvu = $tvData['tiempo_voltaje_update'];
+
+                $tvu_iso = null;
+                if ($tvu !== null) {
+                    try {
+                        $tvu_iso = $tvu->toDateTime()->format('Y-m-d\TH:i:s\Z');
+                    } catch (\Exception $e) { $tvu_iso = null; }
+                }
+
+                $voltaje_activo = false;
+                if ($tv > 0 && $tvu_iso !== null) {
+                    $nowTv = new DateTime('now', new \DateTimeZone('UTC'));
+                    $fechaUpdateTv = new DateTime($tvu_iso, new \DateTimeZone('UTC'));
+                    $horasTranscurridasTv = ($nowTv->getTimestamp() - $fechaUpdateTv->getTimestamp()) / 3600;
+                    $voltaje_activo = ($tv - $horasTranscurridasTv) > 0;
+                }
+
+                $meta['tiempo_voltaje']        = $tv;
+                $meta['tiempo_voltaje_update'] = $tvu_iso;
+                $meta['voltaje_activo']        = $voltaje_activo;
 
                 $puertaPrData = $puertaDelanteraprByUnidad[$uid] ?? [];
                 if (!empty($puertaPrData['puerta_delanterapr'])) {

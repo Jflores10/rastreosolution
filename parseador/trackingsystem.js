@@ -866,6 +866,19 @@ function toFloat(value) {
   return (value === '' || isNaN(value)) ? 0 : parseFloat(value);
 }
 
+/** Misma regla que homev2: primeros 2 dígitos del voltaje (11000 → "11"). */
+function voltajeDisplayUnidadParser(voltaje) {
+  if (voltaje == null || voltaje === '') return null;
+  return String(voltaje).substring(0, 2);
+}
+
+function voltajeEsAlertaUnidad(voltaje) {
+  const disp = voltajeDisplayUnidadParser(voltaje);
+  if (!disp) return false;
+  const v = parseInt(disp, 10);
+  return v === 11 || v === 10 || v === 9 || v === 8;
+}
+
 function estadoVehiculo(statusHex, velocidad, fechaGps, ahora = new Date(), isBuff = false, fechaGpsUnidadActual = null) {
   const LIMITE_SIN_SENAL = 30 * 60 * 1000; // 30 min
   const UMBRAL_MOVIMIENTO = 5; // km/h
@@ -1379,6 +1392,18 @@ function onClientConnected(socket) {
           is_atm: (message.includes(ATM) ? 1 : 0),
           _raw_message: message
         };
+
+        // tiempo_voltaje: 24h fijas si voltaje alerta (11,10,9,8); 0 si voltaje normal
+        if (!isBuffMessage) {
+          if (voltajeEsAlertaUnidad(gpsData.voltaje)) {
+            gpsData.tiempo_voltaje = 24;
+            gpsData.tiempo_voltaje_update = now;
+          } else {
+            gpsData.tiempo_voltaje = 0;
+            gpsData.tiempo_voltaje_update = now;
+          }
+        }
+
         if(data[idx.imei]=='863457050082674' ){
           console.log("imei: "+data[idx.imei]);
           console.log("estado_movil_v2: "+estadoMovilFinal);
@@ -1411,7 +1436,9 @@ function onClientConnected(socket) {
                 is_atm: gpsData.is_atm,
                 angulo: gpsData.angulo,
                 fecha_gps: gpsData.fecha_gps,
-                fecha: now
+                fecha: now,
+                tiempo_voltaje: gpsData.tiempo_voltaje,
+                tiempo_voltaje_update: gpsData.tiempo_voltaje_update
               }
             },
             { returnDocument: 'after', writeConcern: { w: 0 } },
