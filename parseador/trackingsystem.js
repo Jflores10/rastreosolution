@@ -2775,6 +2775,12 @@ function onClientConnected(socket) {
             const anteriorSensor2 = toInteger(document.contador_total_sensor_2);
             const anteriorSensor3 = toInteger(document.contador_total_sensor_3);
             if (saltoImposible(anteriorSensor1, count_sensor_1)) {
+              console.log(
+                "DESCARTADO",
+                anteriorSensor1,
+                count_sensor_1
+            );
+            
               return;
             }
             if (saltoImposible(anteriorSensor2, count_sensor_2)) {
