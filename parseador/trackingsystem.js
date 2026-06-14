@@ -2673,7 +2673,6 @@ function onClientConnected(socket) {
       // ================== GTDTT (contadores) ==================
       else if (message.includes(GTDTT) && !message.includes(ACK)) {
         const isBuffMessage = message.includes(BUFF);
-        // Mantengo tu lógica, solo w:0 en writes (ya ayuda bastante)
         let imei = 2;
         let count = 8;
         let sentTime = 9;
@@ -2681,16 +2680,15 @@ function onClientConnected(socket) {
         let data = message.split(',');
 
         const eventType = toInteger(data[type]);
-        // IGNORAR evento 17
-        // Este evento viene invertido y genera inconsistencias
+        // IGNORAR evento 17: viene invertido y genera inconsistencias
         if (eventType == 17) {
           return;
         }
+
         // Techo 7 dígitos y módulo de rollover en este mensaje (distinto a GTDAT 65535/999999).
         const MAX_COUNT = 9999999;
         const MAX_INCREMENTO = 100;
 
-        
         const lecturaGtdttInvalida = function (v) {
           if (!Number.isFinite(v) || v < 0) return true;
           if (v > MAX_COUNT) return true;
@@ -2702,25 +2700,64 @@ function onClientConnected(socket) {
           if (d >= MAX_COUNT) return true;
           return false;
         };
-        const saltoImposible = function (prev, current) {
-          if (!Number.isFinite(prev) || prev < 0) return false;
+
+        /**
+         * Reinicio manual desde panel (resetConteo): total, inicial y diario quedan en 0.
+         * También cubre unidad/sensor sin baseline (inicial null) con total en 0.
+         */
+        const reinicioManualSensor = function (total, inicial, diario) {
+          const t = toInteger(total);
+          const d = toInteger(diario);
+          if (t !== 0 || d !== 0) return false;
+          if (inicial == null || inicial === '') return true;
+          return toInteger(inicial) === 0;
+        };
+
+        /**
+         * Salto imposible entre dos lecturas consecutivas del total GPS.
+         * Se omite tras reinicio manual o cuando el total anterior es 0 (primera lectura).
+         * Si current < prev se interpreta como rollover/reinicio del equipo.
+         */
+        const saltoImposible = function (prev, current, esReinicioManual) {
+          if (esReinicioManual) return false;
+          if (!Number.isFinite(prev) || prev <= 0) return false;
           if (!Number.isFinite(current) || current < 0) return true;
-          // Si disminuye, se interpreta como rollover/reinicio y se permite.
           if (current < prev) return false;
           return (current - prev) > MAX_INCREMENTO;
+        };
+
+        /** Calcula contador_inicial y contador_diario para un sensor GTDTT. */
+        const calcularContadoresSensorGtdtt = function (countActual, contadorInicialBd, esReinicioManual) {
+          let contador_inicial = contadorInicialBd;
+          let contador_diario = 0;
+
+          if (esReinicioManual) {
+            return { contador_inicial: countActual, contador_diario: 0 };
+          }
+
+          if (contador_inicial != null && contador_inicial !== '') {
+            if (toInteger(contador_inicial) > 0) {
+              if (countActual < toInteger(contador_inicial)) {
+                // Rollover o reinicio del equipo: total GPS menor que baseline del día.
+                contador_inicial = countActual;
+                contador_diario = 0;
+              } else {
+                contador_diario = countActual - toInteger(contador_inicial);
+                if (contador_diario < 0) contador_diario = countActual + MAX_COUNT;
+              }
+            } else {
+              contador_inicial = countActual;
+            }
+          } else {
+            contador_inicial = countActual;
+          }
+
+          return { contador_inicial, contador_diario };
         };
 
         dbTrackingSystem.collection('unidads').findOne({ imei: data[imei], estado: 'A' }, function (err, document) {
           if (err) console.log(err);
           else if (document) {
-            let contador_diario = 0;
-            let contador_diario_sensor_2 = 0;
-            let contador_diario_sensor_3 = 0;
-
-            let contador_inicial = document.contador_inicial;
-            let contador_inicial_sensor_2 = document.contador_inicial_sensor_2;
-            let contador_inicial_sensor_3 = document.contador_inicial_sensor_3;
-
             let count_sensor_1 = 0;
             let count_sensor_2 = 0;
             let count_sensor_3 = 0;
@@ -2768,67 +2805,42 @@ function onClientConnected(socket) {
             }
 
             if (lecturaGtdttInvalida(count_sensor_1) || lecturaGtdttInvalida(count_sensor_2) || lecturaGtdttInvalida(count_sensor_3)) {
-             
               return;
             }
+
+            const reinicioS1 = reinicioManualSensor(document.contador_total, document.contador_inicial, document.contador_diario);
+            const reinicioS2 = reinicioManualSensor(document.contador_total_sensor_2, document.contador_inicial_sensor_2, document.contador_diario_sensor_2);
+            const reinicioS3 = reinicioManualSensor(document.contador_total_sensor_3, document.contador_inicial_sensor_3, document.contador_diario_sensor_3);
+
             const anteriorSensor1 = toInteger(document.contador_total);
             const anteriorSensor2 = toInteger(document.contador_total_sensor_2);
             const anteriorSensor3 = toInteger(document.contador_total_sensor_3);
-            if (saltoImposible(anteriorSensor1, count_sensor_1)) {
-              console.log(
-                "DESCARTADO",
-                anteriorSensor1,
-                count_sensor_1
-            );
-            
+
+            if (saltoImposible(anteriorSensor1, count_sensor_1, reinicioS1)) {
+              if (debug) console.log('GTDTT descartado sensor1', anteriorSensor1, '->', count_sensor_1);
               return;
             }
-            if (saltoImposible(anteriorSensor2, count_sensor_2)) {
+            if (saltoImposible(anteriorSensor2, count_sensor_2, reinicioS2)) {
+              if (debug) console.log('GTDTT descartado sensor2', anteriorSensor2, '->', count_sensor_2);
               return;
             }
-            if (saltoImposible(anteriorSensor3, count_sensor_3)) {
+            if (saltoImposible(anteriorSensor3, count_sensor_3, reinicioS3)) {
+              if (debug) console.log('GTDTT descartado sensor3', anteriorSensor3, '->', count_sensor_3);
               return;
             }
 
-            if (contador_inicial != null) {
-              if (contador_inicial > 0) {
-                if (count_sensor_1 < contador_inicial) {
-                  // Total GPS menor que inicial en BD (reinicio del equipo o inicial corrupto).
-                  contador_inicial = count_sensor_1;
-                  contador_diario = 0;
-                } else {
-                  contador_diario = count_sensor_1 - contador_inicial;
-                  if (contador_diario < 0) contador_diario = count_sensor_1 + MAX_COUNT;
-                }
-              } else contador_inicial = count_sensor_1;
-            } else contador_inicial = count_sensor_1;
+            const r1 = calcularContadoresSensorGtdtt(count_sensor_1, document.contador_inicial, reinicioS1);
+            const r2 = calcularContadoresSensorGtdtt(count_sensor_2, document.contador_inicial_sensor_2, reinicioS2);
+            const r3 = calcularContadoresSensorGtdtt(count_sensor_3, document.contador_inicial_sensor_3, reinicioS3);
 
-            if (contador_inicial_sensor_2 != null) {
-              if (contador_inicial_sensor_2 > 0) {
-                if (count_sensor_2 < contador_inicial_sensor_2) {
-                  contador_inicial_sensor_2 = count_sensor_2;
-                  contador_diario_sensor_2 = 0;
-                } else {
-                  contador_diario_sensor_2 = count_sensor_2 - contador_inicial_sensor_2;
-                  if (contador_diario_sensor_2 < 0) contador_diario_sensor_2 = count_sensor_2 + MAX_COUNT;
-                }
-              } else contador_inicial_sensor_2 = count_sensor_2;
-            } else contador_inicial_sensor_2 = count_sensor_2;
-
-            if (contador_inicial_sensor_3 != null) {
-              if (contador_inicial_sensor_3 > 0) {
-                if (count_sensor_3 < contador_inicial_sensor_3) {
-                  contador_inicial_sensor_3 = count_sensor_3;
-                  contador_diario_sensor_3 = 0;
-                } else {
-                  contador_diario_sensor_3 = count_sensor_3 - contador_inicial_sensor_3;
-                  if (contador_diario_sensor_3 < 0) contador_diario_sensor_3 = count_sensor_3 + MAX_COUNT;
-                }
-              } else contador_inicial_sensor_3 = count_sensor_3;
-            } else contador_inicial_sensor_3 = count_sensor_3;
+            const contador_inicial = r1.contador_inicial;
+            const contador_diario = r1.contador_diario;
+            const contador_inicial_sensor_2 = r2.contador_inicial;
+            const contador_diario_sensor_2 = r2.contador_diario;
+            const contador_inicial_sensor_3 = r3.contador_inicial;
+            const contador_diario_sensor_3 = r3.contador_diario;
 
             if (diarioGtdttFueraDeRango(contador_diario) || diarioGtdttFueraDeRango(contador_diario_sensor_2) || diarioGtdttFueraDeRango(contador_diario_sensor_3)) {
-              
               return;
             }
 
@@ -2847,7 +2859,6 @@ function onClientConnected(socket) {
                   is_atm: (message.includes(ATM) ? 1 : 0)
                 }
               }, { writeConcern: { w: 0 } });
-
             }
 
             dbTrackingSystem.collection('recorridos').insertOne({
