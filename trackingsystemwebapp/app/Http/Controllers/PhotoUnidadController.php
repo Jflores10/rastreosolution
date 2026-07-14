@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Cooperativa;
 use App\PhotoUnidad;
-use App\Services\LocationIqReverseGeocodeService;
 use App\Unidad;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -25,44 +24,6 @@ class PhotoUnidadController extends Controller
         }
 
         return $query;
-    }
-
-    /**
-     * Dirección por foto (id => texto) vía LocationIQ + caché geocache.
-     *
-     * @param \Illuminate\Contracts\Pagination\LengthAwarePaginator|\Illuminate\Support\Collection $items
-     * @param LocationIqReverseGeocodeService $geoService
-     * @return array
-     */
-    private function ubicacionesPorFotos($items, LocationIqReverseGeocodeService $geoService)
-    {
-        $direccionPorCoordenadas = array();
-        $ubicacionesPorId = array();
-
-        foreach ($items as $row) {
-            $id = (string) $row->getKey();
-            $latitud = isset($row->latitud) ? $row->latitud : null;
-            $longitud = isset($row->longitud) ? $row->longitud : null;
-            $direccion = null;
-
-            if ($latitud !== null && $longitud !== null && $latitud !== '' && $longitud !== ''
-                && is_numeric($latitud) && is_numeric($longitud)) {
-                $latF = (float) $latitud;
-                $lngF = (float) $longitud;
-                $rounded = $geoService->roundCoordinates($latF, $lngF);
-                if ($rounded !== null) {
-                    $coordCacheKey = $rounded[0] . ',' . $rounded[1];
-                    if (!array_key_exists($coordCacheKey, $direccionPorCoordenadas)) {
-                        $direccionPorCoordenadas[$coordCacheKey] = $geoService->reverseDisplayName($latF, $lngF);
-                    }
-                    $direccion = $direccionPorCoordenadas[$coordCacheKey];
-                }
-            }
-
-            $ubicacionesPorId[$id] = $direccion;
-        }
-
-        return $ubicacionesPorId;
     }
 
     public function __construct()
@@ -197,9 +158,6 @@ class PhotoUnidadController extends Controller
             }
         }
 
-        $geoService = app(LocationIqReverseGeocodeService::class);
-        $ubicacionesPorId = $this->ubicacionesPorFotos($items, $geoService);
-
         return view('panel.fotos.index', array(
             'items' => $items,
             'cooperativas' => $cooperativas,
@@ -209,7 +167,6 @@ class PhotoUnidadController extends Controller
             'desde' => $desde,
             'hasta' => $hasta,
             'unidades_por_imei' => $unidadesPorImei,
-            'ubicaciones_por_id' => $ubicacionesPorId,
             'es_distribuidor' => $esDistribuidor,
         ));
     }

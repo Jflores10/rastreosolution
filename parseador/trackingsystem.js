@@ -475,11 +475,50 @@ function gtpHdTryPersistPhoto(assemblyKey, opts) {
         frames_esperados: stNow.totalFrames || null,
         ensamblaje_parcial: !isComplete
       };
-      dbTrackingSystem.collection('photos_unidad').updateOne(
-        { imei: imeiValue, tipo: GTPHD, photo_time: photoTimeValue },
-        { $set: photoDoc },
-        { upsert: true, writeConcern: { w: 0 } }
-      );
+      const photoFilter = { imei: imeiValue, tipo: GTPHD, photo_time: photoTimeValue };
+      const photosCol = dbTrackingSystem.collection('photos_unidad');
+
+      // Día local America/Guayaquil (UTC-5, sin DST): num_img reinicia cada día por IMEI
+      const mGyq = moment().utcOffset(-5);
+      const fechaBase = mGyq.format('YYYY-MM-DD');
+      const hoyDesde = moment.parseZone(fechaBase + 'T00:00:00-05:00').toDate();
+      const hoyHasta = moment.parseZone(fechaBase + 'T23:59:59.999-05:00').toDate();
+
+      photosCol.findOne(photoFilter, function (errFind, existing) {
+        function upsertPhoto(numImg) {
+          const setDoc = Object.assign({}, photoDoc);
+          if (numImg != null && numImg > 0) setDoc.num_img = numImg;
+          photosCol.updateOne(
+            photoFilter,
+            { $set: setDoc },
+            { upsert: true, writeConcern: { w: 0 } }
+          );
+        }
+
+        // Misma foto (frames parciales / completar): conservar num_img ya asignado
+        if (!errFind && existing && existing.num_img != null && toInteger(existing.num_img) > 0) {
+          upsertPhoto(toInteger(existing.num_img));
+          return;
+        }
+
+        // Nueva imagen del día: max(num_img) del IMEI hoy + 1 (al día siguiente vuelve a 1)
+        photosCol
+          .find({
+            imei: imeiValue,
+            fecha: { $gte: hoyDesde, $lte: hoyHasta },
+            num_img: { $exists: true, $gt: 0 }
+          })
+          .project({ num_img: 1 })
+          .sort({ num_img: -1 })
+          .limit(1)
+          .toArray(function (errMax, docs) {
+            let maxNum = 0;
+            if (!errMax && Array.isArray(docs) && docs.length > 0 && docs[0].num_img != null) {
+              maxNum = toInteger(docs[0].num_img);
+            }
+            upsertPhoto(maxNum + 1);
+          });
+      });
     }
 
     console.log((isComplete ? '📸 Imagen guardada:' : '📸 Imagen parcial guardada:'), storagePath,
@@ -2234,8 +2273,10 @@ function onClientConnected(socket) {
 
               let fechaPuertaAbiertaPr = null;
               let fechaPuertaCerradaPr = null;
+              let contPdAbierta = toInteger(document.contpdabierta) || 0;
+              const esPuertaAbiertaPr = (puerta === 'PUERTA ABIERTA (DELANTERAPR)');
 
-              if (puerta === 'PUERTA ABIERTA (DELANTERAPR)') {
+              if (esPuertaAbiertaPr) {
                 fechaPuertaAbiertaPr = fecha_gps;
               } else if (document.fecha_puerta_abierta_delanterapr !== undefined && document.fecha_puerta_abierta_delanterapr !== null) {
                 fechaPuertaAbiertaPr = document.fecha_puerta_abierta_delanterapr;
@@ -2248,18 +2289,23 @@ function onClientConnected(socket) {
               }
 
               if (!isBuffMessage) {
+                const updatePuertaPr = {
+                  $set: {
+                    puerta_delanterapr: puerta,
+                    alerta_puerta_message_delanterapr: puerta,
+                    alerta_puerta_fecha_delanterapr: fecha_gps,
+                    fecha_puerta_abierta_delanterapr: fechaPuertaAbiertaPr,
+                    fecha_puerta_cerrada_delanterapr: fechaPuertaCerradaPr,
+                    is_atm: 0
+                  }
+                };
+                if (esPuertaAbiertaPr) {
+                  updatePuertaPr.$inc = { contpdabierta: 1 };
+                  contPdAbierta = contPdAbierta + 1;
+                }
                 dbTrackingSystem.collection('unidads').updateOne(
                   { _id: document._id },
-                  {
-                    $set: {
-                      puerta_delanterapr: puerta,
-                      alerta_puerta_message_delanterapr: puerta,
-                      alerta_puerta_fecha_delanterapr: fecha_gps,
-                      fecha_puerta_abierta_delanterapr: fechaPuertaAbiertaPr,
-                      fecha_puerta_cerrada_delanterapr: fechaPuertaCerradaPr,
-                      is_atm: 0
-                    }
-                  },
+                  updatePuertaPr,
                   { writeConcern: { w: 0 } }
                 );
               }
@@ -2271,6 +2317,7 @@ function onClientConnected(socket) {
                 puerta: 'DELANTERAPR',
                 estado: puerta,
                 fecha: fecha_gps,
+                contpdabierta: contPdAbierta,
                 cooperativa_id: document.cooperativa_id
                   ? String(document.cooperativa_id).trim()
                   : null,
@@ -2804,47 +2851,49 @@ function onClientConnected(socket) {
               count_sensor_3 = toInteger(s3);
             }
 
-            if (lecturaGtdttInvalida(count_sensor_1) || lecturaGtdttInvalida(count_sensor_2) || lecturaGtdttInvalida(count_sensor_3)) {
-              return;
-            }
-
-            const reinicioS1 = reinicioManualSensor(document.contador_total, document.contador_inicial, document.contador_diario);
-            const reinicioS2 = reinicioManualSensor(document.contador_total_sensor_2, document.contador_inicial_sensor_2, document.contador_diario_sensor_2);
-            const reinicioS3 = reinicioManualSensor(document.contador_total_sensor_3, document.contador_inicial_sensor_3, document.contador_diario_sensor_3);
-
-            const anteriorSensor1 = toInteger(document.contador_total);
-            const anteriorSensor2 = toInteger(document.contador_total_sensor_2);
-            const anteriorSensor3 = toInteger(document.contador_total_sensor_3);
-
-            if (saltoImposible(anteriorSensor1, count_sensor_1, reinicioS1)) {
-              if (debug) console.log('GTDTT descartado sensor1', anteriorSensor1, '->', count_sensor_1);
-              return;
-            }
-            if (saltoImposible(anteriorSensor2, count_sensor_2, reinicioS2)) {
-              if (debug) console.log('GTDTT descartado sensor2', anteriorSensor2, '->', count_sensor_2);
-              return;
-            }
-            if (saltoImposible(anteriorSensor3, count_sensor_3, reinicioS3)) {
-              if (debug) console.log('GTDTT descartado sensor3', anteriorSensor3, '->', count_sensor_3);
-              return;
-            }
-
-            const r1 = calcularContadoresSensorGtdtt(count_sensor_1, document.contador_inicial, reinicioS1);
-            const r2 = calcularContadoresSensorGtdtt(count_sensor_2, document.contador_inicial_sensor_2, reinicioS2);
-            const r3 = calcularContadoresSensorGtdtt(count_sensor_3, document.contador_inicial_sensor_3, reinicioS3);
-
-            const contador_inicial = r1.contador_inicial;
-            const contador_diario = r1.contador_diario;
-            const contador_inicial_sensor_2 = r2.contador_inicial;
-            const contador_diario_sensor_2 = r2.contador_diario;
-            const contador_inicial_sensor_3 = r3.contador_inicial;
-            const contador_diario_sensor_3 = r3.contador_diario;
-
-            if (diarioGtdttFueraDeRango(contador_diario) || diarioGtdttFueraDeRango(contador_diario_sensor_2) || diarioGtdttFueraDeRango(contador_diario_sensor_3)) {
-              return;
-            }
 
             if (!isBuffMessage) {
+
+              if (lecturaGtdttInvalida(count_sensor_1) || lecturaGtdttInvalida(count_sensor_2) || lecturaGtdttInvalida(count_sensor_3)) {
+                return;
+              }
+
+              const reinicioS1 = reinicioManualSensor(document.contador_total, document.contador_inicial, document.contador_diario);
+              const reinicioS2 = reinicioManualSensor(document.contador_total_sensor_2, document.contador_inicial_sensor_2, document.contador_diario_sensor_2);
+              const reinicioS3 = reinicioManualSensor(document.contador_total_sensor_3, document.contador_inicial_sensor_3, document.contador_diario_sensor_3);
+
+              const anteriorSensor1 = toInteger(document.contador_total);
+              const anteriorSensor2 = toInteger(document.contador_total_sensor_2);
+              const anteriorSensor3 = toInteger(document.contador_total_sensor_3);
+
+              if (saltoImposible(anteriorSensor1, count_sensor_1, reinicioS1)) {
+                if (debug) console.log('GTDTT descartado sensor1', anteriorSensor1, '->', count_sensor_1);
+                return;
+              }
+              if (saltoImposible(anteriorSensor2, count_sensor_2, reinicioS2)) {
+                if (debug) console.log('GTDTT descartado sensor2', anteriorSensor2, '->', count_sensor_2);
+                return;
+              }
+              if (saltoImposible(anteriorSensor3, count_sensor_3, reinicioS3)) {
+                if (debug) console.log('GTDTT descartado sensor3', anteriorSensor3, '->', count_sensor_3);
+                return;
+              }
+
+              const r1 = calcularContadoresSensorGtdtt(count_sensor_1, document.contador_inicial, reinicioS1);
+              const r2 = calcularContadoresSensorGtdtt(count_sensor_2, document.contador_inicial_sensor_2, reinicioS2);
+              const r3 = calcularContadoresSensorGtdtt(count_sensor_3, document.contador_inicial_sensor_3, reinicioS3);
+
+              const contador_inicial = r1.contador_inicial;
+              const contador_diario = r1.contador_diario;
+              const contador_inicial_sensor_2 = r2.contador_inicial;
+              const contador_diario_sensor_2 = r2.contador_diario;
+              const contador_inicial_sensor_3 = r3.contador_inicial;
+              const contador_diario_sensor_3 = r3.contador_diario;
+
+              if (diarioGtdttFueraDeRango(contador_diario) || diarioGtdttFueraDeRango(contador_diario_sensor_2) || diarioGtdttFueraDeRango(contador_diario_sensor_3)) {
+                return;
+              }
+
               dbTrackingSystem.collection('unidads').updateOne({ _id: document._id }, {
                 $set: {
                   contador_total: count_sensor_1,

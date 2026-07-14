@@ -357,7 +357,7 @@ class HistoricoController extends Controller
             // Batch fetch ignicionf from unidades (single query, only the field we need)
             $unidadesIgnicion = Unidad::whereIn('_id', $toFetch)
                 ->where('estado', 'A')
-                ->get(['_id', 'ignicionf', 'tiempo_power', 'tiempo_power_update', 'tiempo_voltaje', 'tiempo_voltaje_update', 'puerta_delanterapr', 'fecha_puerta_abierta_delanterapr', 'fecha_puerta_cerrada_delanterapr']);
+                ->get(['_id', 'ignicionf', 'tiempo_power', 'tiempo_power_update', 'tiempo_voltaje', 'tiempo_voltaje_update', 'puerta_delanterapr', 'fecha_puerta_abierta_delanterapr', 'fecha_puerta_cerrada_delanterapr', 'contpdabierta']);
             $ignicionByUnidad = [];
             $tiempoPowerByUnidad = [];
             $tiempoVoltajeByUnidad = [];
@@ -377,6 +377,7 @@ class HistoricoController extends Controller
                     'puerta_delanterapr'                => $u->puerta_delanterapr ?? null,
                     'fecha_puerta_abierta_delanterapr'  => $u->fecha_puerta_abierta_delanterapr ?? null,
                     'fecha_puerta_cerrada_delanterapr'  => $u->fecha_puerta_cerrada_delanterapr ?? null,
+                    'contpdabierta'                     => isset($u->contpdabierta) ? (int)$u->contpdabierta : 0,
                 ];
             }
 
@@ -565,6 +566,7 @@ class HistoricoController extends Controller
                         }
                     }
                 }
+                $meta['contpdabierta'] = isset($puertaPrData['contpdabierta']) ? (int)$puertaPrData['contpdabierta'] : 0;
 
                 $listaVueltas = isset($vueltasPorUnidad[(string) $uid]) ? $vueltasPorUnidad[(string) $uid] : array();
                 $meta['numvuelta'] = $this->numVueltaDesdeDespachosOrdenados($listaVueltas);

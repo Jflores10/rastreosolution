@@ -12,11 +12,12 @@ class Unidad extends Moloquent
         'creador_id', 'modificador_id','contador_diario', 'contador_total', 'velocidad_actual','imei',
         'estado_movil','voltaje', 'bateria', 'atm', 'velocidad','control_velocidad','contador_inicial',
         'alerta_cortetubo','alerta_fecha_cortetubo','climatizada','rampa','mileage','sentido','vigilante','tipo_in1',
-        'contador_img'
+        'contador_img', 'contpdabierta'
     ];
 
     protected $attributes = array(
         'contador_img' => 0,
+        'contpdabierta' => 0,
     );
 
     public function scopePermitida($query, $cooperativa = null) {

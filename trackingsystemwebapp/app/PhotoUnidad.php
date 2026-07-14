@@ -21,6 +21,7 @@ class PhotoUnidad extends Model
         'js',
         'marcada',
         'fecha_marca',
+        'num_img',
     );
 
     protected $attributes = array(

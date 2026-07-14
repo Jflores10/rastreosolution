@@ -26,11 +26,6 @@
         border-radius: 4px;
         background: #fff;
     }
-    .fotos-ubicacion {
-        max-width: 280px;
-        word-wrap: break-word;
-        white-space: normal;
-    }
 </style>
 @endsection
 
@@ -117,10 +112,10 @@
                             <table class="table table-bordered table-hover table-striped fotos-table">
                                 <thead>
                                     <tr>
+                                        <th>#</th>
                                         <th>Unidad</th>
                                         <th>Fecha registro</th>
                                         <th>Fecha GPS</th>
-                                        <th>Ubicación</th>
                                         <th>Imagen</th>
                                         @if (!empty($es_distribuidor))
                                             <th>Marcada</th>
@@ -139,24 +134,12 @@
                                                     $fechaGpsVista = (string) $row->fecha_gps;
                                                 }
                                             }
-                                            $fotoId = (string) $row->getKey();
-                                            $ubicacionTexto = isset($ubicaciones_por_id[$fotoId]) ? trim((string) $ubicaciones_por_id[$fotoId]) : '';
-                                            $coordsTitulo = '';
-                                            if ($row->latitud !== null && $row->latitud !== '' && $row->longitud !== null && $row->longitud !== '') {
-                                                $coordsTitulo = (string) $row->latitud . ', ' . (string) $row->longitud;
-                                            }
                                         @endphp
                                         <tr>
+                                            <td class="text-center">{{ !empty($row->num_img) ? (int) $row->num_img : '—' }}</td>
                                             <td>{{ $unidadTexto }}</td>
                                             <td>{{ $row->fecha }}</td>
                                             <td>{{ $fechaGpsVista }}</td>
-                                            <td class="fotos-ubicacion" @if ($coordsTitulo !== '') title="{{ $coordsTitulo }}" @endif>
-                                                @if ($ubicacionTexto !== '')
-                                                    {{ $ubicacionTexto }}
-                                                @else
-                                                    <span class="text-muted">Sin ubicación</span>
-                                                @endif
-                                            </td>
                                             <td>
                                                 @if (!empty($row->imagen))
                                                     <a
