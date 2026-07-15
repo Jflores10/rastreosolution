@@ -15,7 +15,7 @@ use App\Console\Commands\ListenGps;
 
 use App\Console\Commands\UpdateGPSAddress;
 use App\Console\Commands\WriteLogSockets;
-use App\Commands\UpdateUnidadCommand;
+//use App\Commands\UpdateUnidadCommand;
 
 //use App\Console\Commands\SyncConducDespaATMCommand;
 //use App\Console\Commands\ImportRutaPocATMCommand;
@@ -32,7 +32,7 @@ class Kernel extends ConsoleKernel
         WriteLogSockets::class,
         UpdateGPSAddress::class,
         FinalizarDespachosCommand::class,
-        UpdateUnidadCommand::class,
+        //UpdateUnidadCommand::class,
         ClearTramasLogsCommand::class,
         ResetContPdAbiertaCommand::class,
         SyncBloques::class,
@@ -51,7 +51,7 @@ class Kernel extends ConsoleKernel
     {
         //$schedule->command('command:atm')->withoutOverlapping();
         $schedule->command('ts:finalizar-despachos')->everyFiveMinutes()->withoutOverlapping();
-        $schedule->command('ts:update-unidad-estado-ns')->everyFiveMinutes()->withoutOverlapping();
+        //$schedule->command('ts:update-unidad-estado-ns')->everyFiveMinutes()->withoutOverlapping();
         $schedule->command('ts:reset-cont-pd-abierta')->dailyAt('04:00')->withoutOverlapping();
         //$schedule->command('ts:update-gps-address')->hourly()->withoutOverlapping();
         //$schedule->command('ts:clear-tramas-logs')->daily()->withoutOverlapping();
