@@ -2288,24 +2288,28 @@ function onClientConnected(socket) {
                 fechaPuertaCerradaPr = document.fecha_puerta_cerrada_delanterapr;
               }
 
-              if (!isBuffMessage) {
-                const updatePuertaPr = {
-                  $set: {
-                    puerta_delanterapr: puerta,
-                    alerta_puerta_message_delanterapr: puerta,
-                    alerta_puerta_fecha_delanterapr: fecha_gps,
-                    fecha_puerta_abierta_delanterapr: fechaPuertaAbiertaPr,
-                    fecha_puerta_cerrada_delanterapr: fechaPuertaCerradaPr,
-                    is_atm: 0
-                  }
-                };
-                if (esPuertaAbiertaPr) {
-                  updatePuertaPr.$inc = { contpdabierta: 1 };
-                  contPdAbierta = contPdAbierta + 1;
-                }
+              if (esPuertaAbiertaPr) {
+                contPdAbierta = contPdAbierta + 1;
                 dbTrackingSystem.collection('unidads').updateOne(
                   { _id: document._id },
-                  updatePuertaPr,
+                  { $inc: { contpdabierta: 1 } },
+                  { writeConcern: { w: 0 } }
+                );
+              }
+
+              if (!isBuffMessage) {
+                dbTrackingSystem.collection('unidads').updateOne(
+                  { _id: document._id },
+                  {
+                    $set: {
+                      puerta_delanterapr: puerta,
+                      alerta_puerta_message_delanterapr: puerta,
+                      alerta_puerta_fecha_delanterapr: fecha_gps,
+                      fecha_puerta_abierta_delanterapr: fechaPuertaAbiertaPr,
+                      fecha_puerta_cerrada_delanterapr: fechaPuertaCerradaPr,
+                      is_atm: 0
+                    }
+                  },
                   { writeConcern: { w: 0 } }
                 );
               }
