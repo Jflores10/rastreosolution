@@ -194,6 +194,8 @@ const PHOTO_FRAME_GAP_ESTIMATE_MS = 4000;
 /** Escalado por totalFrames del dispositivo (20, 120, 200, etc.). */
 const PHOTO_ASSEMBLY_MS_PER_FRAME = 6000;
 const PHOTO_PARTIAL_IDLE_MS_PER_FRAME = 400;
+/** Tope de espera en silencio antes de construir parcial (aunque falten frames, p.ej. 190/200). */
+const PHOTO_PARTIAL_IDLE_MAX_MS = 90000;
 const PHOTO_LOCATION_CACHE_MAX_AGE_MS = 120000 + (300 * PHOTO_ASSEMBLY_MS_PER_FRAME);
 const photoAssemblies = new Map();
 const lastPhotoLocationByImei = new Map();
@@ -206,29 +208,24 @@ function gtpHdTotalFrames(st) {
 function gtpHdPartialIdleMs(st) {
   const total = gtpHdTotalFrames(st);
   const avgGap = Math.max(PHOTO_FRAME_GAP_ESTIMATE_MS, toInteger(st && st.avgFrameGapMs) || PHOTO_FRAME_GAP_ESTIMATE_MS);
-  return Math.max(PHOTO_PARTIAL_IDLE_MIN_MS, Math.round(avgGap * 5), PHOTO_PARTIAL_IDLE_MIN_MS + (total * PHOTO_PARTIAL_IDLE_MS_PER_FRAME));
+  // 200 frames no deben exigir minutos de silencio: cap en PHOTO_PARTIAL_IDLE_MAX_MS
+  const scaled = PHOTO_PARTIAL_IDLE_MIN_MS + Math.min(total, 100) * PHOTO_PARTIAL_IDLE_MS_PER_FRAME;
+  return Math.min(
+    PHOTO_PARTIAL_IDLE_MAX_MS,
+    Math.max(PHOTO_PARTIAL_IDLE_MIN_MS, Math.round(avgGap * 5), scaled)
+  );
 }
 
 function gtpHdMsSinceLastFrame(st) {
   return Date.now() - (st.lastFrameAt || st.updatedAt || Date.now());
 }
 
-/** Tiempo de silencio requerido antes de cerrar (crece si aún no llega el último número de frame). */
-function gtpHdPersistIdleMs(st) {
-  const total = gtpHdTotalFrames(st);
-  const maxFrame = st.maxFrameReceived || 0;
-  const avgGap = Math.max(PHOTO_FRAME_GAP_ESTIMATE_MS, toInteger(st && st.avgFrameGapMs) || PHOTO_FRAME_GAP_ESTIMATE_MS);
-  const baseIdle = gtpHdPartialIdleMs(st);
-
-  if (maxFrame >= total) {
-    return baseIdle;
-  }
-
-  const remaining = Math.max(0, total - maxFrame);
-  return baseIdle + (remaining * avgGap * 2);
-}
-
-/** ¿Ya dejó de llegar tráfico de esta foto? Evita guardar 49/124 mientras aún vienen frames. */
+/**
+ * ¿Cerrar y construir imagen?
+ * - Completa (N/N): siempre listo.
+ * - Parcial (p.ej. 190/200): tras silencio sin tramas nuevas → construir con lo contiguo desde frame 1.
+ *   Si después llegan más frames, se actualiza; si llega el 100%, se guarda completa.
+ */
 function gtpHdReadyToPersistPartial(st, opts) {
   opts = opts || {};
   if (!st || st.frames.size === 0) return false;
@@ -236,17 +233,25 @@ function gtpHdReadyToPersistPartial(st, opts) {
   if (!opts.forcePartial) return false;
 
   const silentMs = gtpHdMsSinceLastFrame(st);
-  const idleNeeded = gtpHdPersistIdleMs(st);
-  if (silentMs < idleNeeded) return false;
+  const baseIdle = gtpHdPartialIdleMs(st);
+  if (silentMs < baseIdle) return false;
 
-  const maxFrame = st.maxFrameReceived || 0;
   const total = gtpHdTotalFrames(st);
-
-  if (maxFrame >= total) return true;
-
+  const maxFrame = st.maxFrameReceived || 0;
+  const missing = Math.max(0, total - st.frames.size);
   const avgGap = Math.max(PHOTO_FRAME_GAP_ESTIMATE_MS, toInteger(st && st.avgFrameGapMs) || PHOTO_FRAME_GAP_ESTIMATE_MS);
-  const abortIdle = idleNeeded + (Math.max(0, total - maxFrame) * avgGap * 3);
-  return silentMs >= abortIdle;
+
+  // Ya llegó el frame N (o superior) pero hay huecos → parcial OK tras baseIdle.
+  // Gracia corta si faltan 1–3 (pueden estar en camino).
+  if (maxFrame >= total) {
+    if (missing > 0 && missing <= 3 && silentMs < baseIdle + avgGap * 3) return false;
+    return true;
+  }
+
+  // Aún no llega el último índice (p.ej. max=190, total=200): esperar un poco la cola, luego construir igual.
+  const tailMissing = Math.max(0, total - maxFrame);
+  const tailWait = Math.min(tailMissing, 15) * avgGap * 2;
+  return silentMs >= Math.min(baseIdle + tailWait, PHOTO_PARTIAL_IDLE_MAX_MS + 60000);
 }
 
 function gtpHdMaxAssemblyAgeMs(st) {
@@ -338,15 +343,27 @@ function gtpHdAssemblePartialBuffer(st) {
   return pushFrames(indices);
 }
 
+function gtpHdMissingFrameIndices(st) {
+  if (!st || !st.totalFrames) return [];
+  const missing = [];
+  for (let i = 1; i <= st.totalFrames; i++) {
+    if (!st.frames.has(i)) missing.push(i);
+  }
+  return missing;
+}
+
 function gtpHdPrepareJpegBuffer(buffer, isComplete) {
   if (!buffer || buffer.length < 2) return null;
   let out = buffer;
   if (out[0] !== 0xFF || out[1] !== 0xD8) {
     out = Buffer.concat([Buffer.from([0xFF, 0xD8]), out]);
   }
-  if (!isComplete) {
-    const hasEoi = out.length >= 2 && out[out.length - 2] === 0xFF && out[out.length - 1] === 0xD9;
-    if (!hasEoi) out = Buffer.concat([out, Buffer.from([0xFF, 0xD9])]);
+  const hasEoi = out.length >= 2 && out[out.length - 2] === 0xFF && out[out.length - 1] === 0xD9;
+  if (!hasEoi) {
+    if (isComplete) {
+      console.warn('⚠️ GTPHD JPEG completo sin EOI (FF D9); se cierra artificialmente — revisar último frame');
+    }
+    out = Buffer.concat([out, Buffer.from([0xFF, 0xD9])]);
   }
   return out;
 }
@@ -522,7 +539,8 @@ function gtpHdTryPersistPhoto(assemblyKey, opts) {
     }
 
     console.log((isComplete ? '📸 Imagen guardada:' : '📸 Imagen parcial guardada:'), storagePath,
-      '(' + framesReported + '/' + (stNow.totalFrames || '?') + ' frames, max#' + (stNow.maxFrameReceived || 0) + ')');
+      '(' + framesReported + '/' + (stNow.totalFrames || '?') + ' frames, max#' + (stNow.maxFrameReceived || 0) +
+      (isComplete ? '' : (', faltan:[' + gtpHdMissingFrameIndices(stNow).join(',') + ']')) + ')');
 
     if (isComplete) {
       stNow._persisted = true;
@@ -537,30 +555,18 @@ function gtpHdTryPersistPhoto(assemblyKey, opts) {
     gtpHdScheduleIdlePersist(assemblyKey);
   }
 
-  if (gtpHdNeedCoords(st)) {
-    if (dbTrackingSystem) {
-      if (st._resolviendoCoords) return;
-      if (!st._gtpHdUnidadFetchAttempted) {
-        st._gtpHdUnidadFetchAttempted = true;
-        st._resolviendoCoords = true;
-        dbTrackingSystem.collection('unidads').findOne({ imei: imeiValue, estado: 'A' }, function (err, doc) {
-          const st2 = photoAssemblies.get(assemblyKey);
-          if (st2) st2._resolviendoCoords = false;
-          if (!st2 || st2._persisted) return;
-          if (!err && doc) {
-            st2.latitud = toFloat(doc.latitud);
-            st2.longitud = toFloat(doc.longitud);
-            st2.fechaGps = doc.fecha_gps || new Date();
-          }
-          if (gtpHdNeedCoords(st2) && !forcePartial) return;
-          writePhoto();
-        });
-        return;
+  // Coordenadas opcionales: nunca bloquear el guardado (completo ni parcial).
+  if (gtpHdNeedCoords(st) && dbTrackingSystem && !st._gtpHdUnidadFetchAttempted) {
+    st._gtpHdUnidadFetchAttempted = true;
+    dbTrackingSystem.collection('unidads').findOne({ imei: imeiValue, estado: 'A' }, function (err, doc) {
+      const st2 = photoAssemblies.get(assemblyKey);
+      if (!st2 || st2._persisted) return;
+      if (!err && doc) {
+        st2.latitud = toFloat(doc.latitud);
+        st2.longitud = toFloat(doc.longitud);
+        if (!st2.fechaGps) st2.fechaGps = doc.fecha_gps || new Date();
       }
-      if (!forcePartial) return;
-    } else if (!forcePartial) {
-      return;
-    }
+    });
   }
 
   writePhoto();
@@ -572,18 +578,26 @@ function gtpHdScheduleIdlePersist(assemblyKey) {
   if (!st || st._persisted) return;
   gtpHdClearIdleTimer(st);
 
-  const checkDelay = Math.min(5000, Math.max(1000, Math.round(gtpHdPersistIdleMs(st) / 4)));
+  const checkDelay = Math.min(5000, Math.max(1000, Math.round(gtpHdPartialIdleMs(st) / 4)));
   st.idlePersistTimer = setTimeout(function gtpHdIdlePersistTick() {
     const st2 = photoAssemblies.get(assemblyKey);
     if (!st2 || st2._persisted) return;
 
+    // Completa → guardar ya (200/200). Parcial → guardar tras silencio (190/200).
     if (gtpHdFramesComplete(st2)) {
       gtpHdTryPersistPhoto(assemblyKey, { forcePartial: false });
+      if (photoAssemblies.has(assemblyKey) && !photoAssemblies.get(assemblyKey)._persisted) {
+        gtpHdScheduleIdlePersist(assemblyKey);
+      }
       return;
     }
 
     if (gtpHdReadyToPersistPartial(st2, { forcePartial: true })) {
       gtpHdTryPersistPhoto(assemblyKey, { forcePartial: true });
+      // Sigue vivo el assembly: si llegan frames 191–200 después, se actualiza o completa.
+      if (photoAssemblies.has(assemblyKey) && !photoAssemblies.get(assemblyKey)._persisted) {
+        gtpHdScheduleIdlePersist(assemblyKey);
+      }
       return;
     }
 
@@ -1760,7 +1774,12 @@ function onClientConnected(socket) {
         let currentFrameValue = toInteger(data[currentFrameIdx]);
         let photoDataLengthValue = toInteger(data[photoDataLengthIdx]);
 
-        let base64Payload = data.slice(photoDataStartIdx, data.length - 2).join(',');
+        // Photo Data no contiene comas (base64). Usar campo 10 + Photo Data Length;
+        // slice().join(',') mezclaba reserved/sendTime o el siguiente GTPHD coalescido.
+        let base64Payload = String(data[photoDataStartIdx] || '').trim();
+        if (photoDataLengthValue > 0 && base64Payload.length > photoDataLengthValue) {
+          base64Payload = base64Payload.slice(0, photoDataLengthValue);
+        }
         let sendTimeValue = data[data.length - 2];
         let countTail = String(data[data.length - 1] || '').replace('$', '').trim();
 
@@ -1769,14 +1788,18 @@ function onClientConnected(socket) {
         if (base64Payload.length < 50) return;
         if (totalFramesValue <= 0 || currentFrameValue <= 0) return;
 
-        if (photoDataLengthValue > 0 && base64Payload.length !== photoDataLengthValue && debug) {
-          console.log('GTPHD length mismatch', {
-            imei: imeiValue,
-            expected: photoDataLengthValue,
-            actual: base64Payload.length,
-            sendTime: sendTimeValue,
-            count: countTail
-          });
+        if (photoDataLengthValue > 0 && base64Payload.length !== photoDataLengthValue) {
+          if (debug) {
+            console.log('GTPHD length mismatch, frame descartado', {
+              imei: imeiValue,
+              frame: currentFrameValue,
+              expected: photoDataLengthValue,
+              actual: base64Payload.length,
+              sendTime: sendTimeValue,
+              count: countTail
+            });
+          }
+          return;
         }
 
         const key = imeiValue + '_' + photoTimeValue + '_' + cameraIdValue;
@@ -1809,9 +1832,14 @@ function onClientConnected(socket) {
         }
 
         if (state.frames.has(currentFrameValue)) {
-          gtpHdTrackFrameArrival(state, currentFrameValue);
-          gtpHdScheduleIdlePersist(key);
-          return;
+          // Reemplazar solo si el nuevo chunk tiene el tamaño declarado y el anterior no
+          const prev = state.frames.get(currentFrameValue);
+          const prevOk = photoDataLengthValue <= 0 || (prev && prev.length === photoDataLengthValue);
+          if (prevOk) {
+            gtpHdTrackFrameArrival(state, currentFrameValue);
+            gtpHdScheduleIdlePersist(key);
+            return;
+          }
         }
         state.frames.set(currentFrameValue, base64Payload);
         gtpHdTrackFrameArrival(state, currentFrameValue);
@@ -1824,6 +1852,11 @@ function onClientConnected(socket) {
         }
 
         gtpHdTryPersistPhoto(key, { forcePartial: false });
+        // Si ya se guardó un parcial (190/200) y llegan más frames, refrescar ya;
+        // si con eso completa (200/200), el call de arriba ya guardó completa.
+        if (state._partialPersistFilePath && !gtpHdFramesComplete(state) && !state._persisted) {
+          gtpHdTryPersistPhoto(key, { forcePartial: true, finalize: true });
+        }
         gtpHdScheduleIdlePersist(key);
       }
       // ================== GTGOT / GTGIN ==================
