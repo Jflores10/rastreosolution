@@ -222,15 +222,17 @@ function gtpHdMsSinceLastFrame(st) {
 
 /**
  * ¿Cerrar y construir imagen?
- * - Completa (N/N): siempre listo.
- * - Parcial (p.ej. 190/200): tras silencio sin tramas nuevas → construir con lo contiguo desde frame 1.
- *   Si después llegan más frames, se actualiza; si llega el 100%, se guarda completa.
+ * - Completa (N/N): siempre.
+ * - Incompleta (p.ej. 23/28): tras silencio sin tramas nuevas → JPEG con frames contiguos desde el 1.
  */
 function gtpHdReadyToPersistPartial(st, opts) {
   opts = opts || {};
   if (!st || st.frames.size === 0) return false;
   if (gtpHdFramesComplete(st)) return true;
   if (!opts.forcePartial) return false;
+  // Sin frame 1 no hay SOI JPEG usable
+  if (!st.frames.has(1)) return false;
+  if (gtpHdContiguousFrameCount(st) < 1) return false;
 
   const silentMs = gtpHdMsSinceLastFrame(st);
   const baseIdle = gtpHdPartialIdleMs(st);
@@ -238,20 +240,18 @@ function gtpHdReadyToPersistPartial(st, opts) {
 
   const total = gtpHdTotalFrames(st);
   const maxFrame = st.maxFrameReceived || 0;
-  const missing = Math.max(0, total - st.frames.size);
   const avgGap = Math.max(PHOTO_FRAME_GAP_ESTIMATE_MS, toInteger(st && st.avgFrameGapMs) || PHOTO_FRAME_GAP_ESTIMATE_MS);
 
-  // Ya llegó el frame N (o superior) pero hay huecos → parcial OK tras baseIdle.
-  // Gracia corta si faltan 1–3 (pueden estar en camino).
-  if (maxFrame >= total) {
-    if (missing > 0 && missing <= 3 && silentMs < baseIdle + avgGap * 3) return false;
-    return true;
+  // Aún esperábamos más índices (23/28): gracia corta, luego construir igual
+  if (maxFrame < total) {
+    const grace = Math.min(5, total - maxFrame) * avgGap;
+    return silentMs >= baseIdle + grace;
   }
 
-  // Aún no llega el último índice (p.ej. max=190, total=200): esperar un poco la cola, luego construir igual.
-  const tailMissing = Math.max(0, total - maxFrame);
-  const tailWait = Math.min(tailMissing, 15) * avgGap * 2;
-  return silentMs >= Math.min(baseIdle + tailWait, PHOTO_PARTIAL_IDLE_MAX_MS + 60000);
+  // Ya llegó el frame N pero faltan huecos en el medio
+  const missing = Math.max(0, total - st.frames.size);
+  if (missing > 0 && missing <= 5 && silentMs < baseIdle + avgGap * 2) return false;
+  return true;
 }
 
 function gtpHdMaxAssemblyAgeMs(st) {
@@ -404,7 +404,7 @@ function gtpHdTryPersistPhoto(assemblyKey, opts) {
           buffers.push(Buffer.from(stNow.frames.get(i), 'base64'));
         } catch (e) {
           console.error('❌ Error base64 GTPHD (chunk):', e);
-          gtpHdCleanupAssembly(assemblyKey, locationCacheKey);
+          // No borrar el assembly: se reintenta con idle/siguientes tramas
           return;
         }
       }
@@ -414,7 +414,7 @@ function gtpHdTryPersistPhoto(assemblyKey, opts) {
       const partialBuf = gtpHdAssemblePartialBuffer(stNow);
       if (!partialBuf) return;
       buffer = gtpHdPrepareJpegBuffer(partialBuf, false);
-      framesReported = stNow.frames.size;
+      framesReported = gtpHdContiguousFrameCount(stNow) || stNow.frames.size;
     }
 
     const minLen = isComplete ? 1000 : 64;
@@ -432,7 +432,7 @@ function gtpHdTryPersistPhoto(assemblyKey, opts) {
     }
 
     if (isComplete && (buffer[0] !== 0xFF || buffer[1] !== 0xD8)) {
-      gtpHdCleanupAssembly(assemblyKey, locationCacheKey);
+      console.warn('⚠️ GTPHD completo sin SOI JPEG, se mantiene assembly para reintento', assemblyKey);
       return;
     }
 
@@ -441,9 +441,17 @@ function gtpHdTryPersistPhoto(assemblyKey, opts) {
     let dir = path.join(PHOTO_EVENTS_DIR, imeiSafe);
     let filePath = path.join(dir, fileName);
 
-    if (!isComplete && stNow._partialPersistFilePath) {
-      filePath = stNow._partialPersistFilePath;
-      fileName = path.basename(filePath);
+    // Reutilizar el mismo archivo: parcial → completa (o más frames) sin dejar JPEG viejo en la UI
+    if (stNow._partialPersistFilePath) {
+      if (isComplete) {
+        const prevPartial = stNow._partialPersistFilePath;
+        const finalName = path.basename(prevPartial).replace(/_parcial\.jpg$/i, '.jpg');
+        filePath = path.join(path.dirname(prevPartial), finalName);
+        fileName = path.basename(filePath);
+      } else {
+        filePath = stNow._partialPersistFilePath;
+        fileName = path.basename(filePath);
+      }
     }
 
     try {
@@ -460,6 +468,10 @@ function gtpHdTryPersistPhoto(assemblyKey, opts) {
         }
       }
       fs.writeFileSync(filePath, buffer);
+      // Si completa y el parcial tenía otro nombre, borrar el _parcial viejo
+      if (isComplete && stNow._partialPersistFilePath && stNow._partialPersistFilePath !== filePath) {
+        try { fs.unlinkSync(stNow._partialPersistFilePath); } catch (e) { }
+      }
       if (process.platform === 'linux') {
         try {
           const uid = Number(String(execSync('id -u www-data')).trim());
@@ -470,7 +482,7 @@ function gtpHdTryPersistPhoto(assemblyKey, opts) {
     } catch (e) {
       console.error('❌ Error guardando imagen GTPHD:', e);
       stNow._persisted = false;
-      gtpHdCleanupAssembly(assemblyKey, locationCacheKey);
+      // No cleanupAssembly: conservar frames en memoria/disco para reintento
       return;
     }
 
@@ -572,7 +584,7 @@ function gtpHdTryPersistPhoto(assemblyKey, opts) {
   writePhoto();
 }
 
-/** Programa guardado cuando dejen de llegar frames (tiempo dinámico según totalFrames). */
+/** Programa guardado cuando dejen de llegar frames (solo fallback parcial). */
 function gtpHdScheduleIdlePersist(assemblyKey) {
   const st = photoAssemblies.get(assemblyKey);
   if (!st || st._persisted) return;
@@ -583,7 +595,7 @@ function gtpHdScheduleIdlePersist(assemblyKey) {
     const st2 = photoAssemblies.get(assemblyKey);
     if (!st2 || st2._persisted) return;
 
-    // Completa → guardar ya (200/200). Parcial → guardar tras silencio (190/200).
+    // Prioridad: completa N/N
     if (gtpHdFramesComplete(st2)) {
       gtpHdTryPersistPhoto(assemblyKey, { forcePartial: false });
       if (photoAssemblies.has(assemblyKey) && !photoAssemblies.get(assemblyKey)._persisted) {
@@ -594,15 +606,122 @@ function gtpHdScheduleIdlePersist(assemblyKey) {
 
     if (gtpHdReadyToPersistPartial(st2, { forcePartial: true })) {
       gtpHdTryPersistPhoto(assemblyKey, { forcePartial: true });
-      // Sigue vivo el assembly: si llegan frames 191–200 después, se actualiza o completa.
-      if (photoAssemblies.has(assemblyKey) && !photoAssemblies.get(assemblyKey)._persisted) {
-        gtpHdScheduleIdlePersist(assemblyKey);
+    }
+
+    if (photoAssemblies.has(assemblyKey) && !photoAssemblies.get(assemblyKey)._persisted) {
+      gtpHdScheduleIdlePersist(assemblyKey);
+    }
+  }, checkDelay);
+}
+
+/**
+ * Ingesta UNA trama +RESP:GTPHD...$
+ * - Completa (N/N): guarda JPEG completo de inmediato.
+ * - Incompleta (p.ej. 23/28): espera silencio y construye parcial; si llegan más frames, actualiza o completa.
+ */
+function ingestGtpHdMessage(message) {
+  const imei = 2;
+  const cameraId = 4;
+  const photoTime = 6;
+  const totalFramesIdx = 7;
+  const currentFrameIdx = 8;
+  const photoDataLengthIdx = 9;
+  const photoDataStartIdx = 10;
+  const data = message.split(',');
+
+  const imeiValue = String(data[imei] || '').trim();
+  const cameraIdValue = String(data[cameraId] || '').trim();
+  const photoTimeValue = String(data[photoTime] || '').trim();
+  const totalFramesValue = toInteger(data[totalFramesIdx]);
+  const currentFrameValue = toInteger(data[currentFrameIdx]);
+  const photoDataLengthValue = toInteger(data[photoDataLengthIdx]);
+
+  let base64Payload = String(data[photoDataStartIdx] || '').trim();
+  if (photoDataLengthValue > 0 && base64Payload.length > photoDataLengthValue) {
+    base64Payload = base64Payload.slice(0, photoDataLengthValue);
+  }
+
+  if (!imeiValue || !photoTimeValue || !base64Payload) return;
+  if (data.length < 13) return;
+  if (base64Payload.length < 50) return;
+  if (totalFramesValue <= 0 || currentFrameValue <= 0) return;
+  if (currentFrameValue > totalFramesValue) return;
+
+  if (photoDataLengthValue > 0 && base64Payload.length !== photoDataLengthValue && debug) {
+    console.log('GTPHD length mismatch', {
+      imei: imeiValue,
+      frame: currentFrameValue,
+      expected: photoDataLengthValue,
+      actual: base64Payload.length
+    });
+  }
+
+  const key = imeiValue + '_' + photoTimeValue + '_' + cameraIdValue;
+  const locationCacheKey = imeiValue + '_' + photoTimeValue;
+
+  let state = photoAssemblies.get(key);
+  if (!state) {
+    if (photoAssemblies.size >= MAX_ACTIVE_PHOTO_ASSEMBLIES) {
+      console.warn('⚠️ demasiadas fotos en proceso (max ' + MAX_ACTIVE_PHOTO_ASSEMBLIES + '), se ignora trama GTPHD imei=' + imeiValue);
+      return;
+    }
+    state = {
+      imei: imeiValue,
+      photoTime: photoTimeValue,
+      cameraId: cameraIdValue,
+      totalFrames: totalFramesValue,
+      frames: new Map(),
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      latitud: 0,
+      longitud: 0,
+      fechaGps: null
+    };
+    photoAssemblies.set(key, state);
+  }
+
+  // Completa ya persistida: ignorar frames tardíos
+  if (state._persisted) return;
+
+  if (totalFramesValue > 0) {
+    state.totalFrames = totalFramesValue;
+  }
+
+  if (state.frames.has(currentFrameValue)) {
+    const prev = state.frames.get(currentFrameValue);
+    if (prev && prev.length >= base64Payload.length) {
+      gtpHdTrackFrameArrival(state, currentFrameValue);
+      if (gtpHdFramesComplete(state)) {
+        gtpHdTryPersistPhoto(key, { forcePartial: false });
+      } else {
+        gtpHdScheduleIdlePersist(key);
       }
       return;
     }
+  }
+  state.frames.set(currentFrameValue, base64Payload);
+  gtpHdTrackFrameArrival(state, currentFrameValue);
 
-    gtpHdScheduleIdlePersist(assemblyKey);
-  }, checkDelay);
+  const locationInfo = lastPhotoLocationByImei.get(locationCacheKey);
+  if (locationInfo) {
+    state.latitud = toFloat(locationInfo.latitud);
+    state.longitud = toFloat(locationInfo.longitud);
+    state.fechaGps = locationInfo.fecha_gps;
+  }
+
+  // 1) Completa N/N → JPEG final ya
+  if (gtpHdFramesComplete(state)) {
+    gtpHdTryPersistPhoto(key, { forcePartial: false });
+    return;
+  }
+
+  // 2) Ya había parcial (23/28) y llegó otro frame → reescribir parcial ahora
+  if (state._partialPersistFilePath) {
+    gtpHdTryPersistPhoto(key, { forcePartial: true, finalize: true });
+  }
+
+  // 3) Seguir esperando el resto; si dejan de llegar, idle construye parcial
+  gtpHdScheduleIdlePersist(key);
 }
 
 function flushTramas() {
@@ -635,7 +754,10 @@ function limpiarBufferFotosParciales() {
           gtpHdTryPersistPhoto(key, { forcePartial: true, finalize: true });
         }
         const locKey = state.imei && state.photoTime ? (state.imei + '_' + state.photoTime) : null;
-        if (photoAssemblies.has(key)) photoAssemblies.delete(key);
+        if (photoAssemblies.has(key)) {
+          gtpHdClearIdleTimer(state);
+          photoAssemblies.delete(key);
+        }
         if (locKey) lastPhotoLocationByImei.delete(locKey);
       }
     }
@@ -1758,106 +1880,13 @@ function onClientConnected(socket) {
 
       // ================== GTPHD (PHOTO DATA FRAMES) ==================
       else if (message.includes(GTPHD) && !message.includes(ACK)) {
-        let imei = 2;
-        let cameraId = 4;
-        let photoTime = 6;
-        let totalFramesIdx = 7;
-        let currentFrameIdx = 8;
-        let photoDataLengthIdx = 9;
-        let photoDataStartIdx = 10;
-        let data = message.split(',');
-
-        let imeiValue = String(data[imei] || '').trim();
-        let cameraIdValue = String(data[cameraId] || '').trim();
-        let photoTimeValue = String(data[photoTime] || '').trim();
-        let totalFramesValue = toInteger(data[totalFramesIdx]);
-        let currentFrameValue = toInteger(data[currentFrameIdx]);
-        let photoDataLengthValue = toInteger(data[photoDataLengthIdx]);
-
-        // Photo Data no contiene comas (base64). Usar campo 10 + Photo Data Length;
-        // slice().join(',') mezclaba reserved/sendTime o el siguiente GTPHD coalescido.
-        let base64Payload = String(data[photoDataStartIdx] || '').trim();
-        if (photoDataLengthValue > 0 && base64Payload.length > photoDataLengthValue) {
-          base64Payload = base64Payload.slice(0, photoDataLengthValue);
+        // Una trama por frame. Si TCP juntó varias en un solo data, procesar cada una.
+        const parts = String(message).split('$');
+        for (let pi = 0; pi < parts.length; pi++) {
+          const part = parts[pi].replace(/^\s+/, '');
+          if (!part || !part.includes(GTPHD) || part.includes(ACK)) continue;
+          ingestGtpHdMessage(part + '$');
         }
-        let sendTimeValue = data[data.length - 2];
-        let countTail = String(data[data.length - 1] || '').replace('$', '').trim();
-
-        if (!imeiValue || !photoTimeValue || !base64Payload) return;
-        if (data.length < 13) return;
-        if (base64Payload.length < 50) return;
-        if (totalFramesValue <= 0 || currentFrameValue <= 0) return;
-
-        if (photoDataLengthValue > 0 && base64Payload.length !== photoDataLengthValue) {
-          if (debug) {
-            console.log('GTPHD length mismatch, frame descartado', {
-              imei: imeiValue,
-              frame: currentFrameValue,
-              expected: photoDataLengthValue,
-              actual: base64Payload.length,
-              sendTime: sendTimeValue,
-              count: countTail
-            });
-          }
-          return;
-        }
-
-        const key = imeiValue + '_' + photoTimeValue + '_' + cameraIdValue;
-        const locationCacheKey = imeiValue + '_' + photoTimeValue;
-
-        let state = photoAssemblies.get(key);
-
-        if (!state) {
-          if (photoAssemblies.size >= MAX_ACTIVE_PHOTO_ASSEMBLIES) {
-            console.warn('⚠️ demasiadas fotos en proceso (max ' + MAX_ACTIVE_PHOTO_ASSEMBLIES + '), se ignora trama GTPHD imei=' + imeiValue);
-            return;
-          }
-          state = {
-            imei: imeiValue,
-            photoTime: photoTimeValue,
-            cameraId: cameraIdValue,
-            totalFrames: totalFramesValue,
-            frames: new Map(),
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-            latitud: 0,
-            longitud: 0,
-            fechaGps: null
-          };
-          photoAssemblies.set(key, state);
-        }
-
-        if (totalFramesValue > 0) {
-          state.totalFrames = totalFramesValue;
-        }
-
-        if (state.frames.has(currentFrameValue)) {
-          // Reemplazar solo si el nuevo chunk tiene el tamaño declarado y el anterior no
-          const prev = state.frames.get(currentFrameValue);
-          const prevOk = photoDataLengthValue <= 0 || (prev && prev.length === photoDataLengthValue);
-          if (prevOk) {
-            gtpHdTrackFrameArrival(state, currentFrameValue);
-            gtpHdScheduleIdlePersist(key);
-            return;
-          }
-        }
-        state.frames.set(currentFrameValue, base64Payload);
-        gtpHdTrackFrameArrival(state, currentFrameValue);
-
-        const locationInfo = lastPhotoLocationByImei.get(locationCacheKey);
-        if (locationInfo) {
-          state.latitud = toFloat(locationInfo.latitud);
-          state.longitud = toFloat(locationInfo.longitud);
-          state.fechaGps = locationInfo.fecha_gps;
-        }
-
-        gtpHdTryPersistPhoto(key, { forcePartial: false });
-        // Si ya se guardó un parcial (190/200) y llegan más frames, refrescar ya;
-        // si con eso completa (200/200), el call de arriba ya guardó completa.
-        if (state._partialPersistFilePath && !gtpHdFramesComplete(state) && !state._persisted) {
-          gtpHdTryPersistPhoto(key, { forcePartial: true, finalize: true });
-        }
-        gtpHdScheduleIdlePersist(key);
       }
       // ================== GTGOT / GTGIN ==================
       else if (!message.includes(ADMIN) && (message.includes(GTGOT) || message.includes(GTGIN)) && !message.includes(ACK)) {
