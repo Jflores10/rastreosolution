@@ -115,7 +115,7 @@
                                         <th>#</th>
                                         <th>Unidad</th>
                                         <th>Fecha registro</th>
-                                        <th>Fecha GPS</th>
+                                        <th>Fecha Foto</th>
                                         <th>Imagen</th>
                                         @if (!empty($es_distribuidor))
                                             <th>Marcada</th>
@@ -127,11 +127,11 @@
                                         @php
                                             $unidadTexto = $unidades_por_imei[(string) $row->imei] ?? ('IMEI: ' . (string) $row->imei);
                                             $fechaGpsVista = '';
-                                            if (!empty($row->fecha_gps)) {
+                                            if (!empty($row->photo_time_fc)) {
                                                 try {
-                                                    $fechaGpsVista = \Carbon\Carbon::parse($row->fecha_gps)->subHours(5)->format('Y-m-d H:i:s');
+                                                    $fechaGpsVista = \Carbon\Carbon::parse($row->photo_time_fc)->subHours(5)->format('Y-m-d H:i:s');
                                                 } catch (\Exception $e) {
-                                                    $fechaGpsVista = (string) $row->fecha_gps;
+                                                    $fechaGpsVista = (string) $row->photo_time_fc;
                                                 }
                                             }
                                         @endphp

@@ -40,7 +40,7 @@ class PhotoUnidadController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
-        $query = PhotoUnidad::orderBy('fecha_gps', 'desc')->orderBy('num_img', 'desc');
+        $query = PhotoUnidad::orderBy('photo_time_fc', 'desc')->orderBy('num_img', 'desc');
 
         $tipoUsuario = isset($user->tipo_usuario) ? (string) $user->tipo_usuario->valor : '';
         $esDistribuidor = $tipoUsuario === '1';
