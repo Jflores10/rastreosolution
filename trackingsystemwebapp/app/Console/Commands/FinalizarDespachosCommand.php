@@ -29,7 +29,7 @@ class FinalizarDespachosCommand extends Command
      *
      * @var string
      */
-    protected $description = 'Finaliza los despachos pendientes de las unidades de transporte despues de 10min de finalizacion de ruta';
+    protected $description = 'Finaliza los despachos pendientes apenas la unidad marca el ultimo punto de control';
 
     /**
      * Create a new command instance.
@@ -99,15 +99,22 @@ class FinalizarDespachosCommand extends Command
                         if (empty($puntos)) continue;
 
                         $ultimo = end($puntos);
-                        if (!empty($ultimo['tiempo_esperado'])) {
-                            $tiempoEsperado = Carbon::instance($ultimo['tiempo_esperado']->toDateTime())
-                            ->addHours(5) // este ajuste lo estás aplicando en tu código
-                            ->setTimezone('America/Guayaquil');
-                            $fechaLimite = $tiempoEsperado->copy()->addMinutes(10);
+                        if (!empty($ultimo['marca'])) {
+                            // marca se guarda como string 'Y-m-d H:i:s' (hora local),
+                            // no como UTCDateTime (a diferencia de tiempo_esperado).
+                            try {
+                                $tiempoMarca = Carbon::createFromFormat(
+                                    'Y-m-d H:i:s',
+                                    (string) $ultimo['marca'],
+                                    'America/Guayaquil'
+                                );
+                            } catch (\Exception $e) {
+                                $tiempoMarca = Carbon::parse((string) $ultimo['marca'], 'America/Guayaquil');
+                            }
                             $ahora = Carbon::now('America/Guayaquil');
-                            
-                            if ($ahora->greaterThanOrEqualTo($fechaLimite)) {
-                                $this->info("Finalizando despacho {$despacho->_id} (esperado: {$tiempoEsperado}, límite: {$fechaLimite})");
+
+                            if ($ahora->greaterThanOrEqualTo($tiempoMarca)) {
+                                $this->info("Finalizando despacho {$despacho->_id} (marca: {$tiempoMarca})");
                                 $response = $ctrl->end($fakeRequest, $despacho->_id);
                                 $data = $response->getData(true);
 
@@ -116,7 +123,7 @@ class FinalizarDespachosCommand extends Command
                                 } else {
                                     $this->info(" Error al finalizar despacho {$despacho->_id}");
                                 }
-                            } 
+                            }
                         }
 
                     } catch (\Throwable $e) {
