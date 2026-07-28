@@ -477,10 +477,16 @@ function gtpHdTryPersistPhoto(assemblyKey, opts) {
     let storagePath = 'images/' + imeiSafe + '/' + fileName;
 
     if (dbTrackingSystem) {
+      // Solo al persistir: photo_time como Date (como fecha_gps), no como string
+      const photoTimeDate = (toInteger(photoTimeValue) != 0)
+        ? moment(photoTimeValue, DEVICE_DATE_FORMAT).toDate()
+        : null;
+
       const photoDoc = {
         imei: imeiValue,
         tipo: GTPHD,
         tipo_evento: 'foto',
+        photo_time_fc: photoTimeDate,
         photo_time: photoTimeValue,
         fecha_gps: stNow.fechaGps || new Date(),
         latitud: stNow.latitud,
@@ -1712,7 +1718,7 @@ function onClientConnected(socket) {
 
         const fecha_gps = (toInteger(data[gpsUtcTime]) != 0)
           ? moment(data[gpsUtcTime], DEVICE_DATE_FORMAT).toDate()
-          : ((toInteger(data[photoTime]) != 0) ? moment(data[photoTime], DEVICE_DATE_FORMAT).toDate() : new Date());
+          : new Date();
 
         const locationPayload = {
           imei: String(data[imei] || '').trim(),

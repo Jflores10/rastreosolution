@@ -15,7 +15,7 @@ class PhotoUnidad extends Model
         'tipo_evento',
         'fecha_gps',
         'photo_time',
-        'photo_time_str',
+        'photo_time_fc',
         'latitud',
         'longitud',
         'imagen',
