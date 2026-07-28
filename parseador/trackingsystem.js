@@ -547,11 +547,36 @@ function gtpHdTryPersistPhoto(assemblyKey, opts) {
           const update = { $set: setDoc };
           if (persistIsComplete) {
             update.$unset = { frames_faltantes: '' };
+            photosCol.updateOne(
+              photoFilter,
+              update,
+              { upsert: true, writeConcern: { w: 0 } }
+            );
+            return;
           }
+          if (!existing) {
+            // Primera inserción de esta foto.
+            photosCol.updateOne(
+              photoFilter,
+              update,
+              { upsert: true, writeConcern: { w: 0 } }
+            );
+            return;
+          }
+          // Ya existe: actualizar solo si sigue parcial y no tiene más frames.
           photosCol.updateOne(
-            photoFilter,
+            {
+              imei: imeiValue,
+              tipo: GTPHD,
+              photo_time: photoTimeValue,
+              ensamblaje_parcial: { $ne: false },
+              $or: [
+                { frames_recibidos: { $exists: false } },
+                { frames_recibidos: { $lte: framesReported } }
+              ]
+            },
             update,
-            { upsert: true, writeConcern: { w: 0 } }
+            { upsert: false, writeConcern: { w: 0 } }
           );
         }
 
@@ -672,6 +697,7 @@ function limpiarBufferFotosParciales() {
       const lastUpdate = state.updatedAt || state.createdAt || now;
       const age = now - lastUpdate;
       const maxAgeMs = gtpHdMaxAssemblyAgeMs(state);
+      const missingCount = gtpHdMissingFrameIndices(state).length;
 
       // Completa primero; parcial solo si sigue incompleta tras silencio.
       if (gtpHdFramesComplete(state)) {
@@ -687,6 +713,12 @@ function limpiarBufferFotosParciales() {
           } else {
             gtpHdTryPersistPhoto(key, { forcePartial: true, finalize: true });
           }
+        }
+        // Si solo faltan 1–3 frames, NO borrar el assembly todavía:
+        // el frame puede llegar tarde (caso tramas sí / fotos no).
+        // Extender espera hasta 3x maxAge antes de descartar memoria.
+        if (missingCount > 0 && missingCount <= 3 && age < (maxAgeMs * 3)) {
+          continue;
         }
         const locKey = state.imei && state.photoTime ? (state.imei + '_' + state.photoTime) : null;
         if (photoAssemblies.has(key)) photoAssemblies.delete(key);
@@ -1887,18 +1919,12 @@ function onClientConnected(socket) {
           // Reemplazar solo si el nuevo chunk tiene el tamaño declarado y el anterior no
           const prev = state.frames.get(currentFrameValue);
           const prevOk = photoDataLengthValue <= 0 || (prev && prev.length === photoDataLengthValue);
-          if (prevOk) {
-            gtpHdTrackFrameArrival(state, currentFrameValue);
-            // Duplicado válido: si ya está completa, persistir; si no, solo reprogramar espera.
-            if (gtpHdFramesComplete(state)) {
-              gtpHdTryPersistPhoto(key, { forcePartial: false });
-            } else {
-              gtpHdScheduleIdlePersist(key);
-            }
-            return;
+          if (!prevOk) {
+            state.frames.set(currentFrameValue, base64Payload);
           }
+        } else {
+          state.frames.set(currentFrameValue, base64Payload);
         }
-        state.frames.set(currentFrameValue, base64Payload);
         gtpHdTrackFrameArrival(state, currentFrameValue);
 
         const locationInfo = lastPhotoLocationByImei.get(locationCacheKey);
@@ -1909,17 +1935,17 @@ function onClientConnected(socket) {
         }
 
         // 1) Si ya están todos los frames → imagen COMPLETA ahora.
+        //    No hacer return: debe registrarse también en TRAMAS_BUFFER.
         if (gtpHdFramesComplete(state)) {
           gtpHdTryPersistPhoto(key, { forcePartial: false });
-          return;
+        } else {
+          // 2) Incompleta: si ya existía un parcial, actualizarlo con frames nuevos;
+          //    si no, esperar silencio para construir parcial.
+          if (state._partialPersistFilePath && !state._persisted) {
+            gtpHdTryPersistPhoto(key, { forcePartial: true, finalize: true });
+          }
+          gtpHdScheduleIdlePersist(key);
         }
-
-        // 2) Incompleta: si ya existía un parcial, actualizarlo con los frames nuevos;
-        //    si no, solo esperar silencio para decidir parcial.
-        if (state._partialPersistFilePath && !state._persisted) {
-          gtpHdTryPersistPhoto(key, { forcePartial: true, finalize: true });
-        }
-        gtpHdScheduleIdlePersist(key);
       }
       // ================== GTGOT / GTGIN ==================
       else if (!message.includes(ADMIN) && (message.includes(GTGOT) || message.includes(GTGIN)) && !message.includes(ACK)) {
