@@ -50,7 +50,7 @@ class Kernel extends ConsoleKernel
     protected function schedule(Schedule $schedule)
     {
         //$schedule->command('command:atm')->withoutOverlapping();
-        $schedule->command('ts:finalizar-despachos')->everyFiveMinutes()->withoutOverlapping();
+        $schedule->command('ts:finalizar-despachos')->everyMinute()->withoutOverlapping();
         //$schedule->command('ts:update-unidad-estado-ns')->everyFiveMinutes()->withoutOverlapping();
         $schedule->command('ts:reset-cont-pd-abierta')->dailyAt('04:00')->withoutOverlapping();
         //$schedule->command('ts:update-gps-address')->hourly()->withoutOverlapping();
