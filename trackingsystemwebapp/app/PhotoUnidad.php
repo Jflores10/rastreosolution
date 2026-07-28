@@ -32,7 +32,7 @@ class PhotoUnidad extends Model
 
     protected $dates = array(
         'fecha_gps',
-        'photo_time',
+        'photo_time_fc',
         'fecha',
         'fecha_marca',
         'created_at',
