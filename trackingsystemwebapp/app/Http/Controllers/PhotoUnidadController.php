@@ -40,7 +40,7 @@ class PhotoUnidadController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
-        $query = PhotoUnidad::orderBy('fecha_gps', 'desc')->orderBy('num_img', 'desc');
+        $query = PhotoUnidad::orderBy('photo_time', 'desc')->orderBy('num_img', 'desc');
 
         $tipoUsuario = isset($user->tipo_usuario) ? (string) $user->tipo_usuario->valor : '';
         $esDistribuidor = $tipoUsuario === '1';
@@ -126,7 +126,18 @@ class PhotoUnidadController extends Controller
             }
         }
 
-        $query->where('fecha', '>=', $desdeDate)->where('fecha', '<=', $hastaDate);
+        $query->where(function ($q) use ($desdeDate, $hastaDate) {
+            $q->where(function ($inner) use ($desdeDate, $hastaDate) {
+                $inner->whereNotNull('photo_time')
+                    ->where('photo_time', '>=', $desdeDate)
+                    ->where('photo_time', '<=', $hastaDate);
+            })->orWhere(function ($inner) use ($desdeDate, $hastaDate) {
+                // Legado: fotos sin photo_time (usaban fecha_gps / fecha de registro)
+                $inner->whereNull('photo_time')
+                    ->where('fecha', '>=', $desdeDate)
+                    ->where('fecha', '<=', $hastaDate);
+            });
+        });
 
         if (!$esDistribuidor) {
             $query->where('marcada', true);

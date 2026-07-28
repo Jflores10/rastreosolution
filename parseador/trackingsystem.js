@@ -489,12 +489,23 @@ function gtpHdTryPersistPhoto(assemblyKey, opts) {
     let storagePath = 'images/' + imeiSafe + '/' + fileName;
 
     if (dbTrackingSystem) {
+      // photo_time = fecha operativa (antes se usaba fecha_gps de GTPHL)
+      // fecha_gps = solo informativo (gpsUtcTime de GTPHL)
+      const locationInfoNow = lastPhotoLocationByImei.get(locationCacheKey);
+      const photoTimeDate = (locationInfoNow && locationInfoNow.photoTimeDate)
+        || stNow.photoTimeDate
+        || ((toInteger(photoTimeValue) != 0) ? moment(photoTimeValue, DEVICE_DATE_FORMAT).toDate() : null);
+      const fechaGpsInfo = (locationInfoNow && locationInfoNow.fecha_gps)
+        || stNow.fechaGps
+        || null;
+
       const photoDoc = {
         imei: imeiValue,
         tipo: GTPHD,
         tipo_evento: 'foto',
-        photo_time: photoTimeValue,
-        fecha_gps: stNow.fechaGps || new Date(),
+        photo_time: photoTimeDate || null,
+        photo_time_str: photoTimeValue,
+        fecha_gps: fechaGpsInfo,
         latitud: stNow.latitud,
         longitud: stNow.longitud,
         imagen: storagePath,
@@ -504,7 +515,8 @@ function gtpHdTryPersistPhoto(assemblyKey, opts) {
         frames_esperados: stNow.totalFrames || null,
         ensamblaje_parcial: !isComplete
       };
-      const photoFilter = { imei: imeiValue, tipo: GTPHD, photo_time: photoTimeValue };
+      const photoFilter = { imei: imeiValue, tipo: GTPHD, photo_time_str: photoTimeValue };
+      const photoFilterLegacy = { imei: imeiValue, tipo: GTPHD, photo_time: photoTimeValue };
       const photosCol = dbTrackingSystem.collection('photos_unidad');
 
       // Día local America/Guayaquil (UTC-5, sin DST): num_img reinicia cada día por IMEI
@@ -513,12 +525,22 @@ function gtpHdTryPersistPhoto(assemblyKey, opts) {
       const hoyDesde = moment.parseZone(fechaBase + 'T00:00:00-05:00').toDate();
       const hoyHasta = moment.parseZone(fechaBase + 'T23:59:59.999-05:00').toDate();
 
-      photosCol.findOne(photoFilter, function (errFind, existing) {
+      function findExistingPhoto(cb) {
+        photosCol.findOne(photoFilter, function (errFind, existing) {
+          if (!errFind && existing) return cb(null, existing, photoFilter);
+          photosCol.findOne(photoFilterLegacy, function (errLegacy, legacy) {
+            if (!errLegacy && legacy) return cb(null, legacy, { _id: legacy._id });
+            cb(errFind || errLegacy, null, photoFilter);
+          });
+        });
+      }
+
+      findExistingPhoto(function (errFind, existing, updateFilter) {
         function upsertPhoto(numImg) {
           const setDoc = Object.assign({}, photoDoc);
           if (numImg != null && numImg > 0) setDoc.num_img = numImg;
           photosCol.updateOne(
-            photoFilter,
+            updateFilter,
             { $set: setDoc },
             { upsert: true, writeConcern: { w: 0 } }
           );
@@ -576,7 +598,10 @@ function gtpHdTryPersistPhoto(assemblyKey, opts) {
       if (!err && doc) {
         st2.latitud = toFloat(doc.latitud);
         st2.longitud = toFloat(doc.longitud);
-        if (!st2.fechaGps) st2.fechaGps = doc.fecha_gps || new Date();
+        // photo_time es la fecha operativa; no rellenar con fecha_gps de la unidad
+        if (!st2.photoTimeDate && toInteger(st2.photoTime) != 0) {
+          st2.photoTimeDate = moment(st2.photoTime, DEVICE_DATE_FORMAT).toDate();
+        }
       }
     });
   }
@@ -668,6 +693,9 @@ function ingestGtpHdMessage(message) {
     state = {
       imei: imeiValue,
       photoTime: photoTimeValue,
+      photoTimeDate: (toInteger(photoTimeValue) != 0)
+        ? moment(photoTimeValue, DEVICE_DATE_FORMAT).toDate()
+        : null,
       cameraId: cameraIdValue,
       totalFrames: totalFramesValue,
       frames: new Map(),
@@ -675,7 +703,7 @@ function ingestGtpHdMessage(message) {
       updatedAt: Date.now(),
       latitud: 0,
       longitud: 0,
-      fechaGps: null
+      fechaGps: null // solo informativo (gpsUtcTime de GTPHL)
     };
     photoAssemblies.set(key, state);
   }
@@ -706,7 +734,17 @@ function ingestGtpHdMessage(message) {
   if (locationInfo) {
     state.latitud = toFloat(locationInfo.latitud);
     state.longitud = toFloat(locationInfo.longitud);
-    state.fechaGps = locationInfo.fecha_gps;
+    // Operativo: photo_time de GTPHL (reemplaza el uso anterior de fecha_gps)
+    if (locationInfo.photoTimeDate) {
+      state.photoTimeDate = locationInfo.photoTimeDate;
+    }
+    // Informativo: fecha_gps de GTPHL
+    if (locationInfo.fecha_gps) {
+      state.fechaGps = locationInfo.fecha_gps;
+    }
+  }
+  if (!state.photoTimeDate && toInteger(photoTimeValue) != 0) {
+    state.photoTimeDate = moment(photoTimeValue, DEVICE_DATE_FORMAT).toDate();
   }
 
   // 1) Completa N/N → JPEG final ya
@@ -1832,14 +1870,22 @@ function onClientConnected(socket) {
 
         if (!data[imei]) return;
 
+        // photo_time (campo 6): fecha operativa (antes se usaba fecha_gps de este reporte)
+        // fecha_gps / gpsUtcTime (campo 13): solo informativo para photos_unidad
+        const photoTimeRaw = String(data[photoTime] || '').trim();
+        const photoTimeDate = (toInteger(photoTimeRaw) != 0)
+          ? moment(photoTimeRaw, DEVICE_DATE_FORMAT).toDate()
+          : null;
+
         const fecha_gps = (toInteger(data[gpsUtcTime]) != 0)
           ? moment(data[gpsUtcTime], DEVICE_DATE_FORMAT).toDate()
-          : ((toInteger(data[photoTime]) != 0) ? moment(data[photoTime], DEVICE_DATE_FORMAT).toDate() : new Date());
+          : null;
 
         const locationPayload = {
           imei: String(data[imei] || '').trim(),
           cameraId: String(data[cameraId] || '').trim(),
-          photoTime: String(data[photoTime] || '').trim(),
+          photoTime: photoTimeRaw,
+          photoTimeDate: photoTimeDate,
           latitud: toFloat(data[latitude]),
           longitud: toFloat(data[longitude]),
           fecha_gps: fecha_gps,
@@ -1850,8 +1896,21 @@ function onClientConnected(socket) {
 
         const locationCacheKey = locationPayload.imei + '_' + locationPayload.photoTime;
 
+        function applyGtpHlToAssemblies() {
+          photoAssemblies.forEach(function (st) {
+            if (!st || st._persisted) return;
+            if (String(st.imei) !== locationPayload.imei) return;
+            if (String(st.photoTime) !== locationPayload.photoTime) return;
+            if (locationPayload.photoTimeDate) st.photoTimeDate = locationPayload.photoTimeDate;
+            if (locationPayload.fecha_gps) st.fechaGps = locationPayload.fecha_gps;
+            if (locationPayload.latitud !== 0) st.latitud = locationPayload.latitud;
+            if (locationPayload.longitud !== 0) st.longitud = locationPayload.longitud;
+          });
+        }
+
         function persistLocationCache() {
           lastPhotoLocationByImei.set(locationCacheKey, locationPayload);
+          applyGtpHlToAssemblies();
         }
 
         // Si no viene coordenada valida, usar ultima posicion de la unidad.
@@ -1866,9 +1925,7 @@ function onClientConnected(socket) {
             else if (document) {
               locationPayload.latitud = toFloat(document.latitud);
               locationPayload.longitud = toFloat(document.longitud);
-              if (!locationPayload.fecha_gps || Number.isNaN(locationPayload.fecha_gps.getTime())) {
-                locationPayload.fecha_gps = document.fecha_gps || new Date();
-              }
+              // No rellenar fecha_gps informativa ni photo_time con datos de la unidad
             }
             locationPayload.storedAt = Date.now();
             persistLocationCache();
