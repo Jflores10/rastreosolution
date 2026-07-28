@@ -126,7 +126,7 @@ class PhotoUnidadController extends Controller
             }
         }
 
-        $query->where('fecha', '>=', $desdeDate)->where('fecha', '<=', $hastaDate);
+        $query->where('photo_time_fc', '>=', $desdeDate)->where('photo_time_fc', '<=', $hastaDate);
 
         if (!$esDistribuidor) {
             $query->where('marcada', true);

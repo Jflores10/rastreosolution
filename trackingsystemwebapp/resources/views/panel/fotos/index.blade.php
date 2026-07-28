@@ -126,12 +126,12 @@
                                     @foreach ($items as $row)
                                         @php
                                             $unidadTexto = $unidades_por_imei[(string) $row->imei] ?? ('IMEI: ' . (string) $row->imei);
-                                            $fechaGpsVista = '';
+                                            $fechaFotoVista = '';
                                             if (!empty($row->photo_time_fc)) {
                                                 try {
-                                                    $fechaGpsVista = \Carbon\Carbon::parse($row->photo_time_fc)->subHours(5)->format('Y-m-d H:i:s');
+                                                    $fechaFotoVista = \Carbon\Carbon::parse($row->photo_time_fc)->subHours(5)->format('Y-m-d H:i:s');
                                                 } catch (\Exception $e) {
-                                                    $fechaGpsVista = (string) $row->photo_time_fc;
+                                                    $fechaFotoVista = (string) $row->photo_time_fc;
                                                 }
                                             }
                                         @endphp
@@ -139,7 +139,7 @@
                                             <td class="text-center">{{ !empty($row->num_img) ? (int) $row->num_img : '—' }}</td>
                                             <td>{{ $unidadTexto }}</td>
                                             <td>{{ $row->fecha }}</td>
-                                            <td>{{ $fechaGpsVista }}</td>
+                                            <td>{{ $fechaFotoVista }}</td>
                                             <td>
                                                 @if (!empty($row->imagen))
                                                     <a
