@@ -115,7 +115,7 @@
                                         <th>#</th>
                                         <th>Unidad</th>
                                         <th>Fecha registro</th>
-                                        <th>Fecha foto</th>
+                                        <th>Fecha GPS</th>
                                         <th>Imagen</th>
                                         @if (!empty($es_distribuidor))
                                             <th>Marcada</th>
@@ -126,19 +126,12 @@
                                     @foreach ($items as $row)
                                         @php
                                             $unidadTexto = $unidades_por_imei[(string) $row->imei] ?? ('IMEI: ' . (string) $row->imei);
-                                            $fechaFotoVista = '';
-                                            if (!empty($row->photo_time)) {
+                                            $fechaGpsVista = '';
+                                            if (!empty($row->fecha_gps)) {
                                                 try {
-                                                    $fechaFotoVista = \Carbon\Carbon::parse($row->photo_time)->subHours(5)->format('Y-m-d H:i:s');
+                                                    $fechaGpsVista = \Carbon\Carbon::parse($row->fecha_gps)->subHours(5)->format('Y-m-d H:i:s');
                                                 } catch (\Exception $e) {
-                                                    $fechaFotoVista = (string) $row->photo_time;
-                                                }
-                                            } elseif (!empty($row->fecha_gps)) {
-                                                // Legado: fotos antiguas solo con fecha_gps
-                                                try {
-                                                    $fechaFotoVista = \Carbon\Carbon::parse($row->fecha_gps)->subHours(5)->format('Y-m-d H:i:s');
-                                                } catch (\Exception $e) {
-                                                    $fechaFotoVista = (string) $row->fecha_gps;
+                                                    $fechaGpsVista = (string) $row->fecha_gps;
                                                 }
                                             }
                                         @endphp
@@ -146,7 +139,7 @@
                                             <td class="text-center">{{ !empty($row->num_img) ? (int) $row->num_img : '—' }}</td>
                                             <td>{{ $unidadTexto }}</td>
                                             <td>{{ $row->fecha }}</td>
-                                            <td>{{ $fechaFotoVista }}</td>
+                                            <td>{{ $fechaGpsVista }}</td>
                                             <td>
                                                 @if (!empty($row->imagen))
                                                     <a
