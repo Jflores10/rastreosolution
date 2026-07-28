@@ -272,7 +272,7 @@ function gtpHdFramesComplete(st) {
   return true;
 }
 
-function gtpHdTrackFrameArrival(st, currentFrameValue) {
+function gtpHdTrackFrameArrival(st, currentFrameValue, meta) {
   const now = Date.now();
   if (st.lastFrameAt) {
     const gap = now - st.lastFrameAt;
@@ -285,6 +285,58 @@ function gtpHdTrackFrameArrival(st, currentFrameValue) {
   st.lastFrameAt = now;
   st.updatedAt = now;
   st.maxFrameReceived = Math.max(st.maxFrameReceived || 0, toInteger(currentFrameValue));
+
+  // Historial de llegada (para campo log en photos_unidad)
+  if (!st.arrivalLog) st.arrivalLog = [];
+  const m = meta || {};
+  st.arrivalLog.push({
+    seq: st.arrivalLog.length + 1,
+    frame: toInteger(currentFrameValue),
+    len: toInteger(m.len) || (st.frames.has(currentFrameValue) ? String(st.frames.get(currentFrameValue) || '').length : 0),
+    declaredLen: toInteger(m.declaredLen) || null,
+    duplicado: !!m.duplicado,
+    at: new Date(now).toISOString()
+  });
+}
+
+/** Arma el log ordenado 1..N para inspeccionar qué frames llegaron al ensamblador. */
+function gtpHdBuildPhotoLog(st) {
+  const total = gtpHdTotalFrames(st);
+  const porNumero = [];
+  for (let i = 1; i <= total; i++) {
+    if (st.frames.has(i)) {
+      const payload = String(st.frames.get(i) || '');
+      porNumero.push({
+        n: i,
+        ok: true,
+        len: payload.length,
+        preview: payload.substring(0, 24)
+      });
+    } else {
+      porNumero.push({ n: i, ok: false, len: 0, preview: null });
+    }
+  }
+  const faltantes = porNumero.filter(function (f) { return !f.ok; }).map(function (f) { return f.n; });
+  const ordenLlegada = Array.isArray(st.arrivalLog)
+    ? st.arrivalLog.map(function (e) { return e.frame; })
+    : [];
+  const descartados = Array.isArray(st.arrivalLog)
+    ? st.arrivalLog.filter(function (e) { return e.descartado; })
+    : [];
+  const texto = porNumero.map(function (f) {
+    return f.ok ? (f.n + ':OK(' + f.len + ')') : (f.n + ':FALTA');
+  }).join(' | ');
+
+  return {
+    total: total,
+    recibidos: st.frames.size,
+    faltantes: faltantes,
+    orden_llegada: ordenLlegada,
+    por_numero: porNumero,
+    llegada: Array.isArray(st.arrivalLog) ? st.arrivalLog.slice() : [],
+    descartados: descartados,
+    texto: texto
+  };
 }
 
 function gtpHdClearIdleTimer(st) {
@@ -516,7 +568,8 @@ function gtpHdTryPersistPhoto(assemblyKey, opts) {
         js: true,
         frames_recibidos: framesReported,
         frames_esperados: stNow.totalFrames || null,
-        ensamblaje_parcial: !isComplete
+        ensamblaje_parcial: !isComplete,
+        log: gtpHdBuildPhotoLog(stNow)
       };
       if (!isComplete && missingFrames.length) {
         photoDoc.frames_faltantes = missingFrames;
@@ -1883,6 +1936,40 @@ function onClientConnected(socket) {
             sendTime: sendTimeValue,
             count: countTail
           });
+          // Registrar en el log del ensamblaje aunque no se use el payload
+          const discardKey = imeiValue + '_' + photoTimeValue + '_' + cameraIdValue;
+          let discardState = photoAssemblies.get(discardKey);
+          if (!discardState && photoAssemblies.size < MAX_ACTIVE_PHOTO_ASSEMBLIES) {
+            discardState = {
+              imei: imeiValue,
+              photoTime: photoTimeValue,
+              cameraId: cameraIdValue,
+              totalFrames: totalFramesValue,
+              frames: new Map(),
+              arrivalLog: [],
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+              latitud: 0,
+              longitud: 0,
+              fechaGps: null
+            };
+            photoAssemblies.set(discardKey, discardState);
+          }
+          if (discardState) {
+            if (totalFramesValue > 0) discardState.totalFrames = totalFramesValue;
+            if (!discardState.arrivalLog) discardState.arrivalLog = [];
+            discardState.arrivalLog.push({
+              seq: discardState.arrivalLog.length + 1,
+              frame: currentFrameValue,
+              len: base64Payload.length,
+              declaredLen: photoDataLengthValue,
+              descartado: true,
+              motivo: 'length_mismatch',
+              at: new Date().toISOString()
+            });
+            discardState.updatedAt = Date.now();
+            gtpHdScheduleIdlePersist(discardKey);
+          }
           return;
         }
 
@@ -1902,6 +1989,7 @@ function onClientConnected(socket) {
             cameraId: cameraIdValue,
             totalFrames: totalFramesValue,
             frames: new Map(),
+            arrivalLog: [],
             createdAt: Date.now(),
             updatedAt: Date.now(),
             latitud: 0,
@@ -1915,17 +2003,24 @@ function onClientConnected(socket) {
           state.totalFrames = totalFramesValue;
         }
 
+        let wasDuplicate = false;
         if (state.frames.has(currentFrameValue)) {
           // Reemplazar solo si el nuevo chunk tiene el tamaño declarado y el anterior no
           const prev = state.frames.get(currentFrameValue);
           const prevOk = photoDataLengthValue <= 0 || (prev && prev.length === photoDataLengthValue);
           if (!prevOk) {
             state.frames.set(currentFrameValue, base64Payload);
+          } else {
+            wasDuplicate = true;
           }
         } else {
           state.frames.set(currentFrameValue, base64Payload);
         }
-        gtpHdTrackFrameArrival(state, currentFrameValue);
+        gtpHdTrackFrameArrival(state, currentFrameValue, {
+          len: base64Payload.length,
+          declaredLen: photoDataLengthValue,
+          duplicado: wasDuplicate
+        });
 
         const locationInfo = lastPhotoLocationByImei.get(locationCacheKey);
         if (locationInfo) {
