@@ -1254,49 +1254,91 @@ function actualizarSentidoUnidad(dbTrackingSystem, unidad, pdiActual, entrada, r
  * si varios ya iniciaron, se toma el de fecha de salida más reciente
  * cuya ventana cubra fecha_gps (o el más reciente si ya pasó el fin).
  */
-function seleccionarDespachoActualUnidad(despachos, fechaGps) {
-  if (!Array.isArray(despachos) || despachos.length === 0) return null;
+function seleccionarDespachoActualUnidad(despachos, fechaGps, ctxLog) {
+  const tag = '[finish-despacho]';
+  if (!Array.isArray(despachos) || despachos.length === 0) {
+    console.log(tag, 'selección: sin despachos pendientes', ctxLog || '');
+    return null;
+  }
 
   let refGps = null;
+  let refGpsOrigen = 'ahora+10h';
   if (fechaGps) {
     const fg = (fechaGps instanceof Date) ? fechaGps : new Date(fechaGps);
-    if (!isNaN(fg.getTime())) refGps = fg;
+    if (!isNaN(fg.getTime())) {
+      refGps = fg;
+      refGpsOrigen = 'fecha_gps trama';
+    }
   }
   if (!refGps) {
     // fecha_gps del dispositivo ~ local+offset; aproximar con ahora + 10h (misma escala del sistema)
     refGps = new Date(Date.now() + (10 * 60 * 60 * 1000));
   }
 
+  console.log(tag, 'selección: evaluando', despachos.length, 'despacho(s) P | refGps=', refGps.toISOString(), '| origen=', refGpsOrigen, ctxLog || '');
+
   const candidatos = [];
+  const rechazados = [];
   for (let i = 0; i < despachos.length; i++) {
     const d = despachos[i];
     const puntos = Array.isArray(d.puntos_control) ? d.puntos_control : [];
-    if (puntos.length === 0 || !d.fecha || !puntos[puntos.length - 1].tiempo_esperado) continue;
+    if (puntos.length === 0 || !d.fecha || !puntos[puntos.length - 1].tiempo_esperado) {
+      rechazados.push({ id: String(d._id), motivo: 'sin puntos/fecha/tiempo_esperado' });
+      continue;
+    }
 
     const inicioGps = new Date(new Date(d.fecha).getTime() + (10 * 60 * 60 * 1000));
     const finGps = new Date(new Date(puntos[puntos.length - 1].tiempo_esperado).getTime() + (10 * 60 * 60 * 1000));
     // margen de atraso para aún considerar el viaje actual
     const finConMargen = new Date(finGps.getTime() + (2 * 60 * 60 * 1000));
 
-    if (isNaN(inicioGps.getTime()) || isNaN(finGps.getTime())) continue;
+    if (isNaN(inicioGps.getTime()) || isNaN(finGps.getTime())) {
+      rechazados.push({ id: String(d._id), motivo: 'fechas inválidas' });
+      continue;
+    }
     // Aún no empieza este despacho
-    if (refGps < inicioGps) continue;
+    if (refGps < inicioGps) {
+      rechazados.push({
+        id: String(d._id),
+        motivo: 'aún no inicia',
+        inicioGps: inicioGps.toISOString(),
+        finGps: finGps.toISOString()
+      });
+      continue;
+    }
 
+    const enVentana = refGps <= finConMargen;
     candidatos.push({
       despacho: d,
       inicioGps: inicioGps,
       finConMargen: finConMargen,
-      enVentana: refGps <= finConMargen
+      enVentana: enVentana
     });
+    console.log(tag, 'selección: candidato', String(d._id),
+      '| inicio=', inicioGps.toISOString(),
+      '| fin+margen=', finConMargen.toISOString(),
+      '| enVentana=', enVentana);
   }
 
-  if (candidatos.length === 0) return null;
+  if (rechazados.length) {
+    console.log(tag, 'selección: rechazados=', JSON.stringify(rechazados));
+  }
+
+  if (candidatos.length === 0) {
+    console.log(tag, 'selección: ningún candidato iniciado', ctxLog || '');
+    return null;
+  }
 
   // Preferir los que aún están en su ventana horaria; entre ellos el de salida más reciente
   const enVentana = candidatos.filter(c => c.enVentana);
   const pool = enVentana.length > 0 ? enVentana : candidatos;
   pool.sort((a, b) => b.inicioGps.getTime() - a.inicioGps.getTime());
-  return pool[0].despacho;
+  const elegido = pool[0].despacho;
+  console.log(tag, 'selección: ELEGIDO', String(elegido._id),
+    '| pool=', pool.length,
+    '| usóVentana=', enVentana.length > 0,
+    ctxLog || '');
+  return elegido;
 }
 
 /**
@@ -1304,13 +1346,31 @@ function seleccionarDespachoActualUnidad(despachos, fechaGps) {
  * del despacho EN CURSO de la unidad, solicita a Laravel DespachoController::end.
  */
 function intentarFinalizarDespachoPorIngreso(unidad, pdi, fechaGps) {
+  const tag = '[finish-despacho]';
   try {
-    if (!unidad || !unidad._id) return;
-    if (pdi == null || pdi === '') return;
-    if (!LARAVEL_FINISH_DESPACHO_URL || !LARAVEL_PUSH_SECRET) return;
+    const imeiLog = unidad && unidad.imei ? unidad.imei : '-';
+    const unidadIdLog = unidad && unidad._id ? String(unidad._id) : '-';
+    console.log(tag, '▶ INICIO', '| imei=', imeiLog, '| unidad=', unidadIdLog, '| pdi_trama=', pdi, '| fecha_gps=', fechaGps || null);
+
+    if (!unidad || !unidad._id) {
+      console.log(tag, '✗ abort: unidad inválida');
+      return;
+    }
+    if (pdi == null || pdi === '') {
+      console.log(tag, '✗ abort: pdi vacío', '| imei=', imeiLog);
+      return;
+    }
+    if (!LARAVEL_FINISH_DESPACHO_URL || !LARAVEL_PUSH_SECRET) {
+      console.log(tag, '✗ abort: falta LARAVEL_FINISH_DESPACHO_URL o LARAVEL_PUSH_SECRET',
+        '| url=', !!LARAVEL_FINISH_DESPACHO_URL, '| secret=', !!LARAVEL_PUSH_SECRET);
+      return;
+    }
 
     const pdiNum = parseInt(pdi, 10);
-    if (!Number.isFinite(pdiNum)) return;
+    if (!Number.isFinite(pdiNum)) {
+      console.log(tag, '✗ abort: pdi no numérico', pdi, '| imei=', imeiLog);
+      return;
+    }
 
     const fechaBase = moment().format('YYYY-MM-DD');
     // Misma ventana del día que FinalizarDespachosCommand (-5h)
@@ -1325,26 +1385,53 @@ function intentarFinalizarDespachoPorIngreso(unidad, pdi, fechaGps) {
       ]
     };
 
+    console.log(tag, 'paso1: buscando despachos P del día',
+      '| unidad=', unidadIdStr,
+      '| desde=', hoyDesde.toISOString(),
+      '| hasta=', hoyHasta.toISOString());
+
     dbTrackingSystem.collection('despachos').find({
       ...matchUnidad,
       estado: 'P',
       fecha: { $gte: hoyDesde, $lte: hoyHasta }
     }).sort({ fecha: 1 }).toArray(function (err, despachos) {
       if (err) {
-        console.error('❌ Error buscando despacho para finalizar:', err);
+        console.error(tag, '✗ error Mongo despachos:', err);
         return;
       }
-      if (!Array.isArray(despachos) || despachos.length === 0) return;
+      if (!Array.isArray(despachos) || despachos.length === 0) {
+        console.log(tag, '✗ abort: sin despachos P hoy', '| imei=', imeiLog, '| unidad=', unidadIdStr);
+        return;
+      }
+
+      console.log(tag, 'paso2: encontrados', despachos.length, 'despacho(s) P:',
+        despachos.map(function (d) {
+          return { id: String(d._id), fecha: d.fecha, puntos: Array.isArray(d.puntos_control) ? d.puntos_control.length : 0 };
+        }));
 
       // Con varios P del día (creados en la mañana), solo el despacho en curso
-      const despacho = seleccionarDespachoActualUnidad(despachos, fechaGps);
-      if (!despacho) return;
+      const despacho = seleccionarDespachoActualUnidad(despachos, fechaGps, '| imei=' + imeiLog);
+      if (!despacho) {
+        console.log(tag, '✗ abort: no hay despacho en curso para esta fecha_gps', '| imei=', imeiLog);
+        return;
+      }
 
       const puntos = Array.isArray(despacho.puntos_control) ? despacho.puntos_control : [];
-      if (puntos.length === 0) return;
+      if (puntos.length === 0) {
+        console.log(tag, '✗ abort: despacho sin puntos_control', String(despacho._id));
+        return;
+      }
 
       const ultimo = puntos[puntos.length - 1];
-      if (!ultimo || !ultimo.id) return;
+      if (!ultimo || !ultimo.id) {
+        console.log(tag, '✗ abort: último punto sin id', String(despacho._id));
+        return;
+      }
+
+      console.log(tag, 'paso3: despacho en curso', String(despacho._id),
+        '| puntos=', puntos.length,
+        '| ultimo_id=', String(ultimo.id),
+        '| tiempo_esperado_ultimo=', ultimo.tiempo_esperado || null);
 
       // Evitar cerrar con la entrada al inicio si el PDI del primer y último punto coincide:
       // solo aceptar si fecha_gps >= tiempo_esperado del penúltimo (+10h, escala fecha_gps).
@@ -1353,23 +1440,62 @@ function intentarFinalizarDespachoPorIngreso(unidad, pdi, fechaGps) {
         if (!isNaN(penultimoTe.getTime())) {
           const desdeGps = new Date(penultimoTe.getTime() + (10 * 60 * 60 * 1000));
           const fg = (fechaGps instanceof Date) ? fechaGps : new Date(fechaGps);
-          if (!isNaN(fg.getTime()) && fg < desdeGps) return;
+          if (!isNaN(fg.getTime()) && fg < desdeGps) {
+            console.log(tag, '✗ abort: fecha_gps antes del penúltimo (posible entrada al inicio de ruta)',
+              '| despacho=', String(despacho._id),
+              '| fecha_gps=', fg.toISOString(),
+              '| desde_penultimo=', desdeGps.toISOString(),
+              '| pdi_trama=', pdiNum);
+            return;
+          }
+          console.log(tag, 'paso4: OK ventana penúltimo',
+            '| fecha_gps=', fg.toISOString(),
+            '| desde_penultimo=', desdeGps.toISOString());
         }
+      } else {
+        console.log(tag, 'paso4: sin validación penúltimo (1 punto o sin fecha_gps)');
       }
 
       let ultimoId;
       try { ultimoId = ObjectId(String(ultimo.id)); }
-      catch (e) { return; }
+      catch (e) {
+        console.log(tag, '✗ abort: id último punto no es ObjectId válido', String(ultimo.id), e && e.message ? e.message : e);
+        return;
+      }
+
+      console.log(tag, 'paso5: cargando punto_control', String(ultimoId), '| comparar pdi_trama=', pdiNum);
 
       dbTrackingSystem.collection('punto_controls').findOne({ _id: ultimoId }, function (errPc, puntoUltimo) {
-        if (errPc || !puntoUltimo || puntoUltimo.pdi == null) return;
-        if (parseInt(puntoUltimo.pdi, 10) !== pdiNum) return;
+        if (errPc) {
+          console.error(tag, '✗ error Mongo punto_controls:', errPc);
+          return;
+        }
+        if (!puntoUltimo || puntoUltimo.pdi == null) {
+          console.log(tag, '✗ abort: punto_control no encontrado o sin pdi', String(ultimoId));
+          return;
+        }
+
+        const pdiUltimo = parseInt(puntoUltimo.pdi, 10);
+        console.log(tag, 'paso6: comparar PDI',
+          '| pdi_ultimo_punto=', pdiUltimo,
+          '| pdi_trama=', pdiNum,
+          '| desc=', puntoUltimo.descripcion || '-');
+
+        if (pdiUltimo !== pdiNum) {
+          console.log(tag, '✗ abort: PDI no es el último punto del despacho',
+            '| despacho=', String(despacho._id),
+            '| pdi_ultimo=', pdiUltimo,
+            '| pdi_trama=', pdiNum,
+            '| imei=', imeiLog);
+          return;
+        }
 
         const infoLog = {
           despacho_id: String(despacho._id),
           unidad_id: unidadIdStr,
           imei: unidad.imei || null,
-          pdi_ultimo_punto: parseInt(puntoUltimo.pdi, 10),
+          pdi_ultimo_punto: pdiUltimo,
+          pdi_trama: pdiNum,
           punto_control_id: String(ultimo.id),
           descripcion_punto: puntoUltimo.descripcion || null,
           fecha_despacho: despacho.fecha || null,
@@ -1379,7 +1505,8 @@ function intentarFinalizarDespachoPorIngreso(unidad, pdi, fechaGps) {
         // Solo cooperativas con job de finalización automática
         const coopId = unidad.cooperativa_id;
         if (!coopId) {
-          console.log('🚌 Finalizando despacho (ingreso último punto):', JSON.stringify(infoLog));
+          console.log(tag, 'paso7: sin cooperativa_id en unidad → finalizar igual');
+          console.log(tag, '✓ CONDICIONES OK → solicitar end()', JSON.stringify(infoLog));
           solicitarFinalizarDespachoLaravel(String(despacho._id), infoLog);
           return;
         }
@@ -1391,29 +1518,43 @@ function intentarFinalizarDespachoPorIngreso(unidad, pdi, fechaGps) {
           coopQuery = { _id: coopId };
         }
 
+        console.log(tag, 'paso7: validando cooperativa despachos_job', String(coopId));
+
         dbTrackingSystem.collection('cooperativas').findOne(coopQuery, function (errCoop, coop) {
           if (errCoop) {
-            console.error('❌ Error buscando cooperativa para finalizar despacho:', errCoop);
+            console.error(tag, '✗ error Mongo cooperativas:', errCoop);
             return;
           }
           if (coop && coop.despachos_job && String(coop.despachos_job).toUpperCase() !== 'S') {
+            console.log(tag, '✗ abort: cooperativa sin despachos_job=S',
+              '| coop=', coop.descripcion || String(coopId),
+              '| despachos_job=', coop.despachos_job);
             return;
           }
           infoLog.cooperativa = coop && coop.descripcion ? coop.descripcion : String(coopId);
-          console.log('🚌 Finalizando despacho (ingreso último punto):', JSON.stringify(infoLog));
+          infoLog.despachos_job = coop ? coop.despachos_job : null;
+          console.log(tag, '✓ CONDICIONES OK → solicitar end()', JSON.stringify(infoLog));
           solicitarFinalizarDespachoLaravel(String(despacho._id), infoLog);
         });
       });
     });
   } catch (e) {
-    console.error('❌ intentarFinalizarDespachoPorIngreso:', e && e.message ? e.message : e);
+    console.error(tag, '✗ exception:', e && e.message ? e.message : e);
   }
 }
 
 function solicitarFinalizarDespachoLaravel(despachoId, infoLog) {
+  const tag = '[finish-despacho]';
   try {
-    if (!despachoId || !LARAVEL_FINISH_DESPACHO_URL || !LARAVEL_PUSH_SECRET) return;
-    if (finishingDespachoIds.has(despachoId)) return;
+    if (!despachoId || !LARAVEL_FINISH_DESPACHO_URL || !LARAVEL_PUSH_SECRET) {
+      console.log(tag, '✗ HTTP abort: config incompleta', '| id=', despachoId);
+      return;
+    }
+    if (finishingDespachoIds.has(despachoId)) {
+      console.log(tag, '✗ HTTP skip: ya en curso (anti-duplicado)', despachoId,
+        '| pdi_ultimo=', infoLog && infoLog.pdi_ultimo_punto != null ? infoLog.pdi_ultimo_punto : '-');
+      return;
+    }
     finishingDespachoIds.add(despachoId);
 
     const parsed = url.parse(LARAVEL_FINISH_DESPACHO_URL);
@@ -1436,8 +1577,11 @@ function solicitarFinalizarDespachoLaravel(despachoId, infoLog) {
       timeout: 120000
     };
 
-    console.log('➡️ Solicitando end() Laravel:', despachoId,
-      '| pdi_ultimo:', infoLog && infoLog.pdi_ultimo_punto != null ? infoLog.pdi_ultimo_punto : '-');
+    console.log(tag, 'paso8: POST Laravel',
+      '| url=', LARAVEL_FINISH_DESPACHO_URL,
+      '| despacho_id=', despachoId,
+      '| pdi_ultimo=', infoLog && infoLog.pdi_ultimo_punto != null ? infoLog.pdi_ultimo_punto : '-',
+      '| imei=', infoLog && infoLog.imei ? infoLog.imei : '-');
 
     const req = mod.request(opts, (res) => {
       let responseBody = '';
@@ -1446,29 +1590,33 @@ function solicitarFinalizarDespachoLaravel(despachoId, infoLog) {
       });
       res.on('end', () => {
         finishingDespachoIds.delete(despachoId);
-        console.log('⬅️ Despacho finalizado:', despachoId,
-          '| pdi_ultimo:', infoLog && infoLog.pdi_ultimo_punto != null ? infoLog.pdi_ultimo_punto : '-',
-          '| status:', res.statusCode,
-          '| body:', responseBody ? responseBody.substring(0, 300) : '');
+        let parsedBody = null;
+        try { parsedBody = responseBody ? JSON.parse(responseBody) : null; } catch (e) { parsedBody = null; }
+        const ok = res.statusCode >= 200 && res.statusCode < 300 && parsedBody && parsedBody.error === false;
+        console.log(tag, ok ? '✓ RESPUESTA OK' : '⚠ RESPUESTA',
+          '| despacho_id=', despachoId,
+          '| pdi_ultimo=', infoLog && infoLog.pdi_ultimo_punto != null ? infoLog.pdi_ultimo_punto : '-',
+          '| status=', res.statusCode,
+          '| body=', responseBody ? responseBody.substring(0, 500) : '(vacío)');
       });
     });
     req.on('timeout', () => {
       finishingDespachoIds.delete(despachoId);
-      console.error('⏱️ Timeout finish-despacho', despachoId,
-        '| pdi_ultimo:', infoLog && infoLog.pdi_ultimo_punto != null ? infoLog.pdi_ultimo_punto : '-');
+      console.error(tag, '✗ TIMEOUT Laravel', despachoId,
+        '| pdi_ultimo=', infoLog && infoLog.pdi_ultimo_punto != null ? infoLog.pdi_ultimo_punto : '-');
       try { req.destroy(); } catch (e) { }
     });
     req.on('error', (err) => {
       finishingDespachoIds.delete(despachoId);
-      console.error('❌ Error finish-despacho', despachoId,
-        '| pdi_ultimo:', infoLog && infoLog.pdi_ultimo_punto != null ? infoLog.pdi_ultimo_punto : '-',
+      console.error(tag, '✗ ERROR red Laravel', despachoId,
+        '| pdi_ultimo=', infoLog && infoLog.pdi_ultimo_punto != null ? infoLog.pdi_ultimo_punto : '-',
         err && err.message ? err.message : err);
     });
     req.write(payload);
     req.end();
   } catch (e) {
     finishingDespachoIds.delete(despachoId);
-    console.error('❌ solicitarFinalizarDespachoLaravel:', e && e.message ? e.message : e);
+    console.error(tag, '✗ exception HTTP:', e && e.message ? e.message : e);
   }
 }
 
@@ -2353,6 +2501,7 @@ function onClientConnected(socket) {
               if (!err && !isBuffMessage) actualizarSentidoUnidad(dbTrackingSystem, document, pdi, entrada, message);  // ✅
               if (!err && !isBuffMessage && entrada === 1) {
                 setImmediate(function () {
+                  console.log('[finish-despacho] trigger trama GTGIN', '| imei=', data[imei], '| pdi=', pdi, '| fecha_gps=', fecha_gps);
                   intentarFinalizarDespachoPorIngreso(document, pdi, fecha_gps);
                 });
               }
@@ -2477,6 +2626,7 @@ function onClientConnected(socket) {
               if (!err && !isBuffMessage) actualizarSentidoUnidad(dbTrackingSystem, document, pdi, inout, message);  // ✅
               if (!err && !isBuffMessage && inout === 1) {
                 setImmediate(function () {
+                  console.log('[finish-despacho] trigger trama GTGEO entrada', '| imei=', data[imei], '| pdi=', pdi, '| fecha_gps=', fecha_gps);
                   intentarFinalizarDespachoPorIngreso(document, pdi, fecha_gps);
                 });
               }
