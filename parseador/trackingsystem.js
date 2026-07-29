@@ -99,6 +99,15 @@ function pushDebugLog() {
 const LARAVEL_PUSH_URL = (process.env.LARAVEL_PUSH_URL || '').trim();
 /** Mismo valor que PARSER_PUSH_SECRET en .env de Laravel */
 const LARAVEL_PUSH_SECRET = (process.env.LARAVEL_PUSH_SECRET || '').trim();
+/** Finalizar despacho al ingresar al último punto: http://127.0.0.1/api/internal/finish-despacho */
+const LARAVEL_FINISH_DESPACHO_URL = (process.env.LARAVEL_FINISH_DESPACHO_URL || (
+  LARAVEL_PUSH_URL
+    ? LARAVEL_PUSH_URL.replace(/push-by-unidad\/?$/, 'finish-despacho')
+    : ''
+)).trim();
+
+/** Evita llamar end() dos veces para el mismo despacho en paralelo */
+const finishingDespachoIds = new Set();
 
 /**
  * Deben coincidir con `code` en notification_types (activos):
@@ -1239,6 +1248,230 @@ function actualizarSentidoUnidad(dbTrackingSystem, unidad, pdiActual, entrada, r
   });
 }
 
+/**
+ * Despacho en curso de la unidad entre varios pendientes del día.
+ * Los despachos futuros (aún no llega su fecha de salida) se ignoran;
+ * si varios ya iniciaron, se toma el de fecha de salida más reciente
+ * cuya ventana cubra fecha_gps (o el más reciente si ya pasó el fin).
+ */
+function seleccionarDespachoActualUnidad(despachos, fechaGps) {
+  if (!Array.isArray(despachos) || despachos.length === 0) return null;
+
+  let refGps = null;
+  if (fechaGps) {
+    const fg = (fechaGps instanceof Date) ? fechaGps : new Date(fechaGps);
+    if (!isNaN(fg.getTime())) refGps = fg;
+  }
+  if (!refGps) {
+    // fecha_gps del dispositivo ~ local+offset; aproximar con ahora + 10h (misma escala del sistema)
+    refGps = new Date(Date.now() + (10 * 60 * 60 * 1000));
+  }
+
+  const candidatos = [];
+  for (let i = 0; i < despachos.length; i++) {
+    const d = despachos[i];
+    const puntos = Array.isArray(d.puntos_control) ? d.puntos_control : [];
+    if (puntos.length === 0 || !d.fecha || !puntos[puntos.length - 1].tiempo_esperado) continue;
+
+    const inicioGps = new Date(new Date(d.fecha).getTime() + (10 * 60 * 60 * 1000));
+    const finGps = new Date(new Date(puntos[puntos.length - 1].tiempo_esperado).getTime() + (10 * 60 * 60 * 1000));
+    // margen de atraso para aún considerar el viaje actual
+    const finConMargen = new Date(finGps.getTime() + (2 * 60 * 60 * 1000));
+
+    if (isNaN(inicioGps.getTime()) || isNaN(finGps.getTime())) continue;
+    // Aún no empieza este despacho
+    if (refGps < inicioGps) continue;
+
+    candidatos.push({
+      despacho: d,
+      inicioGps: inicioGps,
+      finConMargen: finConMargen,
+      enVentana: refGps <= finConMargen
+    });
+  }
+
+  if (candidatos.length === 0) return null;
+
+  // Preferir los que aún están en su ventana horaria; entre ellos el de salida más reciente
+  const enVentana = candidatos.filter(c => c.enVentana);
+  const pool = enVentana.length > 0 ? enVentana : candidatos;
+  pool.sort((a, b) => b.inicioGps.getTime() - a.inicioGps.getTime());
+  return pool[0].despacho;
+}
+
+/**
+ * Si la entrada (GTGIN/GTGEO entrada=1) es al PDI del último punto de control
+ * del despacho EN CURSO de la unidad, solicita a Laravel DespachoController::end.
+ */
+function intentarFinalizarDespachoPorIngreso(unidad, pdi, fechaGps) {
+  try {
+    if (!unidad || !unidad._id) return;
+    if (pdi == null || pdi === '') return;
+    if (!LARAVEL_FINISH_DESPACHO_URL || !LARAVEL_PUSH_SECRET) return;
+
+    const pdiNum = parseInt(pdi, 10);
+    if (!Number.isFinite(pdiNum)) return;
+
+    const fechaBase = moment().format('YYYY-MM-DD');
+    // Misma ventana del día que FinalizarDespachosCommand (-5h)
+    const hoyDesde = moment(`${fechaBase} 00:00:00`, 'YYYY-MM-DD HH:mm:ss').subtract(5, 'hours').toDate();
+    const hoyHasta = moment(`${fechaBase} 23:59:59`, 'YYYY-MM-DD HH:mm:ss').subtract(5, 'hours').toDate();
+
+    const unidadIdStr = String(unidad._id);
+    const matchUnidad = {
+      $or: [
+        { unidad_id: unidadIdStr },
+        { unidad_id: unidad._id }
+      ]
+    };
+
+    dbTrackingSystem.collection('despachos').find({
+      ...matchUnidad,
+      estado: 'P',
+      fecha: { $gte: hoyDesde, $lte: hoyHasta }
+    }).sort({ fecha: 1 }).toArray(function (err, despachos) {
+      if (err) {
+        console.error('❌ Error buscando despacho para finalizar:', err);
+        return;
+      }
+      if (!Array.isArray(despachos) || despachos.length === 0) return;
+
+      // Con varios P del día (creados en la mañana), solo el despacho en curso
+      const despacho = seleccionarDespachoActualUnidad(despachos, fechaGps);
+      if (!despacho) return;
+
+      const puntos = Array.isArray(despacho.puntos_control) ? despacho.puntos_control : [];
+      if (puntos.length === 0) return;
+
+      const ultimo = puntos[puntos.length - 1];
+      if (!ultimo || !ultimo.id) return;
+
+      // Evitar cerrar con la entrada al inicio si el PDI del primer y último punto coincide:
+      // solo aceptar si fecha_gps >= tiempo_esperado del penúltimo (+10h, escala fecha_gps).
+      if (puntos.length >= 2 && puntos[puntos.length - 2].tiempo_esperado && fechaGps) {
+        const penultimoTe = new Date(puntos[puntos.length - 2].tiempo_esperado);
+        if (!isNaN(penultimoTe.getTime())) {
+          const desdeGps = new Date(penultimoTe.getTime() + (10 * 60 * 60 * 1000));
+          const fg = (fechaGps instanceof Date) ? fechaGps : new Date(fechaGps);
+          if (!isNaN(fg.getTime()) && fg < desdeGps) return;
+        }
+      }
+
+      let ultimoId;
+      try { ultimoId = ObjectId(String(ultimo.id)); }
+      catch (e) { return; }
+
+      dbTrackingSystem.collection('punto_controls').findOne({ _id: ultimoId }, function (errPc, puntoUltimo) {
+        if (errPc || !puntoUltimo || puntoUltimo.pdi == null) return;
+        if (parseInt(puntoUltimo.pdi, 10) !== pdiNum) return;
+
+        const infoLog = {
+          despacho_id: String(despacho._id),
+          unidad_id: unidadIdStr,
+          imei: unidad.imei || null,
+          pdi_ultimo_punto: parseInt(puntoUltimo.pdi, 10),
+          punto_control_id: String(ultimo.id),
+          descripcion_punto: puntoUltimo.descripcion || null,
+          fecha_despacho: despacho.fecha || null,
+          fecha_gps_entrada: fechaGps || null
+        };
+
+        // Solo cooperativas con job de finalización automática
+        const coopId = unidad.cooperativa_id;
+        if (!coopId) {
+          console.log('🚌 Finalizando despacho (ingreso último punto):', JSON.stringify(infoLog));
+          solicitarFinalizarDespachoLaravel(String(despacho._id), infoLog);
+          return;
+        }
+
+        let coopQuery;
+        try {
+          coopQuery = { _id: ObjectId(String(coopId)) };
+        } catch (e) {
+          coopQuery = { _id: coopId };
+        }
+
+        dbTrackingSystem.collection('cooperativas').findOne(coopQuery, function (errCoop, coop) {
+          if (errCoop) {
+            console.error('❌ Error buscando cooperativa para finalizar despacho:', errCoop);
+            return;
+          }
+          if (coop && coop.despachos_job && String(coop.despachos_job).toUpperCase() !== 'S') {
+            return;
+          }
+          infoLog.cooperativa = coop && coop.descripcion ? coop.descripcion : String(coopId);
+          console.log('🚌 Finalizando despacho (ingreso último punto):', JSON.stringify(infoLog));
+          solicitarFinalizarDespachoLaravel(String(despacho._id), infoLog);
+        });
+      });
+    });
+  } catch (e) {
+    console.error('❌ intentarFinalizarDespachoPorIngreso:', e && e.message ? e.message : e);
+  }
+}
+
+function solicitarFinalizarDespachoLaravel(despachoId, infoLog) {
+  try {
+    if (!despachoId || !LARAVEL_FINISH_DESPACHO_URL || !LARAVEL_PUSH_SECRET) return;
+    if (finishingDespachoIds.has(despachoId)) return;
+    finishingDespachoIds.add(despachoId);
+
+    const parsed = url.parse(LARAVEL_FINISH_DESPACHO_URL);
+    const payload = JSON.stringify({
+      secret: LARAVEL_PUSH_SECRET,
+      despacho_id: despachoId
+    });
+    const isHttps = parsed.protocol === 'https:';
+    const mod = isHttps ? https : http;
+    const port = parsed.port ? parseInt(parsed.port, 10) : (isHttps ? 443 : 80);
+    const opts = {
+      hostname: parsed.hostname,
+      port: port,
+      path: (parsed.path || '/') + (parsed.search || ''),
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(payload, 'utf8')
+      },
+      timeout: 120000
+    };
+
+    console.log('➡️ Solicitando end() Laravel:', despachoId,
+      '| pdi_ultimo:', infoLog && infoLog.pdi_ultimo_punto != null ? infoLog.pdi_ultimo_punto : '-');
+
+    const req = mod.request(opts, (res) => {
+      let responseBody = '';
+      res.on('data', (chunk) => {
+        try { responseBody += chunk.toString('utf8'); } catch (e) { }
+      });
+      res.on('end', () => {
+        finishingDespachoIds.delete(despachoId);
+        console.log('⬅️ Despacho finalizado:', despachoId,
+          '| pdi_ultimo:', infoLog && infoLog.pdi_ultimo_punto != null ? infoLog.pdi_ultimo_punto : '-',
+          '| status:', res.statusCode,
+          '| body:', responseBody ? responseBody.substring(0, 300) : '');
+      });
+    });
+    req.on('timeout', () => {
+      finishingDespachoIds.delete(despachoId);
+      console.error('⏱️ Timeout finish-despacho', despachoId,
+        '| pdi_ultimo:', infoLog && infoLog.pdi_ultimo_punto != null ? infoLog.pdi_ultimo_punto : '-');
+      try { req.destroy(); } catch (e) { }
+    });
+    req.on('error', (err) => {
+      finishingDespachoIds.delete(despachoId);
+      console.error('❌ Error finish-despacho', despachoId,
+        '| pdi_ultimo:', infoLog && infoLog.pdi_ultimo_punto != null ? infoLog.pdi_ultimo_punto : '-',
+        err && err.message ? err.message : err);
+    });
+    req.write(payload);
+    req.end();
+  } catch (e) {
+    finishingDespachoIds.delete(despachoId);
+    console.error('❌ solicitarFinalizarDespachoLaravel:', e && e.message ? e.message : e);
+  }
+}
+
 // ===================== COUNTER RESTART =====================
 function getTimeToRestartCounter() {
   const today = new Date();
@@ -2118,6 +2351,11 @@ function onClientConnected(socket) {
               js: true
             }, { writeConcern: { w: 0 } }, function (err) {
               if (!err && !isBuffMessage) actualizarSentidoUnidad(dbTrackingSystem, document, pdi, entrada, message);  // ✅
+              if (!err && !isBuffMessage && entrada === 1) {
+                setImmediate(function () {
+                  intentarFinalizarDespachoPorIngreso(document, pdi, fecha_gps);
+                });
+              }
               if (!err) {
                 dbTrackingSystem.collection('punto_controls').findOne({ pdi: String(pdi), cooperativa_id: String(document.cooperativa_id) }, function (errPuntoControl, puntoControl) {
                   if (errPuntoControl) console.error('❌ Error buscando punto_controls (GTGIN/GTGOT):', errPuntoControl);
@@ -2237,6 +2475,11 @@ function onClientConnected(socket) {
               js: true
             }, { writeConcern: { w: 0 } }, function (err) {
               if (!err && !isBuffMessage) actualizarSentidoUnidad(dbTrackingSystem, document, pdi, inout, message);  // ✅
+              if (!err && !isBuffMessage && inout === 1) {
+                setImmediate(function () {
+                  intentarFinalizarDespachoPorIngreso(document, pdi, fecha_gps);
+                });
+              }
               if (!err) {
 
                 dbTrackingSystem.collection('punto_controls').findOne({ pdi: String(pdi), cooperativa_id: String(document.cooperativa_id) }, function (errPuntoControl, puntoControl) {

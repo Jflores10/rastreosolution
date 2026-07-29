@@ -29,7 +29,7 @@ class FinalizarDespachosCommand extends Command
      *
      * @var string
      */
-    protected $description = 'Finaliza los despachos pendientes apenas la unidad marca el ultimo punto de control';
+    protected $description = 'Finaliza los despachos pendientes de las unidades de transporte al cumplirse el tiempo esperado de finalizacion de ruta';
 
     /**
      * Create a new command instance.
@@ -93,42 +93,65 @@ class FinalizarDespachosCommand extends Command
                     continue;
                 }
 
-                foreach ($despachos as $despacho) {
-                    try {
-                        $puntos = $despacho->puntos_control ?? [];
-                        if (empty($puntos)) continue;
+                // Varios P del día por unidad: no tocar despachos futuros;
+                // solo los ya iniciados cuyo tiempo_esperado ya venció.
+                $porUnidad = $despachos->groupBy(function ($d) {
+                    return (string) $d->unidad_id;
+                });
 
-                        $ultimo = end($puntos);
-                        if (!empty($ultimo['marca'])) {
-                            // marca se guarda como string 'Y-m-d H:i:s' (hora local),
-                            // no como UTCDateTime (a diferencia de tiempo_esperado).
-                            try {
-                                $tiempoMarca = Carbon::createFromFormat(
-                                    'Y-m-d H:i:s',
-                                    (string) $ultimo['marca'],
-                                    'America/Guayaquil'
-                                );
-                            } catch (\Exception $e) {
-                                $tiempoMarca = Carbon::parse((string) $ultimo['marca'], 'America/Guayaquil');
+                foreach ($porUnidad as $despachosUnidad) {
+                    $ahora = Carbon::now('America/Guayaquil');
+                    $ordenados = $despachosUnidad->sortBy(function ($d) {
+                        return $d->fecha ? $d->fecha->getTimestamp() : 0;
+                    })->values();
+
+                    foreach ($ordenados as $despacho) {
+                        try {
+                            if (empty($despacho->fecha)) {
+                                continue;
                             }
-                            $ahora = Carbon::now('America/Guayaquil');
 
-                            if ($ahora->greaterThanOrEqualTo($tiempoMarca)) {
-                                $this->info("Finalizando despacho {$despacho->_id} (marca: {$tiempoMarca})");
-                                $response = $ctrl->end($fakeRequest, $despacho->_id);
-                                $data = $response->getData(true);
+                            $inicio = Carbon::instance($despacho->fecha->toDateTime())
+                                ->addHours(5)
+                                ->setTimezone('America/Guayaquil');
 
-                                if (isset($data['error']) && $data['error'] === false) {
-                                    $this->info(" Despacho {$despacho->_id} finalizado correctamente.");
-                                } else {
-                                    $this->info(" Error al finalizar despacho {$despacho->_id}");
-                                }
+                            // Aún no empieza: los siguientes también son futuros
+                            if ($ahora->lt($inicio)) {
+                                break;
                             }
+
+                            $puntos = $despacho->puntos_control ?? [];
+                            if (empty($puntos)) {
+                                continue;
+                            }
+
+                            $ultimo = end($puntos);
+                            if (empty($ultimo['tiempo_esperado'])) {
+                                continue;
+                            }
+
+                            $tiempoEsperado = Carbon::instance($ultimo['tiempo_esperado']->toDateTime())
+                                ->addHours(5)
+                                ->setTimezone('America/Guayaquil');
+
+                            if ($ahora->lt($tiempoEsperado)) {
+                                // Este es el despacho en curso (ya inició, aún no vence): no cerrar ni los siguientes
+                                break;
+                            }
+
+                            $this->info("Finalizando despacho {$despacho->_id} (tiempo_esperado: {$tiempoEsperado})");
+                            $response = $ctrl->end($fakeRequest, $despacho->_id);
+                            $data = $response->getData(true);
+
+                            if (isset($data['error']) && $data['error'] === false) {
+                                $this->info(" Despacho {$despacho->_id} finalizado correctamente.");
+                            } else {
+                                $this->info(" Error al finalizar despacho {$despacho->_id}");
+                            }
+
+                        } catch (\Throwable $e) {
+                            $this->info(" Error procesando despacho {$despacho->_id}: " . $e->getMessage());
                         }
-
-                    } catch (\Throwable $e) {
-                        $this->info(" Error procesando despacho {$despacho->_id}: " . $e->getMessage());
-                      
                     }
                 }
             }
