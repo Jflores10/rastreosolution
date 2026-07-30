@@ -3226,7 +3226,7 @@ function onClientConnected(socket) {
         }
 
         // Techo 7 dígitos y módulo de rollover en este mensaje (distinto a GTDAT 65535/999999).
-        const MAX_COUNT = 9999999;
+        const MAX_COUNT = message.includes(GTDTTDGT)? 99999999: 9999999;
         const MAX_INCREMENTO = 100;
 
         const lecturaGtdttInvalida = function (v) {
