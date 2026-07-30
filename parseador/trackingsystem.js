@@ -3330,7 +3330,7 @@ function onClientConnected(socket) {
                 .replace(/\r/g, "")
                 .replace(/ /g, "")
                 .trim();
-              const m = /^(\d{8})(\d{4})(\d{5})$/.exec(count_parse);
+                const m = /^(\d{8})(\d{4})(\d{5})(?:\d{7})?$/.exec(count_parse);
               if (m) {
                 count_sensor_1 = toInteger(m[1]);
                 count_sensor_2 = toInteger(m[3]);
