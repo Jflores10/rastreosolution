@@ -95,6 +95,24 @@ function pushDebugLog() {
   const args = Array.prototype.slice.call(arguments);
   console.log.apply(console, ['[push-debug]'].concat(args));
 }
+
+/** IMEIs a los que se les rastrea el flujo GTDTT. '*' = todos, vacío = desactivado. */
+const GTDTT_DEBUG_IMEIS = String(process.env.GTDTT_DEBUG_IMEI || '867162025056912')
+  .split(',')
+  .map(function (v) { return v.trim(); })
+  .filter(function (v) { return v !== ''; });
+
+function gtdttDebugActivo(imeiValue) {
+  if (GTDTT_DEBUG_IMEIS.length === 0) return false;
+  if (GTDTT_DEBUG_IMEIS.indexOf('*') !== -1) return true;
+  return GTDTT_DEBUG_IMEIS.indexOf(String(imeiValue || '').trim()) !== -1;
+}
+
+function gtdttDebugLog(imeiValue) {
+  if (!gtdttDebugActivo(imeiValue)) return;
+  const args = Array.prototype.slice.call(arguments, 1);
+  console.log.apply(console, ['[gtdtt]', String(imeiValue || '-')].concat(args));
+}
 /** URL completa del endpoint Laravel, ej: http://127.0.0.1/api/internal/push-by-unidad */
 const LARAVEL_PUSH_URL = (process.env.LARAVEL_PUSH_URL || '').trim();
 /** Mismo valor que PARSER_PUSH_SECRET en .env de Laravel */
@@ -3189,9 +3207,21 @@ function onClientConnected(socket) {
         let type = 7;
         let data = message.split(',');
 
+        const imeiTrama = String(data[imei] || '').trim();
+        gtdttDebugLog(imeiTrama, 'paso1 trama recibida', {
+          campos: data.length,
+          eventType: data[type],
+          esDGT: message.includes(GTDTTDGT),
+          esBuff: isBuffMessage,
+          esATM: message.includes(ATM),
+          countRaw: data[message.includes(GTDTTDGT) ? 9 : 8],
+          trama: message.trim()
+        });
+
         const eventType = toInteger(data[type]);
         // IGNORAR evento 17: viene invertido y genera inconsistencias
         if (eventType == 17) {
+          gtdttDebugLog(imeiTrama, 'STOP paso1: eventType 17 ignorado');
           return;
         }
 
@@ -3266,8 +3296,28 @@ function onClientConnected(socket) {
         };
 
         dbTrackingSystem.collection('unidads').findOne({ imei: data[imei], estado: 'A' }, function (err, document) {
-          if (err) console.log(err);
+          if (err) {
+            gtdttDebugLog(imeiTrama, 'STOP paso2: error consultando unidads', err && err.message ? err.message : err);
+            console.log(err);
+          }
+          else if (!document) {
+            gtdttDebugLog(imeiTrama, 'STOP paso2: unidad no encontrada con imei exacto y estado A (revisar espacios en imei o estado)');
+          }
           else if (document) {
+            gtdttDebugLog(imeiTrama, 'paso2 unidad encontrada', {
+              unidad_id: String(document._id),
+              descripcion: document.descripcion,
+              contador_total: document.contador_total,
+              contador_inicial: document.contador_inicial,
+              contador_diario: document.contador_diario,
+              contador_total_sensor_2: document.contador_total_sensor_2,
+              contador_inicial_sensor_2: document.contador_inicial_sensor_2,
+              contador_diario_sensor_2: document.contador_diario_sensor_2,
+              contador_total_sensor_3: document.contador_total_sensor_3,
+              contador_inicial_sensor_3: document.contador_inicial_sensor_3,
+              contador_diario_sensor_3: document.contador_diario_sensor_3
+            });
+
             let count_sensor_1 = 0;
             let count_sensor_2 = 0;
             let count_sensor_3 = 0;
@@ -3285,8 +3335,13 @@ function onClientConnected(socket) {
                 count_sensor_1 = toInteger(m[1]);
                 count_sensor_2 = toInteger(m[3]);
               } else {
+                gtdttDebugLog(imeiTrama, 'STOP paso3 (DGT): count no cumple 8+4+5 dígitos', {
+                  count_parse: count_parse,
+                  longitud: count_parse.length
+                });
                 return;
               }
+              gtdttDebugLog(imeiTrama, 'paso3 (DGT) contadores parseados', { count_parse, count_sensor_1, count_sensor_2 });
             } else {
               let count_parse = String(data[count] || '')
                 .replace("RSC", "")
@@ -3295,6 +3350,10 @@ function onClientConnected(socket) {
                 .replace(/ /g, "")
                 .trim();
               if (count_parse.length < 14) {
+                gtdttDebugLog(imeiTrama, 'STOP paso3: count con menos de 14 caracteres', {
+                  count_parse: count_parse,
+                  longitud: count_parse.length
+                });
                 return;
               }
               const s1 = count_parse.slice(0, 7);
@@ -3304,20 +3363,28 @@ function onClientConnected(socket) {
                 s3 = count_parse.slice(14, 21);
               }
               if (!s1 || !s2 || !s3 || s1.length < 7 || s2.length < 7) {
+                gtdttDebugLog(imeiTrama, 'STOP paso3: segmentos de sensores incompletos', { count_parse, s1, s2, s3 });
                 return;
               }
               if (!/^\d+$/.test(s1) || !/^\d+$/.test(s2) || !/^\d+$/.test(s3)) {
+                gtdttDebugLog(imeiTrama, 'STOP paso3: segmentos con caracteres no numéricos', { count_parse, s1, s2, s3 });
                 return;
               }
               count_sensor_1 = toInteger(s1);
               count_sensor_2 = toInteger(s2);
               count_sensor_3 = toInteger(s3);
+              gtdttDebugLog(imeiTrama, 'paso3 contadores parseados', {
+                count_parse, s1, s2, s3, count_sensor_1, count_sensor_2, count_sensor_3
+              });
             }
 
 
             if (!isBuffMessage) {
 
               if (lecturaGtdttInvalida(count_sensor_1) || lecturaGtdttInvalida(count_sensor_2) || lecturaGtdttInvalida(count_sensor_3)) {
+                gtdttDebugLog(imeiTrama, 'STOP paso4: lectura fuera de rango (0..' + MAX_COUNT + ', se descarta ' + MAX_COUNT + ')', {
+                  count_sensor_1, count_sensor_2, count_sensor_3
+                });
                 return;
               }
 
@@ -3329,15 +3396,23 @@ function onClientConnected(socket) {
               const anteriorSensor2 = toInteger(document.contador_total_sensor_2);
               const anteriorSensor3 = toInteger(document.contador_total_sensor_3);
 
+              gtdttDebugLog(imeiTrama, 'paso5 estado previo', {
+                anteriorSensor1, anteriorSensor2, anteriorSensor3,
+                reinicioManual: { s1: reinicioS1, s2: reinicioS2, s3: reinicioS3 }
+              });
+
               if (saltoImposible(anteriorSensor1, count_sensor_1, reinicioS1)) {
+                gtdttDebugLog(imeiTrama, 'STOP paso5: salto > ' + MAX_INCREMENTO + ' en sensor1', anteriorSensor1, '->', count_sensor_1);
                 if (debug) console.log('GTDTT descartado sensor1', anteriorSensor1, '->', count_sensor_1);
                 return;
               }
               if (saltoImposible(anteriorSensor2, count_sensor_2, reinicioS2)) {
+                gtdttDebugLog(imeiTrama, 'STOP paso5: salto > ' + MAX_INCREMENTO + ' en sensor2', anteriorSensor2, '->', count_sensor_2);
                 if (debug) console.log('GTDTT descartado sensor2', anteriorSensor2, '->', count_sensor_2);
                 return;
               }
               if (saltoImposible(anteriorSensor3, count_sensor_3, reinicioS3)) {
+                gtdttDebugLog(imeiTrama, 'STOP paso5: salto > ' + MAX_INCREMENTO + ' en sensor3', anteriorSensor3, '->', count_sensor_3);
                 if (debug) console.log('GTDTT descartado sensor3', anteriorSensor3, '->', count_sensor_3);
                 return;
               }
@@ -3353,24 +3428,50 @@ function onClientConnected(socket) {
               const contador_inicial_sensor_3 = r3.contador_inicial;
               const contador_diario_sensor_3 = r3.contador_diario;
 
+              gtdttDebugLog(imeiTrama, 'paso6 contadores calculados', {
+                sensor1: { total: count_sensor_1, inicial: contador_inicial, diario: contador_diario },
+                sensor2: { total: count_sensor_2, inicial: contador_inicial_sensor_2, diario: contador_diario_sensor_2 },
+                sensor3: { total: count_sensor_3, inicial: contador_inicial_sensor_3, diario: contador_diario_sensor_3 }
+              });
+
               if (diarioGtdttFueraDeRango(contador_diario) || diarioGtdttFueraDeRango(contador_diario_sensor_2) || diarioGtdttFueraDeRango(contador_diario_sensor_3)) {
+                gtdttDebugLog(imeiTrama, 'STOP paso6: contador diario fuera de rango', {
+                  contador_diario, contador_diario_sensor_2, contador_diario_sensor_3
+                });
                 return;
               }
 
-              dbTrackingSystem.collection('unidads').updateOne({ _id: document._id }, {
-                $set: {
-                  contador_total: count_sensor_1,
-                  contador_diario: contador_diario,
-                  contador_inicial: contador_inicial,
-                  contador_total_sensor_2: count_sensor_2,
-                  contador_diario_sensor_2: contador_diario_sensor_2,
-                  contador_inicial_sensor_2: contador_inicial_sensor_2,
-                  contador_total_sensor_3: count_sensor_3,
-                  contador_diario_sensor_3: contador_diario_sensor_3,
-                  contador_inicial_sensor_3: contador_inicial_sensor_3,
-                  is_atm: (message.includes(ATM) ? 1 : 0)
-                }
-              }, { writeConcern: { w: 0 } });
+              const setContadores = {
+                contador_total: count_sensor_1,
+                contador_diario: contador_diario,
+                contador_inicial: contador_inicial,
+                contador_total_sensor_2: count_sensor_2,
+                contador_diario_sensor_2: contador_diario_sensor_2,
+                contador_inicial_sensor_2: contador_inicial_sensor_2,
+                contador_total_sensor_3: count_sensor_3,
+                contador_diario_sensor_3: contador_diario_sensor_3,
+                contador_inicial_sensor_3: contador_inicial_sensor_3,
+                is_atm: (message.includes(ATM) ? 1 : 0)
+              };
+
+              if (gtdttDebugActivo(imeiTrama)) {
+                dbTrackingSystem.collection('unidads').updateOne({ _id: document._id }, { $set: setContadores }, function (errUpd, res) {
+                  if (errUpd) {
+                    gtdttDebugLog(imeiTrama, 'STOP paso7: error en updateOne', errUpd && errUpd.message ? errUpd.message : errUpd);
+                    return;
+                  }
+                  gtdttDebugLog(imeiTrama, 'paso7 update aplicado', {
+                    matched: res ? res.matchedCount : null,
+                    modified: res ? res.modifiedCount : null,
+                    set: setContadores
+                  });
+                });
+              } else {
+                dbTrackingSystem.collection('unidads').updateOne({ _id: document._id }, { $set: setContadores }, { writeConcern: { w: 0 } });
+              }
+            }
+            else {
+              gtdttDebugLog(imeiTrama, 'paso4 trama BUFF: no actualiza contadores en unidads, solo guarda recorrido');
             }
 
             dbTrackingSystem.collection('recorridos').insertOne({
@@ -3388,6 +3489,11 @@ function onClientConnected(socket) {
               contador_total_sensor_3: count_sensor_3,
               trama: message
             }, { writeConcern: { w: 0 } });
+
+            gtdttDebugLog(imeiTrama, 'paso8 recorrido insertado', {
+              count_sensor_1, count_sensor_2, count_sensor_3,
+              sentTimeRaw: data[sentTime]
+            });
           }
         });
       }
