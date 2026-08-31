@@ -3265,6 +3265,34 @@ function onClientConnected(socket) {
           return { contador_inicial, contador_diario };
         };
 
+        /**
+         * Resuelve el estado final (total/inicial/diario) de UN sensor GTDTT sin abortar el mensaje.
+         * Cada sensor es independiente: lo que le pase a uno no bloquea a los otros.
+         * - Lectura fuera de rango: se conserva el valor anterior de ese sensor.
+         * - Reinicio manual / salto imposible / diario incoherente: se re-basa al valor nuevo de la trama.
+         * - Normal: total = valor nuevo, inicial se mantiene, diario = valor nuevo - inicial.
+         */
+        const resolverSensorGtdtt = function (countActual, prevTotal, prevInicial, prevDiario, esReinicioManual) {
+          const anteriorTotal = toInteger(prevTotal);
+
+          // Lectura fuera de rango: no escribimos basura, mantenemos lo que ya había en este sensor.
+          if (lecturaGtdttInvalida(countActual)) {
+            return { total: anteriorTotal, inicial: toInteger(prevInicial), diario: toInteger(prevDiario) };
+          }
+
+          // Reinicio manual o salto imposible: re-basar al valor que trae la trama.
+          if (esReinicioManual || saltoImposible(anteriorTotal, countActual, esReinicioManual)) {
+            return { total: countActual, inicial: countActual, diario: 0 };
+          }
+
+          const calc = calcularContadoresSensorGtdtt(countActual, prevInicial, false);
+          if (diarioGtdttFueraDeRango(calc.contador_diario)) {
+            // Diario incoherente respecto al baseline previo: re-basar.
+            return { total: countActual, inicial: countActual, diario: 0 };
+          }
+          return { total: countActual, inicial: calc.contador_inicial, diario: calc.contador_diario };
+        };
+
         dbTrackingSystem.collection('unidads').findOne({ imei: data[imei], estado: 'A' }, function (err, document) {
           if (err) console.log(err);
           else if (document) {
@@ -3317,57 +3345,29 @@ function onClientConnected(socket) {
 
             if (!isBuffMessage) {
 
-              if (lecturaGtdttInvalida(count_sensor_1) || lecturaGtdttInvalida(count_sensor_2) || lecturaGtdttInvalida(count_sensor_3)) {
-                return;
-              }
-
               const reinicioS1 = reinicioManualSensor(document.contador_total, document.contador_inicial, document.contador_diario);
               const reinicioS2 = reinicioManualSensor(document.contador_total_sensor_2, document.contador_inicial_sensor_2, document.contador_diario_sensor_2);
               const reinicioS3 = reinicioManualSensor(document.contador_total_sensor_3, document.contador_inicial_sensor_3, document.contador_diario_sensor_3);
 
-              const anteriorSensor1 = toInteger(document.contador_total);
-              const anteriorSensor2 = toInteger(document.contador_total_sensor_2);
-              const anteriorSensor3 = toInteger(document.contador_total_sensor_3);
+              // Cada sensor se resuelve por separado: un problema en uno no bloquea a los otros
+              // ni descarta el mensaje. En salto imposible se re-basa al valor nuevo de la trama.
+              const s1 = resolverSensorGtdtt(count_sensor_1, document.contador_total, document.contador_inicial, document.contador_diario, reinicioS1);
+              const s2 = resolverSensorGtdtt(count_sensor_2, document.contador_total_sensor_2, document.contador_inicial_sensor_2, document.contador_diario_sensor_2, reinicioS2);
+              const s3 = resolverSensorGtdtt(count_sensor_3, document.contador_total_sensor_3, document.contador_inicial_sensor_3, document.contador_diario_sensor_3, reinicioS3);
 
-              if (saltoImposible(anteriorSensor1, count_sensor_1, reinicioS1)) {
-                if (debug) console.log('GTDTT descartado sensor1', anteriorSensor1, '->', count_sensor_1);
-                return;
-              }
-              if (saltoImposible(anteriorSensor2, count_sensor_2, reinicioS2)) {
-                if (debug) console.log('GTDTT descartado sensor2', anteriorSensor2, '->', count_sensor_2);
-                return;
-              }
-              if (saltoImposible(anteriorSensor3, count_sensor_3, reinicioS3)) {
-                if (debug) console.log('GTDTT descartado sensor3', anteriorSensor3, '->', count_sensor_3);
-                return;
-              }
-
-              const r1 = calcularContadoresSensorGtdtt(count_sensor_1, document.contador_inicial, reinicioS1);
-              const r2 = calcularContadoresSensorGtdtt(count_sensor_2, document.contador_inicial_sensor_2, reinicioS2);
-              const r3 = calcularContadoresSensorGtdtt(count_sensor_3, document.contador_inicial_sensor_3, reinicioS3);
-
-              const contador_inicial = r1.contador_inicial;
-              const contador_diario = r1.contador_diario;
-              const contador_inicial_sensor_2 = r2.contador_inicial;
-              const contador_diario_sensor_2 = r2.contador_diario;
-              const contador_inicial_sensor_3 = r3.contador_inicial;
-              const contador_diario_sensor_3 = r3.contador_diario;
-
-              if (diarioGtdttFueraDeRango(contador_diario) || diarioGtdttFueraDeRango(contador_diario_sensor_2) || diarioGtdttFueraDeRango(contador_diario_sensor_3)) {
-                return;
-              }
+             
 
               dbTrackingSystem.collection('unidads').updateOne({ _id: document._id }, {
                 $set: {
-                  contador_total: count_sensor_1,
-                  contador_diario: contador_diario,
-                  contador_inicial: contador_inicial,
-                  contador_total_sensor_2: count_sensor_2,
-                  contador_diario_sensor_2: contador_diario_sensor_2,
-                  contador_inicial_sensor_2: contador_inicial_sensor_2,
-                  contador_total_sensor_3: count_sensor_3,
-                  contador_diario_sensor_3: contador_diario_sensor_3,
-                  contador_inicial_sensor_3: contador_inicial_sensor_3,
+                  contador_total: s1.total,
+                  contador_diario: s1.diario,
+                  contador_inicial: s1.inicial,
+                  contador_total_sensor_2: s2.total,
+                  contador_diario_sensor_2: s2.diario,
+                  contador_inicial_sensor_2: s2.inicial,
+                  contador_total_sensor_3: s3.total,
+                  contador_diario_sensor_3: s3.diario,
+                  contador_inicial_sensor_3: s3.inicial,
                   is_atm: (message.includes(ATM) ? 1 : 0)
                 }
               }, { writeConcern: { w: 0 } });

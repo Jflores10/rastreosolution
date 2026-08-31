@@ -254,6 +254,14 @@ class UnidadController extends Controller
            $unidad->contador_total=0;
            $unidad->contador_diario=0;
 
+           $unidad->contador_inicial_sensor_2=0;
+           $unidad->contador_total_sensor_2=0;
+           $unidad->contador_diario_sensor_2=0;
+
+           $unidad->contador_inicial_sensor_3=0;
+           $unidad->contador_total_sensor_3=0;
+           $unidad->contador_diario_sensor_3=0;
+
            $unidad->save();
 
         }
