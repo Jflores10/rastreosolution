@@ -185,11 +185,15 @@
                                 @if ($tipo === 'L')
                                     <input onclick="finalizarTodos();" id="btnRecalculoAll" type="button"
                                         value="Finalizar los Despachos" class="btn btn-success" />
+                                    <button onclick="modalCancelarMasivo();" id="btn_cancelar_despacho" type="button"
+                                         class="btn btn-warning"><i class="fa fa-close"></i> Cancelar Despachos</button>
                                 @else
                                     <input onclick="finalizarTodos();" id="btnRecalculoAll" type="button"
                                         value="Recalcular los Despachos" class="btn btn-success" />
-                                    <button onclick="eliminarTodos();" id="btn_eliminar_despacho" type="button"
-                                         class="btn btn-danger"><i class="fa fa-trash"></i> Eliminar Despachos</button>
+                                    @if ($tipo === 'F' && Auth::user()->tipo_usuario->valor == 1)
+                                        <button onclick="eliminarTodos();" id="btn_eliminar_despacho" type="button"
+                                             class="btn btn-danger"><i class="fa fa-trash"></i> Eliminar Despachos</button>
+                                    @endif
                                 @endif
                             </div>
                         </form>
@@ -546,12 +550,8 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button class="btn btn-primary" onclick="cancel();">
-                        <font size="5">Si</font>
-                    </button>
-                    <button type="button" class="btn btn-default" data-dismiss="modal"><i class="fa fa-close"></i>
-                        <font size="5"> Cerrar</font>
-                    </button>
+                    <button type="button" class="btn btn-default" data-dismiss="modal"><i class="fa fa-close"></i> Cerrar</button>
+                    <button type="button" class="btn btn-danger" onclick="cancel();"><i class="fa fa-check"></i> Confirmar Cancelación</button>
                 </div>
             </div>
         </div>
@@ -897,14 +897,29 @@
         //     return 'false';
         // };
 
+        var cancelacionMasiva = false;
+
         function modalCancelar(id) {
+            cancelacionMasiva = false;
+            $('#myModalLabel').text('Cancelar Despacho');
+            $('#motivo_cancelar').val('');
             $('#modal_cancelar').modal('show');
             despachoIdTMP = id;
         }
 
+        function modalCancelarMasivo() {
+            cancelacionMasiva = true;
+            $('#myModalLabel').text('Cancelar Despachos');
+            $('#motivo_cancelar').val('');
+            $('#modal_cancelar').modal('show');
+        }
 
         function cancel() {
             var motivo_cancelar = document.getElementById('motivo_cancelar');
+            if (cancelacionMasiva) {
+                cancelarTodos(motivo_cancelar.value);
+                return;
+            }
             var url = '{{ url('/despachos') }}' + '/' + despachoIdTMP + '/cancel';
             if (confirm('¿Estás seguro de cancelar este despacho?')) {
                 $('#progress').modal('show');
@@ -920,6 +935,31 @@
                             location.reload(true);
                         }
                     }, 'json');
+            } else {
+                $('#modal_cancelar').modal('hide');
+            }
+        }
+
+        function cancelarTodos(motivo) {
+            if (confirm('¿Está seguro que desea cancelar los despachos filtrados?')) {
+                $('#modal_cancelar').modal('hide');
+                var url = "{{ url('despachos/cancelarTodo') }}";
+                $('#progress').modal('show');
+
+                var data = $('#formDespacho').serialize() + '&motivo_cancelar=' + encodeURIComponent(motivo);
+
+                $.post(url, data, function(data) {
+                    if (!data.error) {
+                        alert(data.mensaje);
+                    } else {
+                        alert(data.mensaje || 'Ocurrió un error al cancelar los despachos.');
+                    }
+                }).fail(function(xhr) {
+                    console.error(xhr.responseText);
+                }).always(function() {
+                    $('#progress').modal('hide');
+                    location.reload(true);
+                });
             } else {
                 $('#modal_cancelar').modal('hide');
             }

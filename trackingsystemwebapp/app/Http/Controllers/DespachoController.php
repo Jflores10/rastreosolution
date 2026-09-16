@@ -2090,6 +2090,13 @@ class DespachoController extends Controller
 
     public function eliminarTodo(Request $request)
     {
+        if (Auth::user()->tipo_usuario->valor != 1) {
+            return response()->json([
+                'error'   => true,
+                'mensaje' => 'No tiene permisos para eliminar despachos.'
+            ], 403);
+        }
+
         set_time_limit(0);
         $this->validate($request, [
             'unidades' => 'required|array',
@@ -2136,6 +2143,93 @@ class DespachoController extends Controller
             'mensaje'    => 'Se eliminaron ' . $totalEliminados . ' despachos correctamente.'
         ]);
 
+    }
+
+    public function cancelarTodo(Request $request)
+    {
+        set_time_limit(0);
+        $this->validate($request, [
+            'unidades' => 'required|array',
+            'desde' => 'required|date',
+            'hasta' => 'required|date',
+            'tipo' => 'required|size:1',
+            'motivo_cancelar' => 'nullable|string'
+        ]);
+        $d = new Carbon($request->input('desde') . ' 00:00:00');
+        date_sub($d, date_interval_create_from_date_string('5 hours'));
+        $h = new Carbon($request->input('hasta') . ' 23:59:59');
+        date_sub($h, date_interval_create_from_date_string('5 hours'));
+
+        // === Determinar estado por tipo (solo se puede cancelar despachos en curso o culminados) ===
+        $tipo = strtoupper($request->input('tipo'));
+        if ($tipo === 'L') {
+            $estado = 'P';
+        } elseif ($tipo === 'F') {
+            $estado = 'C';
+        } else {
+            return response()->json([
+                'error'   => true,
+                'mensaje' => 'Los despachos cancelados no pueden volver a cancelarse.'
+            ]);
+        }
+
+        $motivo_cancelar = $request->input('motivo_cancelar');
+        $motivo_cancelar = (isset($motivo_cancelar) ? $motivo_cancelar : "");
+
+        $unidades = $request->input('unidades');
+
+        $despachos = Despacho::where('estado', $estado)
+            ->where('fecha', '>=', $d)
+            ->where('fecha', '<=', $h)
+            ->whereIn('unidad_id', $unidades)
+            ->get();
+
+        if ($despachos->count() == 0) {
+            return response()->json([
+                'error'   => false,
+                'mensaje' => 'No se encontraron despachos en el rango indicado.'
+            ]);
+        }
+
+        $now = new Carbon();
+        $totalCancelados = 0;
+        $totalOmitidos = 0;
+
+        foreach ($despachos as $despacho) {
+            $cooperativa = $despacho->unidad != null ? $despacho->unidad->cooperativa : null;
+
+            if ($cooperativa != null && $cooperativa->despachos_atm == 'S') {
+                $fechaLimite = (clone $despacho->fecha)->addHours(5);
+                if ($now > $fechaLimite) {
+                    // Despacho fuera de tiempo, ORDEN ATM no permite cancelarlo
+                    $totalOmitidos++;
+                    continue;
+                }
+
+                $despacho->estado = 'I';
+                $despacho->estado_exportacion = ($despacho->estado_exportacion == 'P' || $despacho->estado_exportacion == 'A') ? 'A' : 'C';
+            } else {
+                $despacho->estado = 'I';
+                $despacho->estado_exportacion = 'P';
+            }
+
+            $despacho->motivo_cancelar = $motivo_cancelar;
+            $despacho->modificador_id = Auth::user()->_id;
+            $despacho->save();
+            $totalCancelados++;
+        }
+
+        $mensaje = 'Se cancelaron ' . $totalCancelados . ' despachos correctamente.';
+        if ($totalOmitidos > 0) {
+            $mensaje .= ' ' . $totalOmitidos . ' despacho(s) no se pudieron cancelar por estar fuera de tiempo (ORDEN ATM).';
+        }
+
+        return response()->json([
+            'error'      => false,
+            'cancelados' => $totalCancelados,
+            'omitidos'   => $totalOmitidos,
+            'mensaje'    => $mensaje
+        ]);
     }
 
 
