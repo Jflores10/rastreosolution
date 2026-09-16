@@ -185,14 +185,16 @@
                                 @if ($tipo === 'L')
                                     <input onclick="finalizarTodos();" id="btnRecalculoAll" type="button"
                                         value="Finalizar los Despachos" class="btn btn-success" />
-                                    <button onclick="modalCancelarMasivo();" id="btn_cancelar_despacho" type="button"
-                                         class="btn btn-warning"><i class="fa fa-close"></i> Cancelar Despachos</button>
                                 @else
                                     <input onclick="finalizarTodos();" id="btnRecalculoAll" type="button"
                                         value="Recalcular los Despachos" class="btn btn-success" />
-                                    @if ($tipo === 'F' && Auth::user()->tipo_usuario->valor == 1)
-                                        <button onclick="eliminarTodos();" id="btn_eliminar_despacho" type="button"
-                                             class="btn btn-danger"><i class="fa fa-trash"></i> Eliminar Despachos</button>
+                                    @if ($tipo === 'F')
+                                        <button onclick="modalCancelarMasivo();" id="btn_cancelar_despacho" type="button"
+                                             class="btn btn-warning"><i class="fa fa-close"></i> Cancelar Despachos</button>
+                                        @if (Auth::user()->tipo_usuario->valor == 1)
+                                            <button onclick="eliminarTodos();" id="btn_eliminar_despacho" type="button"
+                                                 class="btn btn-danger"><i class="fa fa-trash"></i> Eliminar Despachos</button>
+                                        @endif
                                     @endif
                                 @endif
                             </div>
