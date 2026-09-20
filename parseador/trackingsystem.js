@@ -175,7 +175,7 @@ function connectWebSocketClient() {
   try {
     wsClient = new WebSocket("ws://127.0.0.1:6001");
 
-    wsClient.on("open", () => { if (debug) console.log("Conectado a WebSocket local"); });
+    wsClient.on("open", () => {  console.log("Conectado a WebSocket local"); });
     wsClient.on("close", (code, reason) => {
       console.warn(`WS local cerrado. Reconectando en ${wsReconnectTimeout}ms (code=${code})`);
       setTimeout(connectWebSocketClient, wsReconnectTimeout);
