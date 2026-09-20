@@ -80,8 +80,9 @@ const GPRMC_DATE_FORMAT = 'DDMMYYHHmmss';
 
 const restartHour = 4, restartMinute = 0, restartSecond = 0, restartMilisecond = 0;
 const correoinfinty = 'management.infinity.fleets@gmail.com';
-const debug = false;
-const PUSH_DEBUG = String(process.env.PUSH_DEBUG || '1').trim() !== '0';
+const debug = process.env.DEBUG === '1';
+const PUSH_DEBUG = process.env.PUSH_DEBUG === '1';
+
 
 function maskSecret(value) {
   const v = String(value || '');
@@ -174,7 +175,7 @@ function connectWebSocketClient() {
   try {
     wsClient = new WebSocket("ws://127.0.0.1:6001");
 
-    wsClient.on("open", () => console.log("Conectado a WebSocket local"));
+    wsClient.on("open", () => { if (debug) console.log("Conectado a WebSocket local"); });
     wsClient.on("close", (code, reason) => {
       console.warn(`WS local cerrado. Reconectando en ${wsReconnectTimeout}ms (code=${code})`);
       setTimeout(connectWebSocketClient, wsReconnectTimeout);
@@ -673,7 +674,7 @@ function gtpHdTryPersistPhoto(assemblyKey, opts) {
       });
     }
 
-    console.log((isComplete ? '📸 Imagen guardada:' : '📸 Imagen parcial guardada:'), storagePath,
+    if (debug) console.log((isComplete ? '📸 Imagen guardada:' : '📸 Imagen parcial guardada:'), storagePath,
       '(' + framesReported + '/' + (stNow.totalFrames || '?') + ' frames, max#' + (stNow.maxFrameReceived || 0) +
       (isComplete ? '' : (', faltan:[' + missingFrames.join(',') + ']')) + ')');
 
@@ -1379,7 +1380,7 @@ function intentarFinalizarDespachoPorIngreso(unidad, pdi, fechaGps) {
         // Solo cooperativas con job de finalización automática
         const coopId = unidad.cooperativa_id;
         if (!coopId) {
-          console.log('🚌 Finalizando despacho (ingreso último punto):', JSON.stringify(infoLog));
+          if (debug) console.log('🚌 Finalizando despacho (ingreso último punto):', JSON.stringify(infoLog));
           solicitarFinalizarDespachoLaravel(String(despacho._id), infoLog);
           return;
         }
@@ -1400,7 +1401,7 @@ function intentarFinalizarDespachoPorIngreso(unidad, pdi, fechaGps) {
             return;
           }
           infoLog.cooperativa = coop && coop.descripcion ? coop.descripcion : String(coopId);
-          console.log('🚌 Finalizando despacho (ingreso último punto):', JSON.stringify(infoLog));
+          if (debug) console.log('🚌 Finalizando despacho (ingreso último punto):', JSON.stringify(infoLog));
           solicitarFinalizarDespachoLaravel(String(despacho._id), infoLog);
         });
       });
@@ -1436,7 +1437,7 @@ function solicitarFinalizarDespachoLaravel(despachoId, infoLog) {
       timeout: 120000
     };
 
-    console.log('➡️ Solicitando end() Laravel:', despachoId,
+    if (debug) console.log('➡️ Solicitando end() Laravel:', despachoId,
       '| pdi_ultimo:', infoLog && infoLog.pdi_ultimo_punto != null ? infoLog.pdi_ultimo_punto : '-');
 
     const req = mod.request(opts, (res) => {
@@ -1446,7 +1447,7 @@ function solicitarFinalizarDespachoLaravel(despachoId, infoLog) {
       });
       res.on('end', () => {
         finishingDespachoIds.delete(despachoId);
-        console.log('⬅️ Despacho finalizado:', despachoId,
+        if (debug) console.log('⬅️ Despacho finalizado:', despachoId,
           '| pdi_ultimo:', infoLog && infoLog.pdi_ultimo_punto != null ? infoLog.pdi_ultimo_punto : '-',
           '| status:', res.statusCode,
           '| body:', responseBody ? responseBody.substring(0, 300) : '');
@@ -1494,7 +1495,7 @@ function getTimeToRestartCounter() {
 
 function restartCounter() {
   dbTrackingSystem.collection('unidads').find({}).each(function (err, document) {
-    if (err) console.log(err);
+    if (err && debug) console.log(err);
     else if (document != null) {
       dbTrackingSystem.collection('unidads').updateOne(
         { _id: document._id },
@@ -1518,7 +1519,7 @@ function restartCounter() {
 // ===================== BOOT =====================
 MongoClient.connect(connection, { useUnifiedTopology: true }, function (error, client) {
   if (error) {
-    console.log(error);
+    if (debug) console.log(error);
     process.exit(1);
   }
 
@@ -1534,7 +1535,7 @@ MongoClient.connect(connection, { useUnifiedTopology: true }, function (error, c
     restartCounter();
   });
 
-  console.log('TCP server listening on', PORT);
+  if (debug) console.log('TCP server listening on', PORT);
 });
 
 // ===================== HEAVY ASYNC WORK =====================
@@ -1829,7 +1830,7 @@ function onClientConnected(socket) {
           }
         }
 
-        if(data[idx.imei]=='863457050082674' ){
+        if(debug && data[idx.imei]=='863457050082674' ){
           console.log("imei: "+data[idx.imei]);
           console.log("estado_movil_v2: "+estadoMovilFinal);
         }
@@ -1945,7 +1946,7 @@ function onClientConnected(socket) {
         if (data[flag] === '>PC' || data[flag] === '>PC3') {
           if (data[deviceName] === 'P1' || data[deviceName] === 'P2' || data[deviceName] === 'P3') {
             dbTrackingSystem.collection('unidads').findOne({ imei: data[imei], estado: 'A' }, function (err, document) {
-              if (err) console.log(err);
+              if (err && debug) console.log(err);
               else if (document) {
                 const tag = data[deviceName];
                 const lecturaContador = toInteger(data[count]);
@@ -1998,7 +1999,7 @@ function onClientConnected(socket) {
           } else {
             if (data[deviceName] === 'PAC') {
               dbTrackingSystem.collection('unidads').findOne({ imei: data[imei], estado: 'A' }, function (err, document) {
-                if (err) console.log(err);
+                if (err && debug) console.log(err);
                 else if (document) {
                   let puerta_1 = parseInt(data[count], 10);
                   let puerta_2 = parseInt(data[p2], 10);
@@ -2031,7 +2032,7 @@ function onClientConnected(socket) {
               });
             } else {
               dbTrackingSystem.collection('unidads').findOne({ imei: data[imei], estado: 'A' }, function (err, document) {
-                if (err) console.log(err);
+                if (err && debug) console.log(err);
                 else if (document) {
                   const tag = data[deviceName];
                   const lecturaContador = toInteger(data[count]);
@@ -2112,7 +2113,7 @@ function onClientConnected(socket) {
             return;
           }
           dbTrackingSystem.collection('unidads').findOne({ imei: locationPayload.imei, estado: 'A' }, function (err, document) {
-            if (err) console.log(err);
+            if (err && debug) console.log(err);
             else if (document) {
               locationPayload.latitud = toFloat(document.latitud);
               locationPayload.longitud = toFloat(document.longitud);
@@ -2291,7 +2292,7 @@ function onClientConnected(socket) {
         const indiceval = 20;
 
         dbTrackingSystem.collection('unidads').findOne({ imei: data[imei], estado: 'A' }, function (err, document) {
-          if (err) console.log(err);
+          if (err && debug) console.log(err);
           else if (document) {
             let pdi = indiceval + hexToBitPosition(data[infoControlPoint]);
 
@@ -2413,7 +2414,7 @@ function onClientConnected(socket) {
         let data = message.split(',');
 
         dbTrackingSystem.collection('unidads').findOne({ imei: data[imei], estado: 'A' }, function (err, document) {
-          if (err) console.log(err);
+          if (err && debug) console.log(err);
           else if (document) {
             let pdi, inout;
             if (data[infoControlPoint].length === 3) {
@@ -2549,7 +2550,7 @@ function onClientConnected(socket) {
         else socketObject.socket = socket;
 
         dbTrackingSystem.collection('unidads').findOne({ imei: deviceIMEI, estado: 'A' }, function (err, document) {
-          if (err) console.log(err);
+          if (err && debug) console.log(err);
           else {
             let entrada = 0;
             if (deviceEvent >= 38) {
@@ -2864,7 +2865,7 @@ function onClientConnected(socket) {
                   }
                 },
                 { writeConcern: { w: 0 } },
-                function (uErr) { if (uErr) console.log(uErr); }
+                function (uErr) { if (uErr && debug) console.log(uErr); }
               );
 
               // Persistir ignicionf='on' en el cache para que los GTFRI posteriores lo incluyan
@@ -2946,7 +2947,7 @@ function onClientConnected(socket) {
                   }
                 },
                 { writeConcern: { w: 0 } },
-                function (uErr) { if (uErr) console.log(uErr); }
+                function (uErr) { if (uErr && debug) console.log(uErr); }
               );
 
               // Persistir ignicionf='off' en el cache para que los GTFRI posteriores lo incluyan
@@ -3001,7 +3002,7 @@ function onClientConnected(socket) {
         let fechaGPS = toInteger(data[datetime]);
 
         dbTrackingSystem.collection('unidads').findOne({ imei: data[imei], estado: 'A' }, function (err, document) {
-          if (err) console.log(err);
+          if (err && debug) console.log(err);
           else if (document) {
             let fecha_gps = (fechaGPS != 0)
             ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate()
@@ -3097,7 +3098,7 @@ function onClientConnected(socket) {
         let fechaGPS = toInteger(data[datetime]);
 
         dbTrackingSystem.collection('unidads').findOne({ imei: data[imei], estado: 'A' }, function (err, document) {
-          if (err) console.log(err);
+          if (err && debug) console.log(err);
           else if (document) {
             let fecha_gps = (fechaGPS != 0)
             ? moment(data[datetime], DEVICE_DATE_FORMAT).toDate()
@@ -3294,7 +3295,7 @@ function onClientConnected(socket) {
         };
 
         dbTrackingSystem.collection('unidads').findOne({ imei: data[imei], estado: 'A' }, function (err, document) {
-          if (err) console.log(err);
+          if (err && debug) console.log(err);
           else if (document) {
             let count_sensor_1 = 0;
             let count_sensor_2 = 0;
@@ -3523,7 +3524,7 @@ function onClientConnected(socket) {
           Error: err.message
         }, { writeConcern: { w: 0 } });
       } catch (e) { }
-      console.log(err);
+      if (debug) console.log(err);
     }
   });
 

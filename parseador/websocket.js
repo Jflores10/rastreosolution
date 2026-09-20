@@ -49,7 +49,7 @@ const server = http.createServer((req, res) => {
     }
     set.add(res);
 
-    console.log(`🔌 SSE CONNECT coop=${coop} total=${set.size}`);
+    if (DEBUG_WS) console.log(`🔌 SSE CONNECT coop=${coop} total=${set.size}`);
 
     // 🔥 HEARTBEAT
     const ping = setInterval(() => {
@@ -59,7 +59,7 @@ const server = http.createServer((req, res) => {
     req.on('close', () => {
         clearInterval(ping);
         set.delete(res);
-        console.log(`🔌 SSE CLOSE coop=${coop} total=${set.size}`);
+        if (DEBUG_WS) console.log(`🔌 SSE CLOSE coop=${coop} total=${set.size}`);
     });
 
     return;
@@ -84,7 +84,7 @@ const server = http.createServer((req, res) => {
 const wss = new WebSocket.Server({ server });
 
 server.listen(PORT, () => {
-    console.log(`✅ WebSocket + SSE escuchando en http://127.0.0.1:${PORT}`);
+    if (DEBUG_WS) console.log(`✅ WebSocket + SSE escuchando en http://127.0.0.1:${PORT}`);
 });
 
 const DEBUG_WS = process.env.DEBUG_WS === '1';
@@ -119,8 +119,10 @@ redisSub.on('message', (channel, message) => {
         const data = JSON.parse(message);
 
         const coopMsg = String(data.cooperativa_id || '').trim();
-        console.log('📥 REDIS DATA:', data);
-        console.log('📥 coopMsg=', coopMsg, ' sseKeys=', [...sseClients.keys()]);
+        if (DEBUG_WS) {
+            console.log('📥 REDIS DATA:', data);
+            console.log('📥 coopMsg=', coopMsg, ' sseKeys=', [...sseClients.keys()]);
+        }
         if (!coopMsg) return; // 🔥 evita broadcast accidental
 
         if (DEBUG_WS) {

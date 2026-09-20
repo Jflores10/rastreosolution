@@ -111,6 +111,7 @@ Route::group(['middleware' => ['auth', 'usuario']], function () {
         Route::post('/despachosfinalizar/v2', 'DespachoController@finalizarTodov2');
 
         Route::post('/eliminar', 'DespachoController@eliminarTodo');
+        Route::post('/cancelarTodo', 'DespachoController@cancelarTodo');
         Route::get('/info/{id}', 'DespachoController@infoPrint');
         Route::get('/ticketalbosao/{id}', 'DespachoController@showAlbosau');
         Route::get('/{id}/finishv2', 'DespachoController@end_v2');
