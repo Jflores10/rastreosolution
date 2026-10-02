@@ -2197,6 +2197,8 @@ class DespachoController extends Controller
 
         foreach ($despachos as $despacho) {
             $cooperativa = $despacho->unidad != null ? $despacho->unidad->cooperativa : null;
+            $estadoAnterior = $despacho->estado;
+            $estadoExportacionAnterior = $despacho->estado_exportacion;
 
             if ($cooperativa != null && $cooperativa->despachos_atm == 'S') {
                 $fechaLimite = (clone $despacho->fecha)->addHours(5);
@@ -2213,6 +2215,9 @@ class DespachoController extends Controller
                 $despacho->estado_exportacion = 'P';
             }
 
+            // Guardar estado previo para poder revertir la cancelación
+            $despacho->estado_anterior = $estadoAnterior;
+            $despacho->estado_exportacion_anterior = $estadoExportacionAnterior;
             $despacho->motivo_cancelar = $motivo_cancelar;
             $despacho->modificador_id = Auth::user()->_id;
             $despacho->save();
@@ -2366,6 +2371,9 @@ class DespachoController extends Controller
         $despacho = Despacho::findOrFail($id);
         $motivo_cancelar = $request->input('motivo_cancelar');
         $motivo_cancelar = (isset($motivo_cancelar) ? $motivo_cancelar : "");
+        // Guardar estado previo para poder revertir la cancelación
+        $despacho->estado_anterior = $despacho->estado;
+        $despacho->estado_exportacion_anterior = $despacho->estado_exportacion;
         if ($despacho->unidad->cooperativa->despachos_atm == 'S') {
             $now = new Carbon();
             if ($now > $despacho->fecha->addHours(5))
@@ -2386,6 +2394,41 @@ class DespachoController extends Controller
         }
         $despacho->modificador_id = Auth::user()->_id;
         $despacho->save();
+        return response()->json(['error' => false, 'despacho' => $despacho]);
+    }
+
+    public function revertirCancelacion($id)
+    {
+        // Solo usuarios Distribuidor pueden revertir cancelaciones
+        if (Auth::user()->tipo_usuario->valor != 1) {
+            return response()->json(['error' => true, 'mensaje' => 'No posee permisos para revertir cancelaciones.']);
+        }
+
+        $despacho = Despacho::findOrFail($id);
+        if ($despacho->estado !== 'I') {
+            return response()->json(['error' => true, 'mensaje' => 'El despacho no se encuentra cancelado.']);
+        }
+
+        // Restaurar el estado previo a la cancelación. Para despachos cancelados antes de
+        // guardar estado_anterior se deduce: si fue culminado tiene fecha_culminacion/end_id.
+        if (isset($despacho->estado_anterior) && in_array($despacho->estado_anterior, ['P', 'C'])) {
+            $despacho->estado = $despacho->estado_anterior;
+        } else {
+            $despacho->estado = (isset($despacho->fecha_culminacion) || isset($despacho->end_id)) ? 'C' : 'P';
+        }
+
+        $despacho->estado_exportacion = isset($despacho->estado_exportacion_anterior)
+            ? $despacho->estado_exportacion_anterior
+            : 'P';
+
+        $despacho->estado_anterior = null;
+        $despacho->estado_exportacion_anterior = null;
+        $despacho->motivo_cancelar = null;
+        $despacho->reversion_cancelacion_id = Auth::user()->_id;
+        $despacho->fecha_reversion_cancelacion = Carbon::now();
+        $despacho->modificador_id = Auth::user()->_id;
+        $despacho->save();
+
         return response()->json(['error' => false, 'despacho' => $despacho]);
     }
 

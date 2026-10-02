@@ -99,6 +99,7 @@ Route::group(['middleware' => ['auth', 'usuario']], function () {
         Route::get('/{cooperativa}/rutas', 'DespachoController@getRutas');
         Route::get('/{id}/finish', 'DespachoController@end');
         Route::post('/{id}/cancel', 'DespachoController@cancel');
+        Route::post('/{id}/revertirCancelacion', 'DespachoController@revertirCancelacion');
         Route::get('/error/{id}', 'DespachoController@errorATM');
         Route::post('/reenviarATM/{id}', 'DespachoController@reenviarATM');
         Route::get('/frecuencias', 'DespachoController@frecuencias');

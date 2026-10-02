@@ -235,6 +235,9 @@
                                         <th></th>
                                     @endif
                                     <th></th>
+                                    @if ($tipo === 'C' && Auth::user()->tipo_usuario->valor == 1)
+                                        <th></th>
+                                    @endif
                                     @if ($tipo != 'C')
                                         <th></th>
                                         <th></th>
@@ -274,6 +277,11 @@
                                                 <td class="acciones"><button onclick="construirImpresion('{{ $despacho->_id }}');"
                                                     type="button" class="btn btn-default"><i class="fa fa-print"></i>
                                                     Imprimir</button></td>
+                                            @if ($tipo === 'C' && Auth::user()->tipo_usuario->valor == 1)
+                                                <td class="acciones"><button onclick="revertirCancelacion('{{ $despacho->_id }}');"
+                                                    type="button" class="btn btn-warning"><i class="fa fa-undo"></i>
+                                                    Revertir Cancelación</button></td>
+                                            @endif
                                             @if ($tipo != 'C')
                                                 @if ($despacho->ruta->ruta_padre == '5b4528f9f544150ac01cecc6')
                                                     <td class="acciones"><button onclick="finish('{{ $despacho->_id }}');" type="button"
@@ -965,6 +973,27 @@
             } else {
                 $('#modal_cancelar').modal('hide');
             }
+        }
+
+        function revertirCancelacion(id) {
+            if (!confirm('¿Está seguro que desea revertir la cancelación de este despacho?')) {
+                return;
+            }
+            var url = '{{ url('/despachos') }}' + '/' + id + '/revertirCancelacion';
+            $('#progress').modal('show');
+            $.post(url, {}, function(data) {
+                if (data.error) {
+                    alert(data.mensaje || 'No se pudo revertir la cancelación del despacho.');
+                    $('#progress').modal('hide');
+                } else {
+                    alert('La cancelación del despacho fue revertida con éxito.');
+                    location.reload(true);
+                }
+            }, 'json').fail(function(xhr) {
+                console.error(xhr.responseText);
+                alert('Ocurrió un error al revertir la cancelación del despacho.');
+                $('#progress').modal('hide');
+            });
         }
 
         function errorAtm(id) {
