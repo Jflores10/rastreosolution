@@ -955,11 +955,28 @@ function generarMascaraIconoLista(img) {
     var datos = ctx.getImageData(0, 0, tam, tam);   // lanza excepción si la imagen es de otro origen
     var p = datos.data;
 
-    // Color de fondo: promedio de las esquinas de la imagen dibujada que sean opacas
-    // (1 px hacia adentro para no caer en el borde antialiasado cuando la imagen no es cuadrada).
-    var x0 = Math.min(tam - 1, Math.ceil((tam - w) / 2) + 1), y0 = Math.min(tam - 1, Math.ceil((tam - h) / 2) + 1);
-    var x1 = Math.max(0, Math.floor((tam + w) / 2) - 2), y1 = Math.max(0, Math.floor((tam + h) / 2) - 2);
-    var esquinas = [[x0, y0], [x1, y0], [x0, y1], [x1, y1]];
+    // Color de fondo: promedio de las esquinas opacas del ÁREA OPACA de la imagen
+    // (1 px hacia adentro para no caer en el borde antialiasado). No se usan las esquinas
+    // del rectángulo dibujado: al subir el ícono, GD lo guarda como cuadrado con bandas
+    // transparentes (si no era cuadrado) y un borde semitransparente, así que esas esquinas
+    // caían fuera del fondo real y una imagen con fondo blanco quedaba como un cuadrado lleno.
+    var ox0 = tam, oy0 = tam, ox1 = -1, oy1 = -1;
+    for (var oy = 0; oy < tam; oy++) {
+        for (var ox = 0; ox < tam; ox++) {
+            if (p[(oy * tam + ox) * 4 + 3] > 200) {
+                if (ox < ox0) ox0 = ox;
+                if (ox > ox1) ox1 = ox;
+                if (oy < oy0) oy0 = oy;
+                if (oy > oy1) oy1 = oy;
+            }
+        }
+    }
+    var esquinas = [];
+    if (ox1 >= 0) {
+        var x0 = Math.min(ox1, ox0 + 1), y0 = Math.min(oy1, oy0 + 1);
+        var x1 = Math.max(ox0, ox1 - 1), y1 = Math.max(oy0, oy1 - 1);
+        esquinas = [[x0, y0], [x1, y0], [x0, y1], [x1, y1]];
+    }
     var fr = 0, fg = 0, fb = 0, n = 0;
     esquinas.forEach(function (c) {
         var k = (c[1] * tam + c[0]) * 4;
