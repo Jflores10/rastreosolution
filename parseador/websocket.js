@@ -21,6 +21,13 @@ const PORT = 6001;
 // SSE clients: Map<coopId, Set<res>>
 const sseClients = new Map();
 
+// Vida máxima de cada conexión SSE (+ jitter de 0-10 s). Al vencer se cierra y el navegador reconecta
+// solo (retry). Libera periódicamente el proceso de Apache (prefork + mod_proxy) que la sostiene.
+const SSE_MAX_LIFETIME_MS = Math.max(10000, Number(process.env.SSE_MAX_LIFETIME_MS) || 50000);
+// Debe ser bastante menor que el timeout del ProxyPass de /sse en Apache (45 s).
+const SSE_PING_MS = Math.max(5000, Number(process.env.SSE_PING_MS) || 15000);
+const SSE_RETRY_MS = 3000;
+
 // Create HTTP server and attach WebSocket.Server to it so both WS and SSE share the same port
 const server = http.createServer((req, res) => {
     try {
@@ -39,7 +46,7 @@ const server = http.createServer((req, res) => {
     });
 
     // 🔥 SSE INIT
-    res.write('retry: 3000\n');
+    res.write('retry: ' + SSE_RETRY_MS + '\n');
     res.write(': connected\n\n');
 
     let set = sseClients.get(coop);
@@ -54,13 +61,27 @@ const server = http.createServer((req, res) => {
     // 🔥 HEARTBEAT
     const ping = setInterval(() => {
         try { res.write(': ping\n\n'); } catch (e) {}
-    }, 25000);
+    }, SSE_PING_MS);
 
-    req.on('close', () => {
+    // Cierre programado; el jitter evita que todas las pestañas reconecten a la vez.
+    const vida = setTimeout(() => {
+        try { res.write('retry: ' + SSE_RETRY_MS + '\n: bye\n\n'); } catch (e) {}
+        try { res.end(); } catch (e) {}
+    }, SSE_MAX_LIFETIME_MS + Math.floor(Math.random() * 10000));
+
+    let cerrado = false;
+    const limpiar = () => {
+        if (cerrado) return;
+        cerrado = true;
         clearInterval(ping);
+        clearTimeout(vida);
         set.delete(res);
+        if (set.size === 0 && sseClients.get(coop) === set) sseClients.delete(coop);
         if (DEBUG_WS) console.log(`🔌 SSE CLOSE coop=${coop} total=${set.size}`);
-    });
+    };
+    req.on('close', limpiar);
+    res.on('finish', limpiar);
+    res.on('close', limpiar);
 
     return;
 }

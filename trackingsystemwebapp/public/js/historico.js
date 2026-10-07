@@ -107,7 +107,7 @@ function cargaHistorico(url, id_cooperativa, valor_usuario, pagina = 1) {
                     '<table class="table" id="tr-registros-historicos">' +
                     '<thead style="background-color: #FAFAFA;">' +
                     '<th>Fecha de GPS</th><th>Fecha de servidor</th><th>Evento</th><th>Latitud</th>' +
-                    '<th>Longitud</th><th>Mileage</th><th>Ubicación</th><th>Punto cardinal</th>' +
+                    '<th>Longitud</th><th>Odometro</th><th>Ubicación</th><th>Punto cardinal</th>' +
                     '<th>Velocidad</th><th>Voltaje</th><th>Contador</th><th>Movimiento</th>' +
                     '</thead>' +
                     '<tbody id="tbody-historico"></tbody>' +

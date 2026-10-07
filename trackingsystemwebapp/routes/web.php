@@ -4,6 +4,10 @@
 
 Auth::routes();
 
+// Íconos de tipos de unidad (listado y mapa). Se define antes del resource para que no lo capture "show".
+Route::get('tipos-de-unidades/icono/{nombre}', 'TipoUnidadController@icono')
+    ->where('nombre', '[A-Za-z0-9]+');
+
 
 Route::group(['middleware' => ['auth', 'usuario']], function () {
     Route::get('sesiones', 'SesionController@index');

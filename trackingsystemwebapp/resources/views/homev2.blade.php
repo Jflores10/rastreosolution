@@ -326,6 +326,42 @@
 </style>
 
 <style>
+    /* Ícono de listado por tipo de unidad: reemplaza el glifo fa-bus. La imagen se usa como máscara
+       y se rellena con currentColor, así toma el mismo color de estado que el ícono de bus. */
+    .fa-bus.icono-tipo-lista
+    {
+        display: inline-block;
+        width: 16px;
+        height: 16px;
+        vertical-align: middle;
+        background-color: currentColor;
+        -webkit-mask-image: var(--icono-lista);
+        -webkit-mask-size: contain;
+        -webkit-mask-repeat: no-repeat;
+        -webkit-mask-position: center;
+        mask-image: var(--icono-lista);
+        mask-size: contain;
+        mask-repeat: no-repeat;
+        mask-position: center;
+        cursor: pointer;
+    }
+    /* Navegadores sin soporte de máscaras: imagen original con el color de estado como subrayado */
+    @supports not ((mask-image: none) or (-webkit-mask-image: none))
+    {
+        .fa-bus.icono-tipo-lista
+        {
+            background-color: transparent;
+            background-image: var(--icono-lista);
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            border-bottom: 3px solid currentColor;
+        }
+    }
+    .fa-bus.icono-tipo-lista::before
+    {
+        content: none !important;
+    }
     #reloj
     {
         background: linear-gradient(45deg, #FC4439, #FC4439) !important;
@@ -842,6 +878,156 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 </script>
 <script>
+// =========================
+// ÍCONOS POR TIPO DE UNIDAD (listado lateral y mapa)
+// =========================
+// tipo_unidad_id -> { icono_lista_url, icono_mapa_url } (solo tipos con algún ícono)
+var ICONOS_TIPOS_UNIDAD = {!! json_encode((object) (isset($iconos_tipos_unidad) ? $iconos_tipos_unidad : []), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) !!};
+var tipoUnidadPorUnidad = {};   // unidad_id -> tipo_unidad_id (los payloads SSE pueden no traerlo)
+var iconosListaEstado = {};     // icono_lista_url -> 'cargando' | 'ok' | 'error'
+var iconosListaMascara = {};    // icono_lista_url -> data URL de la silueta (para pintarla con el color de estado)
+
+function registrarTipoDeUnidad(unidad) {
+    if (!unidad) return null;
+    var uid = unidad._id || unidad.unidad_id;
+    if (!uid) return null;
+    uid = String(uid);
+    if (unidad.tipo_unidad_id) tipoUnidadPorUnidad[uid] = String(unidad.tipo_unidad_id);
+    return uid;
+}
+
+function getIconosTipoDeUnidad(uid) {
+    var tipo = tipoUnidadPorUnidad[String(uid)];
+    return (tipo && ICONOS_TIPOS_UNIDAD.hasOwnProperty(tipo)) ? ICONOS_TIPOS_UNIDAD[tipo] : null;
+}
+
+// el: el <i class="fa fa-bus"> del listado. Se conserva el elemento (id, clase fa-bus y color
+// los usa otro código); la clase icono-tipo-lista oculta el glifo y muestra la silueta de la
+// imagen pintada con el color de estado (currentColor). Mientras se genera la silueta se ve el bus.
+function aplicarIconoListaUnidad(el, unidad) {
+    var uid = registrarTipoDeUnidad(unidad);
+    if (!el || !uid) return;
+    var iconos = getIconosTipoDeUnidad(uid);
+    var url = (iconos && iconos.icono_lista_url) ? iconos.icono_lista_url : null;
+    if (url && iconosListaEstado[url] !== 'error') {
+        el.setAttribute('data-icono-lista', url);
+        if (iconosListaMascara[url])
+            mostrarMascaraIconoLista(el, iconosListaMascara[url]);
+        else
+            precargarIconoLista(url);
+    } else {
+        quitarIconoLista(el);
+    }
+}
+
+function mostrarMascaraIconoLista(el, mascara) {
+    el.classList.add('icono-tipo-lista');
+    el.style.setProperty('--icono-lista', 'url("' + mascara + '")');
+}
+
+function quitarIconoLista(el) {
+    el.classList.remove('icono-tipo-lista');
+    el.style.removeProperty('--icono-lista');
+    el.removeAttribute('data-icono-lista');
+}
+
+function elementosConIconoLista(url) {
+    var res = [];
+    var els = document.querySelectorAll('[data-icono-lista]');
+    for (var i = 0; i < els.length; i++)
+        if (els[i].getAttribute('data-icono-lista') === url) res.push(els[i]);
+    return res;
+}
+
+// Genera una silueta (PNG con transparencia) a partir de la imagen subida: el color de fondo,
+// tomado de las esquinas, se vuelve transparente y el resto queda opaco. Así una imagen con fondo
+// blanco (u otro color sólido) se puede pintar con el color de estado sin verse como un cuadrado.
+function generarMascaraIconoLista(img) {
+    var tam = 64;
+    var canvas = document.createElement('canvas');
+    canvas.width = tam;
+    canvas.height = tam;
+    var ctx = canvas.getContext('2d');
+    var escala = Math.min(tam / img.naturalWidth, tam / img.naturalHeight);
+    var w = img.naturalWidth * escala, h = img.naturalHeight * escala;
+    ctx.drawImage(img, (tam - w) / 2, (tam - h) / 2, w, h);
+
+    var datos = ctx.getImageData(0, 0, tam, tam);   // lanza excepción si la imagen es de otro origen
+    var p = datos.data;
+
+    // Color de fondo: promedio de las esquinas de la imagen dibujada que sean opacas
+    // (1 px hacia adentro para no caer en el borde antialiasado cuando la imagen no es cuadrada).
+    var x0 = Math.min(tam - 1, Math.ceil((tam - w) / 2) + 1), y0 = Math.min(tam - 1, Math.ceil((tam - h) / 2) + 1);
+    var x1 = Math.max(0, Math.floor((tam + w) / 2) - 2), y1 = Math.max(0, Math.floor((tam + h) / 2) - 2);
+    var esquinas = [[x0, y0], [x1, y0], [x0, y1], [x1, y1]];
+    var fr = 0, fg = 0, fb = 0, n = 0;
+    esquinas.forEach(function (c) {
+        var k = (c[1] * tam + c[0]) * 4;
+        if (p[k + 3] > 200) { fr += p[k]; fg += p[k + 1]; fb += p[k + 2]; n++; }
+    });
+    var hayFondo = n >= 3;
+    if (hayFondo) { fr /= n; fg /= n; fb /= n; }
+
+    for (var i = 0; i < p.length; i += 4) {
+        var alfa = p[i + 3];
+        if (hayFondo) {
+            // Distancia al color de fondo: hasta 40 => transparente, desde 120 => opaco (borde suave).
+            var dr = p[i] - fr, dg = p[i + 1] - fg, db = p[i + 2] - fb;
+            var dist = Math.sqrt(dr * dr + dg * dg + db * db);
+            var factor = Math.max(0, Math.min(1, (dist - 40) / 80));
+            alfa = Math.round(alfa * factor);
+        }
+        p[i] = 0; p[i + 1] = 0; p[i + 2] = 0;
+        p[i + 3] = alfa;
+    }
+    ctx.putImageData(datos, 0, 0);
+
+    // Recorta al contenido visible para que el margen de la imagen no achique la silueta.
+    var minX = tam, minY = tam, maxX = -1, maxY = -1;
+    for (var y = 0; y < tam; y++) {
+        for (var x = 0; x < tam; x++) {
+            if (p[(y * tam + x) * 4 + 3] > 20) {
+                if (x < minX) minX = x;
+                if (x > maxX) maxX = x;
+                if (y < minY) minY = y;
+                if (y > maxY) maxY = y;
+            }
+        }
+    }
+    if (maxX < 0) return canvas.toDataURL('image/png');
+    var bw = maxX - minX + 1, bh = maxY - minY + 1;
+    var recorte = document.createElement('canvas');
+    recorte.width = tam;
+    recorte.height = tam;
+    var esc2 = Math.min(tam / bw, tam / bh);
+    var rw = bw * esc2, rh = bh * esc2;
+    recorte.getContext('2d').drawImage(canvas, minX, minY, bw, bh, (tam - rw) / 2, (tam - rh) / 2, rw, rh);
+    return recorte.toDataURL('image/png');
+}
+
+// Carga la imagen una vez por URL y genera su silueta. Si falla, queda el ícono de bus.
+function precargarIconoLista(url) {
+    if (iconosListaEstado[url]) return;
+    iconosListaEstado[url] = 'cargando';
+    var img = new Image();
+    img.onload = function () {
+        var mascara;
+        try {
+            mascara = generarMascaraIconoLista(img);
+        } catch (e) {
+            mascara = url;   // sin acceso a los píxeles: se usa la imagen tal cual como máscara
+        }
+        iconosListaMascara[url] = mascara;
+        iconosListaEstado[url] = 'ok';
+        elementosConIconoLista(url).forEach(function (el) { mostrarMascaraIconoLista(el, mascara); });
+    };
+    img.onerror = function () {
+        iconosListaEstado[url] = 'error';
+        elementosConIconoLista(url).forEach(quitarIconoLista);
+    };
+    img.src = url;
+}
+
 let ws = null;
 // Ajustes horarios para fechas que vienen del servidor:
 // Según HistoricoController: fecha_gps => restar 10 horas, fecha (servidor) => restar 5 horas
@@ -1236,14 +1422,41 @@ function programarResyncTrasSegundoPlano() {
     __homeV2ResyncTimer = setTimeout(sincronizarUnidadesAlVolverAlFrente, 0);
 }
 
+// Pestaña oculta: tras un margen se cierra el SSE para no retener un proceso de Apache
+// (el margen evita reconexiones al alternar pestañas rápido). Al volver,
+// sincronizarUnidadesAlVolverAlFrente() refresca la meta y reconecta.
+var SSE_CIERRE_OCULTA_MS = 30000;
+var __sseCierreOcultaTimer = null;
+
+function cerrarSSE() {
+    clearTimeout(__sseReintentoTimer);
+    __sseReintentoTimer = null;
+    if (sse) {
+        try { sse.close(); } catch (e) {}
+        sse = null;
+    }
+    SSE_CONNECTED = false;
+}
+
 document.addEventListener('visibilitychange', function () {
     if (document.visibilityState === 'hidden') {
         __homeV2PageWasHidden = true;
+        clearTimeout(__sseCierreOcultaTimer);
+        __sseCierreOcultaTimer = setTimeout(cerrarSSE, SSE_CIERRE_OCULTA_MS);
         return;
     }
+    clearTimeout(__sseCierreOcultaTimer);
+    __sseCierreOcultaTimer = null;
     if (document.visibilityState === 'visible' && __homeV2PageWasHidden) {
         programarResyncTrasSegundoPlano();
     }
+});
+
+// pagehide (no beforeunload, que impide la bfcache). Si la página vuelve desde la bfcache,
+// el pageshow de abajo reconecta.
+window.addEventListener('pagehide', function () {
+    __homeV2PageWasHidden = true;
+    cerrarSSE();
 });
 
 window.addEventListener('pageshow', function (ev) {
@@ -1381,20 +1594,41 @@ function mostrarToastAlerta(titulo, mensaje, fechaGps, duracionMs) {
     }, dur);
 }
 
+var __sseReintentoTimer = null;
+var __sseReintentoMs = 0;
+
+// Solo cuando el EventSource quedó CLOSED (p. ej. 502/503 del proxy, el navegador ya no reintenta):
+// reintento con espera creciente de 5 s a 60 s más jitter. No se reintenta con la pestaña oculta.
+function programarReconexionSSE(coopId) {
+    if (__sseReintentoTimer || document.visibilityState === 'hidden') return;
+    __sseReintentoMs = Math.min(60000, __sseReintentoMs ? __sseReintentoMs * 2 : 5000);
+    __sseReintentoTimer = setTimeout(function () {
+        __sseReintentoTimer = null;
+        conectarSSE(coopId);
+    }, __sseReintentoMs + Math.floor(Math.random() * 2000));
+}
+
 function conectarSSE(coopId) {
 
-    if (sse && sse.readyState === EventSource.OPEN) {
-        console.log('ℹ️ SSE ya conectado');
-        return;
+    // Una sola conexión por pestaña: si hay una viva (OPEN o CONNECTING) se reutiliza; si no, se cierra.
+    if (sse) {
+        if (sse.readyState !== EventSource.CLOSED) {
+            console.log('ℹ️ SSE ya conectado');
+            return;
+        }
+        try { sse.close(); } catch (e) {}
+        sse = null;
     }
 
     const url = `/sse?coop=${encodeURIComponent(String(coopId).trim())}`;
     console.log('🔌 Conectando SSE:', url);
 
     sse = new EventSource(url);
+    const esActual = sse;
 
     sse.addEventListener('open', () => {
         console.log('🟢 SSE CONECTADO');
+        __sseReintentoMs = 0;
     });
 
     sse.addEventListener('unidad.updated', (evt) => {
@@ -1754,11 +1988,14 @@ function conectarSSE(coopId) {
     };
 
     sse.onerror = (e) => {
-        // ⚠️ ESTO ES NORMAL EN SSE
-        if (sse.readyState === EventSource.CONNECTING) {
+        // Una instancia ya reemplazada o cerrada a propósito no debe disparar reintentos.
+        if (esActual !== sse) return;
+        if (esActual.readyState === EventSource.CONNECTING) {
+            // Reconexión nativa del navegador (retry: 3000 enviado por el servidor); es normal.
             console.warn('🟡 SSE reconectando...');
-        } else if (sse.readyState === EventSource.CLOSED) {
-            console.error('🔴 SSE cerrado');
+        } else if (esActual.readyState === EventSource.CLOSED) {
+            console.error('🔴 SSE cerrado, reintento programado');
+            programarReconexionSSE(coopId);
         }
     };
 }
@@ -2370,6 +2607,7 @@ function updateUnidadInList(unidad, opts) {
     }
 
     li.innerHTML = html;
+    aplicarIconoListaUnidad(document.getElementById(iId), unidad);
     // Si la unidad está en modo BUFF, re-aplicar la clase de parpadeo
     // (li.innerHTML la borra al reconstruir el contenido)
     if (li._is_buff) {
@@ -3616,11 +3854,6 @@ $("#velocimetro").myfunc({divFact:10});
             strokeWeight: 2
         });
 
-        var icono_bus = {
-            url: '{{url("/images/autobu.png")}}',
-            scale: 1,
-            labelOrigin: new google.maps.Point(4, 25)
-        };
         var icono_flecha;
         var ii, jj;
         var colorFlecha = 'red';
@@ -3628,7 +3861,7 @@ $("#velocimetro").myfunc({divFact:10});
         map.addListener('zoom_changed', function() {
             if (map.getZoom() <= 13) {
                 for (ii = 0; ii < array_marcador.length; ii++)
-                    array_marcador[ii].setIcon(icono_bus);
+                    array_marcador[ii].setIcon(getIconoBusUnidad(array_marcador[ii].getTitle()));
             } else {
                 if (map.getZoom() > 13) {
                     for (ii = 0; ii < array_marcador.length; ii++) {
@@ -3750,6 +3983,7 @@ $("#velocimetro").myfunc({divFact:10});
     setInterval(verifyGoogleMSG,100,null);
 
     function setMarcadorUnidad(unidad, fecha_gps_, fecha_servidor_, _is) {
+        registrarIconoUnidad(unidad);
 
         // =========================
         // ESTADO
@@ -3840,7 +4074,7 @@ $("#velocimetro").myfunc({divFact:10});
                 `<li><strong>Placa:</strong> ${unidad.placa || '-'}</li>` +
                 `<li><strong>Velocidad:</strong> ${unidad.velocidad_actual || 0} km/h</li>` +
                 `<li><strong>Voltaje:</strong> ${unidad.voltaje || '-'} v</li>` +
-                `<li><strong>Mileage:</strong> ${unidad.mileage || '-'} km</li>` +
+                `<li><strong>Odometro:</strong> ${unidad.mileage || '-'} km</li>` +
                 `<li><strong>C. Total:</strong> ${unidad.contador_total != null ? unidad.contador_total : 0}</li>` +
                 `<li><strong>C. Diario:</strong> ${unidad.contador_diario != null ? unidad.contador_diario : 0}</li>` +
                 '<li><strong>C. Total 2:</strong>&nbsp' + ((unidad.contador_total_sensor_2 != undefined) ? unidad.contador_total_sensor_2 : '-') + '</li>' +
@@ -4557,6 +4791,7 @@ $("#velocimetro").myfunc({divFact:10});
                 }
 
                 var currentLi = document.getElementById(iId);
+                aplicarIconoListaUnidad(currentLi, data.unidades[i]);
                 var currentU = data.unidades[i];
                 try {
                     var _afU = data.array_fechas[i];
@@ -4668,6 +4903,67 @@ $("#velocimetro").myfunc({divFact:10});
 	}
 
 
+    // =========================
+    // ÍCONO DE MAPA POR TIPO DE UNIDAD (reemplaza al bus en zoom <= 13)
+    // =========================
+    var ICONO_UNIDAD_PX = 27;
+    var iconosMapaCache = {};  // icono_mapa_url -> objeto icon de Google Maps | 'cargando' | 'error'
+    var iconoBusDefault = null;
+
+    function getIconoBusDefault() {
+        if (iconoBusDefault === null) {
+            iconoBusDefault = {
+                url: '{{url("/images/autobu.png")}}',
+                scale: 1,
+                labelOrigin: new google.maps.Point(4, 25)
+            };
+        }
+        return iconoBusDefault;
+    }
+
+    function urlIconoMapaUnidad(uid) {
+        var iconos = getIconosTipoDeUnidad(uid);
+        return (iconos && iconos.icono_mapa_url) ? iconos.icono_mapa_url : null;
+    }
+
+    function registrarIconoUnidad(unidad) {
+        var uid = registrarTipoDeUnidad(unidad);
+        var url = uid ? urlIconoMapaUnidad(uid) : null;
+        if (url) precargarIconoUnidad(url);
+    }
+
+    // Precarga la imagen una sola vez por URL; mientras carga (o si falla) se usa el bus.
+    function precargarIconoUnidad(url) {
+        if (iconosMapaCache[url]) return;
+        iconosMapaCache[url] = 'cargando';
+        var img = new Image();
+        img.onload = function () {
+            iconosMapaCache[url] = {
+                url: url,
+                scaledSize: new google.maps.Size(ICONO_UNIDAD_PX, ICONO_UNIDAD_PX),
+                anchor: new google.maps.Point(ICONO_UNIDAD_PX / 2, ICONO_UNIDAD_PX),
+                labelOrigin: new google.maps.Point(ICONO_UNIDAD_PX / 2, ICONO_UNIDAD_PX + 10)
+            };
+            if (map.getZoom() <= 13) {
+                for (var i = 0; i < array_marcador.length; i++) {
+                    if (urlIconoMapaUnidad(array_marcador[i].getTitle()) === url)
+                        array_marcador[i].setIcon(iconosMapaCache[url]);
+                }
+            }
+        };
+        img.onerror = function () {
+            iconosMapaCache[url] = 'error';
+        };
+        img.src = url;
+    }
+
+    function getIconoBusUnidad(id) {
+        var url = urlIconoMapaUnidad(id);
+        if (url) precargarIconoUnidad(url);
+        var icono = url ? iconosMapaCache[url] : null;
+        return (icono && typeof icono === 'object') ? icono : getIconoBusDefault();
+    }
+
     function addMarker(html, latitude, longitude, id, angulo, placa,velocidad, sentido = false)
     {
         var icon;
@@ -4685,11 +4981,7 @@ $("#velocimetro").myfunc({divFact:10});
                 }
                 
                 if(map.getZoom()<=13 )
-                    icon = {
-                        url: '{{url("/images/autobu.png")}}',
-                        scale: 1,
-                        labelOrigin: new google.maps.Point(4, 25)
-                    };
+                    icon = getIconoBusUnidad(id);
                 else
                     icon = {
                         path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
@@ -4741,11 +5033,7 @@ $("#velocimetro").myfunc({divFact:10});
 
             mk = getMarkerById(id);
             if(map.getZoom()<=13)
-                icon = {
-                    url: '{{url("/images/autobu.png")}}',
-                    scale: 1,
-                    labelOrigin: new google.maps.Point(4, 25)
-                };
+                icon = getIconoBusUnidad(id);
             else
                 icon = {
                     path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,

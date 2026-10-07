@@ -11,6 +11,11 @@ use GuzzleHttp\Exception\RequestException;
  */
 class FcmV1Service
 {
+    const CACHE_KEY_TOKEN = 'fcm_v1_access_token';
+
+    // Timeouts cortos: cada push ocupa un proceso de Apache (prefork) mientras espera a Google.
+    const HTTP_OPCIONES = array('timeout' => 8, 'connect_timeout' => 3);
+
     /** @var int */
     protected static $cachedExp = 0;
 
@@ -77,6 +82,18 @@ class FcmV1Service
         if (self::$cachedAccessToken && self::$cachedExp > ($now + 60)) {
             return self::$cachedAccessToken;
         }
+        // Con mod_php la static no sobrevive entre peticiones: el token se comparte vía Cache de Laravel
+        // para no pedir uno nuevo a Google en cada push.
+        try {
+            $cache = \Cache::get(self::CACHE_KEY_TOKEN);
+        } catch (\Exception $e) {
+            $cache = null;
+        }
+        if (is_array($cache) && !empty($cache['token']) && isset($cache['exp']) && $cache['exp'] > ($now + 60)) {
+            self::$cachedAccessToken = $cache['token'];
+            self::$cachedExp = $cache['exp'];
+            return self::$cachedAccessToken;
+        }
 
         $header = $this->base64UrlEncode(json_encode(array('alg' => 'RS256', 'typ' => 'JWT')));
         $claim = $this->base64UrlEncode(json_encode(array(
@@ -100,7 +117,7 @@ class FcmV1Service
         $jwt = $input . '.' . $this->base64UrlEncode($signature);
 
         try {
-            $client = new Client(array('timeout' => 20));
+            $client = new Client(self::HTTP_OPCIONES);
             $res = $client->post('https://oauth2.googleapis.com/token', array(
                 'form_params' => array(
                     'grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer',
@@ -113,6 +130,15 @@ class FcmV1Service
             }
             self::$cachedAccessToken = $json['access_token'];
             self::$cachedExp = $now + (int) (isset($json['expires_in']) ? $json['expires_in'] : 3600);
+            try {
+                // Laravel 5.3: duración en minutos.
+                $minutos = (int) floor((self::$cachedExp - $now) / 60) - 1;
+                if ($minutos > 0) {
+                    \Cache::put(self::CACHE_KEY_TOKEN, array('token' => self::$cachedAccessToken, 'exp' => self::$cachedExp), $minutos);
+                }
+            } catch (\Exception $e) {
+                \Log::warning('FCM: no se pudo guardar el token en cache: ' . $e->getMessage());
+            }
             return self::$cachedAccessToken;
         } catch (\Exception $e) {
             \Log::warning('FCM OAuth token error: ' . $e->getMessage());
@@ -206,7 +232,7 @@ class FcmV1Service
         );
 
         try {
-            $client = new Client(array('timeout' => 20));
+            $client = new Client(self::HTTP_OPCIONES);
             $client->post($url, array(
                 'headers' => array(
                     'Authorization' => 'Bearer ' . $access,

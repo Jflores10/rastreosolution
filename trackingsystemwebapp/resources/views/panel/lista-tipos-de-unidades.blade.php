@@ -66,6 +66,8 @@ UNIDADES
                     <table class="table">
                         <th></th>
                         <th>Descripción</th>
+                        <th>Ícono listado</th>
+                        <th>Ícono mapa</th>
                         <th>Fecha de creación</th>
                         <th>Fecha de modificación</th>
                         <th>Usuario creador</th>
@@ -75,6 +77,8 @@ UNIDADES
                             <tr class="{{($tipo_unidad->estado=='I')?'danger':''}}">
                                 <td><button onclick="editarTipoUnidad('{{ url('/tipos-de-unidades/' . $tipo_unidad->_id) }}');" data-toggle="modal" data-target="#form" class="btn btn-primary"><i class="fa fa-edit"></i></button></td>
                                 <td>{{ $tipo_unidad->descripcion }}</td>
+                                <td>@if($tipo_unidad->icono_lista_url)<img src="{{ $tipo_unidad->icono_lista_url }}" alt="" style="width:20px;height:20px;object-fit:contain;"/>@endif</td>
+                                <td>@if($tipo_unidad->icono_mapa_url)<img src="{{ $tipo_unidad->icono_mapa_url }}" alt="" style="width:32px;height:32px;object-fit:contain;"/>@endif</td>
                                 <td>{{ $tipo_unidad->created_at }}</td>
                                 <td>{{ $tipo_unidad->updated_at }}</td>
                                 <td>{{ ($tipo_unidad->creador!=null)?$tipo_unidad->creador->name:""}}</td>
@@ -112,6 +116,26 @@ UNIDADES
                   </div>
                   <span class="help-block" id="span_descripcion"></span>
               </div>
+              @foreach(['icono_lista' => 'Ícono de listado', 'icono_mapa' => 'Ícono de mapa'] as $campo_icono => $label_icono)
+              <div class="form-group" id="div-{{ $campo_icono }}">
+                  <label for="{{ $campo_icono }}" class="col-sm-2 control-label">{{ $label_icono }}</label>
+                  <div class="col-sm-10">
+                      <div style="margin-bottom:6px;">
+                          @if($campo_icono == 'icono_lista')
+                          {{-- Por defecto el listado de homev2 usa el glifo fa-bus --}}
+                          <span id="{{ $campo_icono }}_default" style="display:inline-flex;align-items:center;justify-content:center;width:48px;height:48px;border:1px solid #ddd;border-radius:4px;background:#fff;"><i class="fa fa-bus" style="font-size:24px;"></i></span>
+                          @endif
+                          <img id="{{ $campo_icono }}_preview" src="{{ url('/images/autobu.png') }}" data-default="{{ url('/images/autobu.png') }}" alt="{{ $label_icono }}" style="width:48px;height:48px;object-fit:contain;border:1px solid #ddd;border-radius:4px;padding:2px;background:#fff;"/>
+                      </div>
+                      <input class="form-control" name="{{ $campo_icono }}" id="{{ $campo_icono }}" type="file" accept="image/png,image/jpeg,image/webp" onchange="previsualizarIcono('{{ $campo_icono }}');"/>
+                      <p class="help-block" style="margin-bottom:0;">PNG, JPG o WEBP. Máximo 2 MB. Sin imagen se usa el ícono de bus.</p>
+                      <div class="checkbox" id="div-quitar_{{ $campo_icono }}" style="display:none;">
+                          <label><input type="checkbox" id="quitar_{{ $campo_icono }}" onchange="toggleQuitarIcono('{{ $campo_icono }}');"/> Quitar ícono actual</label>
+                      </div>
+                      <span class="help-block" id="span_{{ $campo_icono }}"></span>
+                  </div>
+              </div>
+              @endforeach
           </div>
       </div>
       <div class="modal-footer">
