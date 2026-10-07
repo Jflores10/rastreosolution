@@ -331,8 +331,8 @@
     .fa-bus.icono-tipo-lista
     {
         display: inline-block;
-        width: 16px;
-        height: 16px;
+        width: 14px;
+        height: 14px;
         vertical-align: middle;
         background-color: currentColor;
         -webkit-mask-image: var(--icono-lista);
