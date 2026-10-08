@@ -2849,12 +2849,20 @@ function onClientConnected(socket) {
           function (err, unidad) {
             if (err || !unidad) return;
 
+            // Hora (servidor) del último cambio a encendido: la app muestra cuánto tiempo
+            // lleva encendida. Solo si el estado cambia (un GTIGN repetido no reinicia el
+            // contador) y nunca con BUFF (tramas atrasadas del equipo).
+            const fechaIgnicionOn = (!isBuffMessage && (unidad.ignicionf !== 'on' || !unidad.fecha_ignicion_on))
+              ? new Date()
+              : null;
+
             if (!isBuffMessage) {
               dbTrackingSystem.collection('unidads').updateOne(
                 { _id: unidad._id },
                 {
                   $set: {
                     ignicionf: 'on',
+                    ...(fechaIgnicionOn ? { fecha_ignicion_on: fechaIgnicionOn } : {}),
                     fecha_gps: fecha_gps,
                     latitud: toFloat(data[latitude]),
                     longitud: toFloat(data[longitude]),
@@ -2880,6 +2888,7 @@ function onClientConnected(socket) {
               _id: unidad._id,
               imei: unidad.imei,
               ignicionf: 'on',
+              ...(fechaIgnicionOn ? { fecha_ignicion_on: fechaIgnicionOn } : {}),
               latitud: toFloat(data[latitude]),
               longitud: toFloat(data[longitude]),
               velocidad_actual: toFloat(data[speed]),
@@ -2931,12 +2940,18 @@ function onClientConnected(socket) {
           function (err, unidad) {
             if (err || !unidad) return;
 
+            // Hora (servidor) del último cambio a apagado; mismas reglas que GTIGN.
+            const fechaIgnicionOff = (!isBuffMessage && (unidad.ignicionf !== 'off' || !unidad.fecha_ignicion_off))
+              ? new Date()
+              : null;
+
             if (!isBuffMessage) {
               dbTrackingSystem.collection('unidads').updateOne(
                 { _id: unidad._id },
                 {
                   $set: {
                     ignicionf: 'off',
+                    ...(fechaIgnicionOff ? { fecha_ignicion_off: fechaIgnicionOff } : {}),
                     fecha_gps: fecha_gps,
                     latitud: toFloat(data[latitude]),
                     longitud: toFloat(data[longitude]),
@@ -2960,6 +2975,7 @@ function onClientConnected(socket) {
               _id: unidad._id,
               imei: unidad.imei,
               ignicionf: 'off',
+              ...(fechaIgnicionOff ? { fecha_ignicion_off: fechaIgnicionOff } : {}),
               latitud: toFloat(data[latitude]),
               longitud: toFloat(data[longitude]),
               velocidad_actual: toFloat(data[speed]),
