@@ -12,7 +12,14 @@ class Unidad extends Moloquent
         'creador_id', 'modificador_id','contador_diario', 'contador_total', 'velocidad_actual','imei',
         'estado_movil','voltaje', 'bateria', 'atm', 'velocidad','control_velocidad','contador_inicial',
         'alerta_cortetubo','alerta_fecha_cortetubo','climatizada','rampa','mileage','sentido','vigilante','tipo_in1',
-        'contador_img', 'contpdabierta'
+        'contador_img', 'contpdabierta', 'mileage_inicio_dia', 'km_diario', 'fecha_km_diario'
+    ];
+
+    // Zona horaria del día del km diario (fecha_km_diario es 'Y-m-d' en esta zona).
+    const ZONA_KM_DIARIO = 'America/Guayaquil';
+
+    protected $casts = [
+        'mileage_inicio_dia' => 'float',
     ];
 
     protected $attributes = array(
@@ -36,6 +43,21 @@ class Unidad extends Moloquent
 
     public function scopeActiva($query) {
         return $query->where('estado', 'A');
+    }
+
+    public static function fechaHoyKmDiario()
+    {
+        return \Carbon\Carbon::now(self::ZONA_KM_DIARIO)->toDateString();
+    }
+
+    // Km recorridos hoy. Si fecha_km_diario no es hoy (unidad sin tramas desde
+    // medianoche y el reinicio diario aún no corrió), hoy lleva 0.
+    public function getKmDiarioAttribute($value)
+    {
+        $fecha = isset($this->attributes['fecha_km_diario']) ? (string) $this->attributes['fecha_km_diario'] : null;
+        if ($fecha !== self::fechaHoyKmDiario())
+            return 0.0;
+        return round((float) $value, 2);
     }
 
     public function creador()

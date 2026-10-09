@@ -152,6 +152,142 @@ function buildUnidadPayloadRealtime(base, extra = {}) {
   return payload;
 }
 
+// ===================== KM DIARIO =====================
+// km_diario = mileage actual − mileage al inicio del día local (America/Guayaquil).
+// Ecuador continental es UTC-5 fijo (sin horario de verano): se aplica el offset a
+// mano para no depender de la zona horaria del servidor.
+const KM_DIARIO_UTC_OFFSET_MS = -5 * 60 * 60 * 1000;
+// Velocidad máxima creíble entre dos tramas; por encima el avance del odómetro se
+// descarta como salto irreal (configurable por variable de entorno).
+const KM_DIARIO_MAX_KMH = Number(process.env.KM_DIARIO_MAX_KMH) || 250;
+// Saltos seguidos tras los que se acepta el nuevo valor (p. ej. cambio de equipo).
+const KM_DIARIO_MAX_SALTOS_SEGUIDOS = 3;
+
+// imei -> { fecha, inicio, ultimoMileage, ultimoMs, saltos } (o { fecha: null } si
+// la BD aún no tiene km diario). Sin entrada = no se conoce todavía: se siembra con
+// el documento que devuelve la propia escritura GTFRI (sin consultas extra).
+const kmDiarioState = new Map();
+
+function redondearKm(v) {
+  return Math.round(v * 100) / 100;
+}
+
+/** Fecha local 'YYYY-MM-DD' de la trama a partir de la hora GPS (UTC, 'YYYYMMDDHHmmss'). */
+function fechaLocalKmDiario(gpsUtc, now) {
+  const s = String(gpsUtc || '').trim();
+  let ms = now.getTime();
+  if (/^\d{14}$/.test(s) && Number(s) !== 0) {
+    ms = Date.UTC(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8), +s.slice(8, 10), +s.slice(10, 12), +s.slice(12, 14));
+  }
+  return { fecha: new Date(ms + KM_DIARIO_UTC_OFFSET_MS).toISOString().slice(0, 10), ms: ms };
+}
+
+/** Siembra el estado de una unidad desde su documento en BD (solo si no se conoce). */
+function sembrarKmDiarioDesdeBD(imei, unidad) {
+  if (!imei || kmDiarioState.has(imei) || !unidad) return;
+  const inicio = Number(unidad.mileage_inicio_dia);
+  if (unidad.fecha_km_diario && Number.isFinite(inicio)) {
+    const ultimo = Number(unidad.mileage);
+    kmDiarioState.set(imei, {
+      fecha: String(unidad.fecha_km_diario),
+      inicio: inicio,
+      ultimoMileage: Number.isFinite(ultimo) && ultimo > 0 ? ultimo : inicio,
+      ultimoMs: null,
+      saltos: 0
+    });
+  } else {
+    kmDiarioState.set(imei, { fecha: null });
+  }
+}
+
+/**
+ * Calcula los campos de km diario para una trama GTFRI no-BUFF.
+ * Devuelve { set, historial } o null si no corresponde tocar el km diario.
+ * `historial` trae el día cerrado cuando la trama abre un día nuevo.
+ */
+function calcularKmDiario(imei, mileage, gpsUtc, now) {
+  if (!imei || !Number.isFinite(mileage) || mileage <= 0) return null;
+  const st = kmDiarioState.get(imei);
+  if (!st) return null; // aún no sembrado: la escritura de esta trama lo siembra
+
+  const { fecha, ms } = fechaLocalKmDiario(gpsUtc, now);
+
+  // Día nuevo (o primera vez): se cierra el anterior y se arranca desde este odómetro.
+  if (!st.fecha || fecha > st.fecha) {
+    const historial = (st.fecha && Number.isFinite(st.inicio))
+      ? {
+        fecha: st.fecha,
+        mileage_inicio: st.inicio,
+        mileage_fin: st.ultimoMileage,
+        km_recorridos: redondearKm(Math.max(0, st.ultimoMileage - st.inicio))
+      }
+      : null;
+    kmDiarioState.set(imei, { fecha: fecha, inicio: mileage, ultimoMileage: mileage, ultimoMs: ms, saltos: 0 });
+    return {
+      set: { mileage_inicio_dia: mileage, km_diario: 0, fecha_km_diario: fecha },
+      historial: historial
+    };
+  }
+
+  // Trama de un día ya cerrado: no altera el día actual.
+  if (fecha < st.fecha) return null;
+
+  const kmPrevio = Math.max(0, st.ultimoMileage - st.inicio);
+  const delta = mileage - st.ultimoMileage;
+
+  if (delta > 0 && st.ultimoMs != null) {
+    const horas = Math.max(Math.abs(ms - st.ultimoMs) / 3600000, 1 / 3600);
+    if (delta / horas > KM_DIARIO_MAX_KMH) {
+      st.saltos = (st.saltos || 0) + 1;
+      if (st.saltos < KM_DIARIO_MAX_SALTOS_SEGUIDOS) {
+        console.log(`[km_diario] salto descartado imei=${imei} ${st.ultimoMileage} -> ${mileage} (${Math.round(delta / horas)} km/h)`);
+        return null;
+      }
+      // Persiste: se toma como nueva referencia sin sumar el salto.
+      console.log(`[km_diario] salto aceptado como nueva referencia imei=${imei} ${st.ultimoMileage} -> ${mileage}`);
+      st.inicio = mileage - kmPrevio;
+    }
+  } else if (delta < 0) {
+    // Odómetro que retrocede (reinicio o cambio de equipo): se rebasa el inicio para
+    // conservar lo ya recorrido hoy, sin km negativos.
+    console.log(`[km_diario] odometro retrocede imei=${imei} ${st.ultimoMileage} -> ${mileage}`);
+    st.inicio = mileage - kmPrevio;
+  }
+
+  st.saltos = 0;
+  st.ultimoMileage = mileage;
+  st.ultimoMs = ms;
+  return {
+    set: {
+      mileage_inicio_dia: redondearKm(st.inicio),
+      km_diario: redondearKm(Math.max(0, mileage - st.inicio)),
+      fecha_km_diario: st.fecha
+    },
+    historial: null
+  };
+}
+
+/** Guarda (idempotente) el km de un día cerrado. */
+function guardarKmDiarioHistorial(unidad, historial) {
+  if (!unidad || !unidad._id || !historial) return;
+  const ahora = new Date();
+  dbTrackingSystem.collection('km_diario_historial').updateOne(
+    { unidad_id: unidad._id, fecha: historial.fecha },
+    {
+      $set: {
+        imei: unidad.imei,
+        mileage_inicio: historial.mileage_inicio,
+        mileage_fin: historial.mileage_fin,
+        km_recorridos: historial.km_recorridos,
+        updated_at: ahora
+      },
+      $setOnInsert: { created_at: ahora }
+    },
+    { upsert: true, writeConcern: { w: 0 } },
+    function (err) { if (err && debug) console.log('km_diario_historial:', err.message || err); }
+  );
+}
+
 /**
  * Publica tracking por Redis como GTFRI (`type: 'unidad.updated'`).
  * No sustituye otros envíos con type propio (ignición, power, puerta, etc.).
@@ -1835,6 +1971,15 @@ function onClientConnected(socket) {
           console.log("estado_movil_v2: "+estadoMovilFinal);
         }
        
+        // ===================== KM DIARIO =====================
+        // Solo tramas no-BUFF (las BUFF llegan atrasadas y no actualizan la unidad).
+        // Se calcula en memoria y viaja en el mismo $set de abajo: sin consultas extra.
+        const imeiKmDiario = String(data[idx.imei] || '').trim();
+        const kmDiario = !isBuffMessage
+          ? calcularKmDiario(imeiKmDiario, gpsData.mileage, data[idx.datetime], now)
+          : null;
+        if (kmDiario) Object.assign(gpsData, kmDiario.set);
+
         // ===================== PAYLOAD COMPLETO (CACHE + GPS) =====================
         const unidadPayload = buildUnidadPayloadRealtime(gpsData);
 
@@ -1864,7 +2009,8 @@ function onClientConnected(socket) {
                 fecha_gps: gpsData.fecha_gps,
                 fecha: now,
                 tiempo_voltaje: gpsData.tiempo_voltaje,
-                tiempo_voltaje_update: gpsData.tiempo_voltaje_update
+                tiempo_voltaje_update: gpsData.tiempo_voltaje_update,
+                ...(kmDiario ? kmDiario.set : {})
               }
             },
             { returnDocument: 'after', writeConcern: { w: 0 } },
@@ -1873,6 +2019,11 @@ function onClientConnected(socket) {
               if (err || !result || !result.value) return;
 
               const unidad = result.value; // 🔥 unidad ya actualizada
+
+              // km diario: siembra el estado (primera trama tras reiniciar el proceso) y
+              // guarda el día cerrado si esta trama abrió uno nuevo.
+              sembrarKmDiarioDesdeBD(imeiKmDiario, unidad);
+              if (kmDiario && kmDiario.historial) guardarKmDiarioHistorial(unidad, kmDiario.historial);
 
               // Enviar una publicación autorizada basada en la unidad en BD
               // Esto garantiza que el campo `sentido` viene desde la tabla `unidads`
