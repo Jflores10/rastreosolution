@@ -9,19 +9,24 @@ use MongoDB\BSON\ObjectID;
 use MongoDB\BSON\UTCDateTime;
 
 /**
- * Cierra el km diario de las unidades que no han enviado tramas desde medianoche.
+ * Corte diario (programado a las 23:59 America/Guayaquil). Para cada unidad activa:
  *
- * El parseador reinicia el km diario con la primera trama GTFRI del nuevo día; una
- * unidad apagada toda la noche no envía tramas y seguiría mostrando el km de ayer.
- * Este comando guarda ese día en km_diario_historial y deja el día de hoy en 0.
+ * - Km diario: guarda el día que termina en km_diario_historial y registra el inicio
+ *   del día siguiente: mileage_inicio_dia = último mileage recibido, km_diario = 0,
+ *   fecha_km_diario = día que empieza. `mileage` no se modifica.
+ * - Encendido / apagado acumulado: cierra el tramo en curso hasta las 23:59, guarda
+ *   los totales del día (seg_encendido / seg_apagado en el mismo historial) y deja
+ *   los contadores en 0, con el tramo actual empezando a las 23:59.
+ *
+ * Todo queda en BD, así que sobrevive a reinicios del parseador.
  */
 class ReiniciarKmDiarioCommand extends Command
 {
     const LOTE = 500;
 
-    protected $signature = 'ts:reiniciar-km-diario';
+    protected $signature = 'ts:reiniciar-km-diario {--fecha= : Día que empieza (Y-m-d). Por defecto, el siguiente al corte de las 23:59} {--imei= : Solo la unidad con este IMEI}';
 
-    protected $description = 'Cierra el km diario del día anterior y reinicia km_diario en las unidades activas';
+    protected $description = 'Corte de las 23:59: km diario y tiempo encendido/apagado acumulado del día';
 
     public function __construct()
     {
@@ -31,25 +36,37 @@ class ReiniciarKmDiarioCommand extends Command
     public function handle()
     {
         try {
-            $hoy = Unidad::fechaHoyKmDiario();
+            // A las 23:59 (+1 h) ya es el día siguiente; también si el cron corre con retraso.
+            $hoy = $this->option('fecha') ?: \Carbon\Carbon::now(Unidad::ZONA_KM_DIARIO)->addHour()->toDateString();
+            // Instante del corte: 23:59:00 local del día anterior al que empieza.
+            $corte = \Carbon\Carbon::parse($hoy . ' 00:00:00', Unidad::ZONA_KM_DIARIO)->subMinute();
             $procesadas = 0;
             $cerradas = 0;
+            $filtro = [
+                'estado' => 'A',
+                '$or' => [
+                    ['fecha_km_diario' => ['$lt' => $hoy]],
+                    ['fecha_km_diario' => null],
+                    ['fecha_ignicion_dia' => ['$lt' => $hoy]],
+                    ['fecha_ignicion_dia' => null],
+                ],
+            ];
+            if ($this->option('imei'))
+                $filtro['imei'] = (string) $this->option('imei');
 
-            // Cada pasada actualiza fecha_km_diario a hoy, así que las procesadas dejan
+            // Cada pasada actualiza las fechas al día que empieza, así que las procesadas dejan
             // de cumplir el filtro (no se usa paginación por offset, que se saltaría
             // documentos al cambiar el campo filtrado). El tope evita un bucle infinito.
             for ($pasada = 0; $pasada < 1000; $pasada++) {
-                $unidades = Unidad::raw(function ($collection) use ($hoy) {
+                $unidades = Unidad::raw(function ($collection) use ($filtro) {
                     return $collection->find(
+                        $filtro,
                         [
-                            'estado' => 'A',
-                            '$or' => [
-                                ['fecha_km_diario' => ['$lt' => $hoy]],
-                                ['fecha_km_diario' => null],
+                            'projection' => [
+                                'imei' => 1, 'mileage' => 1, 'mileage_inicio_dia' => 1, 'fecha_km_diario' => 1,
+                                'ignicionf' => 1, 'seg_encendido_dia' => 1, 'seg_apagado_dia' => 1,
+                                'ignicion_tramo_desde' => 1, 'fecha_ignicion_dia' => 1,
                             ],
-                        ],
-                        [
-                            'projection' => ['imei' => 1, 'mileage' => 1, 'mileage_inicio_dia' => 1, 'fecha_km_diario' => 1],
                             'limit' => self::LOTE,
                         ]
                     )->toArray();
@@ -59,7 +76,10 @@ class ReiniciarKmDiarioCommand extends Command
                     break;
 
                 foreach ($unidades as $u) {
-                    if ($this->cerrarDia($u, $hoy))
+                    $id = $u['_id'] instanceof ObjectID ? $u['_id'] : new ObjectID((string) $u['_id']);
+                    $km = $this->cerrarKmDiario($u, $id, $hoy);
+                    $ign = $this->cerrarIgnicionDia($u, $id, $hoy, $corte);
+                    if ($km || $ign)
                         $cerradas++;
                     $procesadas++;
                 }
@@ -76,55 +96,120 @@ class ReiniciarKmDiarioCommand extends Command
     }
 
     /**
-     * Guarda el día anterior (si lo hay) y deja la unidad en el día de hoy con 0 km.
-     * Devuelve true si se guardó un día en el historial.
+     * Km diario: guarda el día que termina (si lo hay) y deja la unidad en el día que
+     * empieza con 0 km. Devuelve true si se guardó un día en el historial.
      */
-    private function cerrarDia($u, $hoy)
+    private function cerrarKmDiario($u, $id, $hoy)
     {
-        $id = $u['_id'] instanceof ObjectID ? $u['_id'] : new ObjectID((string) $u['_id']);
         $fechaAnterior = isset($u['fecha_km_diario']) ? (string) $u['fecha_km_diario'] : null;
+        if ($fechaAnterior !== null && $fechaAnterior >= $hoy)
+            return false;
         $inicio = isset($u['mileage_inicio_dia']) && is_numeric($u['mileage_inicio_dia']) ? (float) $u['mileage_inicio_dia'] : null;
         $mileage = isset($u['mileage']) && is_numeric($u['mileage']) ? (float) $u['mileage'] : null;
         $mileageValido = $mileage !== null && $mileage > 0;
 
         // Solo se toca la unidad si el parseador no la reinició mientras tanto.
-        $filtro = ['_id' => $id, 'fecha_km_diario' => $fechaAnterior];
-        $resultado = Unidad::raw(function ($collection) use ($filtro, $hoy, $mileage, $mileageValido) {
-            return $collection->updateOne($filtro, [
-                '$set' => [
-                    'mileage_inicio_dia' => $mileageValido ? round($mileage, 2) : null,
-                    'km_diario' => 0,
-                    'fecha_km_diario' => $hoy,
-                ],
-            ]);
-        });
-
-        $modificada = is_object($resultado) && method_exists($resultado, 'getModifiedCount')
-            ? $resultado->getModifiedCount() > 0
-            : true;
+        $modificada = $this->actualizarSiSigueIgual(
+            ['_id' => $id, 'fecha_km_diario' => $fechaAnterior],
+            [
+                'mileage_inicio_dia' => $mileageValido ? round($mileage, 2) : null,
+                'km_diario' => 0,
+                'fecha_km_diario' => $hoy,
+            ]
+        );
         if (!$modificada || $fechaAnterior === null || $inicio === null)
             return false;
 
         $fin = $mileageValido ? $mileage : $inicio;
+        $this->guardarHistorial($id, $u, $fechaAnterior, [
+            'mileage_inicio' => round($inicio, 2),
+            'mileage_fin' => round($fin, 2),
+            'km_recorridos' => round(max(0, $fin - $inicio), 2),
+        ]);
+
+        return true;
+    }
+
+    /**
+     * Encendido / apagado: suma al contador del estado actual lo transcurrido hasta el
+     * corte, guarda los totales del día y reinicia los contadores en 0 con el tramo en
+     * curso empezando en el corte. Devuelve true si se guardó un día en el historial.
+     */
+    private function cerrarIgnicionDia($u, $id, $hoy, \Carbon\Carbon $corte)
+    {
+        $fechaAnterior = isset($u['fecha_ignicion_dia']) ? (string) $u['fecha_ignicion_dia'] : null;
+        if ($fechaAnterior !== null && $fechaAnterior >= $hoy)
+            return false;
+
+        $estado = isset($u['ignicionf']) && in_array($u['ignicionf'], ['on', 'off'], true) ? $u['ignicionf'] : null;
+        $segOn = isset($u['seg_encendido_dia']) && is_numeric($u['seg_encendido_dia']) ? (float) $u['seg_encendido_dia'] : 0.0;
+        $segOff = isset($u['seg_apagado_dia']) && is_numeric($u['seg_apagado_dia']) ? (float) $u['seg_apagado_dia'] : 0.0;
+        $desde = isset($u['ignicion_tramo_desde']) && $u['ignicion_tramo_desde'] instanceof UTCDateTime
+            ? $u['ignicion_tramo_desde']->toDateTime()->getTimestamp()
+            : null;
+        // Nunca en el futuro (p. ej. una ejecución manual con --fecha antes de las 23:59).
+        $corteTs = min($corte->getTimestamp(), time());
+
+        // Tramo en curso hasta el corte (pertenece al día que termina).
+        if ($fechaAnterior !== null && $estado !== null && $desde !== null && $corteTs > $desde) {
+            if ($estado === 'on')
+                $segOn += $corteTs - $desde;
+            else
+                $segOff += $corteTs - $desde;
+        }
+
+        // Primera vez (sin contadores): se empieza a acumular desde ahora, sin suponer
+        // que el estado actual viene desde el corte.
+        $nuevoDesde = $fechaAnterior !== null ? $corteTs : max($corteTs, time());
+
+        $modificada = $this->actualizarSiSigueIgual(
+            ['_id' => $id, 'fecha_ignicion_dia' => $fechaAnterior],
+            [
+                'seg_encendido_dia' => 0,
+                'seg_apagado_dia' => 0,
+                'ignicion_tramo_desde' => new UTCDateTime($nuevoDesde * 1000),
+                'fecha_ignicion_dia' => $hoy,
+            ]
+        );
+        if (!$modificada || $fechaAnterior === null)
+            return false;
+
+        $this->guardarHistorial($id, $u, $fechaAnterior, [
+            'seg_encendido' => (int) round($segOn),
+            'seg_apagado' => (int) round($segOff),
+        ]);
+
+        return true;
+    }
+
+    /** updateOne condicionado: false si el documento cambió (p. ej. lo reinició el parseador). */
+    private function actualizarSiSigueIgual(array $filtro, array $set)
+    {
+        $resultado = Unidad::raw(function ($collection) use ($filtro, $set) {
+            return $collection->updateOne($filtro, ['$set' => $set]);
+        });
+
+        return is_object($resultado) && method_exists($resultado, 'getModifiedCount')
+            ? $resultado->getModifiedCount() > 0
+            : true;
+    }
+
+    /** Resumen del día en km_diario_historial (upsert por unidad y fecha). */
+    private function guardarHistorial($id, $u, $fecha, array $campos)
+    {
         $ahora = new UTCDateTime();
-        // Mismo documento que escribe el parseador (upsert por unidad y fecha).
-        KmDiarioHistorial::raw(function ($collection) use ($id, $u, $fechaAnterior, $inicio, $fin, $ahora) {
+        KmDiarioHistorial::raw(function ($collection) use ($id, $u, $fecha, $campos, $ahora) {
             return $collection->updateOne(
-                ['unidad_id' => $id, 'fecha' => $fechaAnterior],
+                ['unidad_id' => $id, 'fecha' => $fecha],
                 [
-                    '$set' => [
+                    '$set' => array_merge($campos, [
                         'imei' => isset($u['imei']) ? $u['imei'] : null,
-                        'mileage_inicio' => round($inicio, 2),
-                        'mileage_fin' => round($fin, 2),
-                        'km_recorridos' => round(max(0, $fin - $inicio), 2),
                         'updated_at' => $ahora,
-                    ],
+                    ]),
                     '$setOnInsert' => ['created_at' => $ahora],
                 ],
                 ['upsert' => true]
             );
         });
-
-        return true;
     }
 }

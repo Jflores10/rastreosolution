@@ -205,6 +205,69 @@ function kmDiarioDecidir(estado, mileage, fecha) {
 }
 // <<< KM_DIARIO_PURO
 
+// >>> IGNICION_DIA_PURO (funciones sin BD; test/ignicion_dia.test.js las carga desde aquí)
+// Tiempo encendido / apagado ACUMULADO del día. Cada cambio de ignición cierra el
+// tramo en curso y lo suma al contador del estado que termina; los contadores solo
+// vuelven a 0 en el corte de las 23:59 America/Guayaquil (Laravel,
+// `ts:reiniciar-km-diario`). Campos en `unidads`:
+//   seg_encendido_dia, seg_apagado_dia  segundos de los tramos cerrados del día
+//   ignicion_tramo_desde                inicio (hora servidor) del tramo en curso
+//   fecha_ignicion_dia                  día de los contadores ('YYYY-MM-DD')
+const IGNICION_CORTE_SEG = 60; // el día empieza a las 23:59:00 del día anterior
+
+/** Día de los contadores para un instante: a partir de las 23:59 ya es el día siguiente. */
+function ignicionDiaDe(ahora) {
+  return new Date(ahora.getTime() + KM_DIARIO_UTC_OFFSET_MS + IGNICION_CORTE_SEG * 1000).toISOString().slice(0, 10);
+}
+
+/** Instante del corte (23:59:00 local del día anterior) en que empieza el día `dia`. */
+function ignicionInicioDia(dia) {
+  const medianocheLocalUtc = Date.parse(dia + 'T00:00:00Z') - KM_DIARIO_UTC_OFFSET_MS;
+  return new Date(medianocheLocalUtc - IGNICION_CORTE_SEG * 1000);
+}
+
+/**
+ * Contadores al recibir un cambio de ignición.
+ * @param unidad      documento actual (ignicionf, seg_*_dia, ignicion_tramo_desde, fecha_ignicion_dia)
+ * @param nuevoEstado 'on' | 'off'
+ * @returns null si el estado no cambia; si no, { set } con los valores absolutos a guardar.
+ */
+function ignicionDiaAlCambiar(unidad, nuevoEstado, ahora) {
+  const previo = (unidad.ignicionf === 'on' || unidad.ignicionf === 'off') ? unidad.ignicionf : null;
+  if (previo === nuevoEstado) return null;
+
+  const dia = ignicionDiaDe(ahora);
+  let segOn = Number(unidad.seg_encendido_dia) || 0;
+  let segOff = Number(unidad.seg_apagado_dia) || 0;
+  let desde = unidad.ignicion_tramo_desde ? new Date(unidad.ignicion_tramo_desde) : null;
+  if (desde && isNaN(desde.getTime())) desde = null;
+
+  // Contadores de otro día (el corte no corrió): se empieza el día de hoy y del
+  // tramo en curso solo cuenta lo transcurrido desde el corte.
+  if (unidad.fecha_ignicion_dia !== dia) {
+    segOn = 0;
+    segOff = 0;
+    const inicioDia = ignicionInicioDia(dia);
+    if (desde && desde < inicioDia) desde = inicioDia;
+  }
+
+  if (previo && desde) {
+    const cerrado = Math.max(0, (ahora.getTime() - desde.getTime()) / 1000);
+    if (previo === 'on') segOn += cerrado;
+    else segOff += cerrado;
+  }
+
+  return {
+    set: {
+      seg_encendido_dia: Math.round(segOn),
+      seg_apagado_dia: Math.round(segOff),
+      ignicion_tramo_desde: ahora,
+      fecha_ignicion_dia: dia
+    }
+  };
+}
+// <<< IGNICION_DIA_PURO
+
 // Estado en memoria (copia de lo que hay en BD, para no consultar por trama) y
 // sincronización con el documento que devuelve la propia escritura GTFRI.
 const KM_DIARIO_DEBUG = debug || process.env.KM_DIARIO_DEBUG === '1';
@@ -2990,9 +3053,12 @@ function onClientConnected(socket) {
             // Hora (servidor) del último cambio a encendido: la app muestra cuánto tiempo
             // lleva encendida. Solo si el estado cambia (un GTIGN repetido no reinicia el
             // contador) y nunca con BUFF (tramas atrasadas del equipo).
+            const ahoraIgnicion = new Date();
             const fechaIgnicionOn = (!isBuffMessage && (unidad.ignicionf !== 'on' || !unidad.fecha_ignicion_on))
-              ? new Date()
+              ? ahoraIgnicion
               : null;
+            // Acumulado del día (encendido/apagado): solo si la ignición cambia de verdad.
+            const ignicionDia = !isBuffMessage ? ignicionDiaAlCambiar(unidad, 'on', ahoraIgnicion) : null;
 
             if (!isBuffMessage) {
               dbTrackingSystem.collection('unidads').updateOne(
@@ -3001,6 +3067,7 @@ function onClientConnected(socket) {
                   $set: {
                     ignicionf: 'on',
                     ...(fechaIgnicionOn ? { fecha_ignicion_on: fechaIgnicionOn } : {}),
+                    ...(ignicionDia ? ignicionDia.set : {}),
                     fecha_gps: fecha_gps,
                     latitud: toFloat(data[latitude]),
                     longitud: toFloat(data[longitude]),
@@ -3015,7 +3082,7 @@ function onClientConnected(socket) {
               );
 
               // Persistir ignicionf='on' en el cache para que los GTFRI posteriores lo incluyan
-              buildUnidadPayloadRealtime({ imei: unidad.imei, _id: unidad._id, ignicionf: 'on' });
+              buildUnidadPayloadRealtime(Object.assign({ imei: unidad.imei, _id: unidad._id, ignicionf: 'on' }, ignicionDia ? ignicionDia.set : {}));
             }
 
             
@@ -3027,6 +3094,7 @@ function onClientConnected(socket) {
               imei: unidad.imei,
               ignicionf: 'on',
               ...(fechaIgnicionOn ? { fecha_ignicion_on: fechaIgnicionOn } : {}),
+              ...(ignicionDia ? ignicionDia.set : {}),
               latitud: toFloat(data[latitude]),
               longitud: toFloat(data[longitude]),
               velocidad_actual: toFloat(data[speed]),
@@ -3079,9 +3147,12 @@ function onClientConnected(socket) {
             if (err || !unidad) return;
 
             // Hora (servidor) del último cambio a apagado; mismas reglas que GTIGN.
+            const ahoraIgnicion = new Date();
             const fechaIgnicionOff = (!isBuffMessage && (unidad.ignicionf !== 'off' || !unidad.fecha_ignicion_off))
-              ? new Date()
+              ? ahoraIgnicion
               : null;
+            // Acumulado del día (encendido/apagado): solo si la ignición cambia de verdad.
+            const ignicionDia = !isBuffMessage ? ignicionDiaAlCambiar(unidad, 'off', ahoraIgnicion) : null;
 
             if (!isBuffMessage) {
               dbTrackingSystem.collection('unidads').updateOne(
@@ -3090,6 +3161,7 @@ function onClientConnected(socket) {
                   $set: {
                     ignicionf: 'off',
                     ...(fechaIgnicionOff ? { fecha_ignicion_off: fechaIgnicionOff } : {}),
+                    ...(ignicionDia ? ignicionDia.set : {}),
                     fecha_gps: fecha_gps,
                     latitud: toFloat(data[latitude]),
                     longitud: toFloat(data[longitude]),
@@ -3104,7 +3176,7 @@ function onClientConnected(socket) {
               );
 
               // Persistir ignicionf='off' en el cache para que los GTFRI posteriores lo incluyan
-              buildUnidadPayloadRealtime({ imei: unidad.imei, _id: unidad._id, ignicionf: 'off' });
+              buildUnidadPayloadRealtime(Object.assign({ imei: unidad.imei, _id: unidad._id, ignicionf: 'off' }, ignicionDia ? ignicionDia.set : {}));
             }
 
             enviarALaravelPorWS({
@@ -3114,6 +3186,7 @@ function onClientConnected(socket) {
               imei: unidad.imei,
               ignicionf: 'off',
               ...(fechaIgnicionOff ? { fecha_ignicion_off: fechaIgnicionOff } : {}),
+              ...(ignicionDia ? ignicionDia.set : {}),
               latitud: toFloat(data[latitude]),
               longitud: toFloat(data[longitude]),
               velocidad_actual: toFloat(data[speed]),

@@ -55,9 +55,9 @@ class Kernel extends ConsoleKernel
         //$schedule->command('ts:finalizar-despachos')->everyMinute()->withoutOverlapping();
         //$schedule->command('ts:update-unidad-estado-ns')->everyFiveMinutes()->withoutOverlapping();
         $schedule->command('ts:reset-cont-pd-abierta')->dailyAt('04:00')->withoutOverlapping();
-        // Km diario: corte al iniciar el día (00:00 local). A las 23:59 se perdería el
-        // último minuto del día; las unidades con tramas ya se reinician solas en el parseador.
-        $schedule->command('ts:reiniciar-km-diario')->dailyAt('00:00')->timezone('America/Guayaquil')->withoutOverlapping();
+        // Km diario: a las 23:59 local se registra mileage_inicio_dia (último mileage
+        // recibido) del día que empieza; el parseador calcula km_diario contra ese valor.
+        $schedule->command('ts:reiniciar-km-diario')->dailyAt('23:59')->timezone('America/Guayaquil')->withoutOverlapping();
         //$schedule->command('ts:update-gps-address')->hourly()->withoutOverlapping();
         //$schedule->command('ts:clear-tramas-logs')->daily()->withoutOverlapping();
         //$schedule->command('bloques:sync')->everyMinute();

@@ -12,7 +12,8 @@ class Unidad extends Moloquent
         'creador_id', 'modificador_id','contador_diario', 'contador_total', 'velocidad_actual','imei',
         'estado_movil','voltaje', 'bateria', 'atm', 'velocidad','control_velocidad','contador_inicial',
         'alerta_cortetubo','alerta_fecha_cortetubo','climatizada','rampa','mileage','sentido','vigilante','tipo_in1',
-        'contador_img', 'contpdabierta', 'mileage_inicio_dia', 'km_diario', 'fecha_km_diario'
+        'contador_img', 'contpdabierta', 'mileage_inicio_dia', 'km_diario', 'fecha_km_diario',
+        'seg_encendido_dia', 'seg_apagado_dia', 'ignicion_tramo_desde', 'fecha_ignicion_dia'
     ];
 
     // Zona horaria del día del km diario (fecha_km_diario es 'Y-m-d' en esta zona).
