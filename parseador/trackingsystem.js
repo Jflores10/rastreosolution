@@ -154,11 +154,11 @@ function buildUnidadPayloadRealtime(base, extra = {}) {
 
 // ===================== KM DIARIO =====================
 // >>> KM_DIARIO_PURO (funciones sin BD; test/km_diario.test.js las carga desde aquí)
-// km_diario es un campo SEPARADO: km_diario = mileage_actual − mileage_inicio_dia.
-// Nunca modifica `mileage` (se guarda tal cual lo envía el GPS).
+// km_diario es un campo SEPARADO: km_diario = odometro_actual − odometro_inicio_dia.
+// El odómetro es el campo 19 de la GTFRI (`odometro`, km). `mileage` no se usa ni se modifica.
 // - Corte diario: Laravel a las 23:59 America/Guayaquil (`ts:reiniciar-km-diario`)
-//   registra mileage_inicio_dia = último mileage recibido y fecha_km_diario = día que empieza.
-// - Sin inicio para el día de la trama: el inicio es el mileage de la primera GTFRI del día.
+//   registra odometro_inicio_dia = último odómetro recibido y fecha_km_diario = día que empieza.
+// - Sin inicio para el día de la trama: el inicio es el odómetro de la primera GTFRI del día.
 // - Dentro del día, siempre contra el mismo inicio hasta el próximo corte.
 
 // Ecuador continental: UTC-5 fijo, sin horario de verano.
@@ -166,6 +166,12 @@ const KM_DIARIO_UTC_OFFSET_MS = -5 * 60 * 60 * 1000;
 
 function redondearKm(v) {
   return Math.round(v * 100) / 100;
+}
+
+/** Odómetro de la GTFRI (km con decimales, p. ej. "224206.8"); 0, vacío o inválido = null. */
+function odometroValido(valor) {
+  const n = parseFloat(String(valor == null ? "" : valor).trim());
+  return Number.isFinite(n) && n > 0 ? n : null;
 }
 
 /** Fecha local 'YYYY-MM-DD' de la trama desde la hora GPS (UTC, 'YYYYMMDDHHmmss'). */
@@ -181,23 +187,23 @@ function kmDiarioFechaLocalTrama(gpsUtc, now) {
 /**
  * Decide el km diario para una trama.
  * @param estado  { inicio, fecha } de la unidad (como está en BD) o null si se desconoce.
- * @param mileage mileage de la trama, tal cual (no se altera).
+ * @param odometro odómetro de la trama (km), tal cual (no se altera).
  * @param fecha   fecha local de la trama ('YYYY-MM-DD').
- * @returns null si el mileage no es válido; si no:
+ * @returns null si el odómetro no es válido; si no:
  *   { accion: 'esperar' }                         estado desconocido
  *   { accion: 'iniciar', inicio, fecha, km: 0 }   sin inicio para ese día: esta trama es el inicio
- *   { accion: 'calcular', km, negativo }          km = mileage − inicio (0 si es negativo)
+ *   { accion: 'calcular', km, negativo }          km = odometro − inicio (0 si es negativo)
  */
-function kmDiarioDecidir(estado, mileage, fecha) {
-  if (!Number.isFinite(mileage) || mileage <= 0) return null;
+function kmDiarioDecidir(estado, odometro, fecha) {
+  if (!Number.isFinite(odometro) || odometro <= 0) return null;
   if (!estado) return { accion: 'esperar' };
 
   const inicio = estado.inicio == null ? NaN : Number(estado.inicio);
   if (!Number.isFinite(inicio) || !estado.fecha || String(estado.fecha) < fecha) {
-    return { accion: 'iniciar', inicio: mileage, fecha: fecha, km: 0 };
+    return { accion: 'iniciar', inicio: odometro, fecha: fecha, km: 0 };
   }
 
-  const diff = mileage - inicio;
+  const diff = odometro - inicio;
   // Odómetro por debajo del inicio (reset del equipo o dato corrupto): km_diario = 0
   // sin tocar el inicio; el corte de las 23:59 toma el nuevo valor.
   if (diff < 0) return { accion: 'calcular', km: 0, negativo: true };
@@ -306,9 +312,9 @@ setInterval(function () {
   if ((h === 23 && m === 59) || (h === 0 && m === 0)) kmDiarioState.clear();
 }, 15000);
 
-function logKmDiario(imei, mileage, inicio, km, extra) {
+function logKmDiario(imei, odometro, inicio, km, extra) {
   if (!KM_DIARIO_DEBUG) return;
-  console.log(`[km_diario] imei=${imei} mileage=${mileage} mileage_inicio_dia=${inicio} km_diario=${km}${extra ? ' ' + extra : ''}`);
+  console.log(`[km_diario] imei=${imei} odometro=${odometro} odometro_inicio_dia=${inicio} km_diario=${km}${extra ? ' ' + extra : ''}`);
 }
 
 /**
@@ -316,10 +322,10 @@ function logKmDiario(imei, mileage, inicio, km, extra) {
  * hecho por Laravel), crea el inicio del día si falta y corrige km_diario si se
  * calculó con un inicio desactualizado. Solo escribe en esos casos (raros).
  */
-function sincronizarKmDiario(imei, unidad, mileage, fecha, calculado) {
+function sincronizarKmDiario(imei, unidad, odometro, fecha, calculado) {
   if (!imei || !unidad || !unidad._id) return;
-  const estadoBD = { inicio: unidad.mileage_inicio_dia, fecha: unidad.fecha_km_diario };
-  const decision = kmDiarioDecidir(estadoBD, mileage, fecha);
+  const estadoBD = { inicio: unidad.odometro_inicio_dia, fecha: unidad.fecha_km_diario };
+  const decision = kmDiarioDecidir(estadoBD, odometro, fecha);
   if (!decision) return;
 
   if (decision.accion === 'iniciar') {
@@ -329,22 +335,22 @@ function sincronizarKmDiario(imei, unidad, mileage, fecha, calculado) {
       {
         _id: unidad._id,
         $or: [
-          { mileage_inicio_dia: null },
+          { odometro_inicio_dia: null },
           { fecha_km_diario: null },
           { fecha_km_diario: { $lt: decision.fecha } }
         ]
       },
-      { $set: { mileage_inicio_dia: decision.inicio, km_diario: 0, fecha_km_diario: decision.fecha } },
+      { $set: { odometro_inicio_dia: decision.inicio, km_diario: 0, fecha_km_diario: decision.fecha } },
       { writeConcern: { w: 0 } },
       function (err) { if (err && debug) console.log('km_diario iniciar:', err.message || err); }
     );
-    logKmDiario(imei, mileage, decision.inicio, 0, `(inicio del día ${decision.fecha} con esta trama)`);
+    logKmDiario(imei, odometro, decision.inicio, 0, `(inicio del día ${decision.fecha} con esta trama)`);
     return;
   }
 
   kmDiarioState.set(imei, { inicio: Number(estadoBD.inicio), fecha: String(estadoBD.fecha) });
   if (decision.negativo) {
-    console.warn(`[km_diario] WARN imei=${imei} mileage=${mileage} < mileage_inicio_dia=${estadoBD.inicio}: km_diario=0 (reset del odómetro o dato corrupto)`);
+    console.warn(`[km_diario] WARN imei=${imei} odometro=${odometro} < odometro_inicio_dia=${estadoBD.inicio}: km_diario=0 (reset del odómetro o dato corrupto)`);
   }
   if (!calculado || calculado.accion !== 'calcular' || calculado.km !== decision.km) {
     dbTrackingSystem.collection('unidads').updateOne(
@@ -353,7 +359,7 @@ function sincronizarKmDiario(imei, unidad, mileage, fecha, calculado) {
       { writeConcern: { w: 0 } },
       function (err) { if (err && debug) console.log('km_diario corregir:', err.message || err); }
     );
-    logKmDiario(imei, mileage, estadoBD.inicio, decision.km, '(sincronizado con BD)');
+    logKmDiario(imei, odometro, estadoBD.inicio, decision.km, '(sincronizado con BD)');
   }
 }
 
@@ -1975,6 +1981,7 @@ function onClientConnected(socket) {
           latitude: 12,
           datetime: 13,
           mileage: 17,
+          odometro: 19,
           battery: 23,
           status: 24,
           sentTime: 28
@@ -2016,6 +2023,8 @@ function onClientConnected(socket) {
           velocidad_actual: velocidadActual,
           bateria: toFloat(data[idx.battery]),
           mileage: toDecimalHex(data[idx.mileage]),
+          // Odómetro del equipo (campo 19, km con decimales). 0 o inválido = sin dato.
+          odometro: odometroValido(data[idx.odometro]),
           angulo: toInteger(data[idx.angle]),
           estado_movil: estadoMovilFinal,
           fecha_gps: fechaGpsDate,
@@ -2046,12 +2055,12 @@ function onClientConnected(socket) {
         const imeiKmDiario = String(data[idx.imei] || '').trim();
         const fechaKmDiario = kmDiarioFechaLocalTrama(data[idx.datetime], now);
         const kmCalculado = !isBuffMessage
-          ? kmDiarioDecidir(kmDiarioState.get(imeiKmDiario) || null, gpsData.mileage, fechaKmDiario)
+          ? kmDiarioDecidir(kmDiarioState.get(imeiKmDiario) || null, gpsData.odometro, fechaKmDiario)
           : null;
         if (kmCalculado && kmCalculado.accion === 'calcular') {
           gpsData.km_diario = kmCalculado.km;
           const st = kmDiarioState.get(imeiKmDiario);
-          logKmDiario(imeiKmDiario, gpsData.mileage, st && st.inicio, kmCalculado.km);
+          logKmDiario(imeiKmDiario, gpsData.odometro, st && st.inicio, kmCalculado.km);
         }
 
         // ===================== PAYLOAD COMPLETO (CACHE + GPS) =====================
@@ -2077,6 +2086,7 @@ function onClientConnected(socket) {
                 voltaje: gpsData.voltaje,
                 velocidad_actual: gpsData.velocidad_actual,
                 mileage: gpsData.mileage,
+                ...(gpsData.odometro != null ? { odometro: gpsData.odometro } : {}),
                 bateria: gpsData.bateria,
                 is_atm: gpsData.is_atm,
                 angulo: gpsData.angulo,
@@ -2095,7 +2105,7 @@ function onClientConnected(socket) {
               const unidad = result.value; // 🔥 unidad ya actualizada
 
               // km diario: sincroniza con BD (corte de las 23:59, inicio del día si falta).
-              if (!isBuffMessage) sincronizarKmDiario(imeiKmDiario, unidad, gpsData.mileage, fechaKmDiario, kmCalculado);
+              if (!isBuffMessage) sincronizarKmDiario(imeiKmDiario, unidad, gpsData.odometro, fechaKmDiario, kmCalculado);
 
               // Enviar una publicación autorizada basada en la unidad en BD
               // Esto garantiza que el campo `sentido` viene desde la tabla `unidads`
