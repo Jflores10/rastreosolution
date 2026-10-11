@@ -268,6 +268,28 @@ function ignicionDiaAlCambiar(unidad, nuevoEstado, ahora) {
 }
 // <<< IGNICION_DIA_PURO
 
+// La escritura GTFRI devuelve la unidad tal como estaba en BD; si un GTIGN/GTIGF se
+// guardó justo después (llegan casi a la vez), ese documento trae la ignición vieja
+// y publicarlo revertiría el estado en la app/web. Si la caché tiene un cambio de
+// ignición más reciente, se publican sus campos de ignición en lugar de los del doc.
+const IGNICION_CAMPOS_VIGENTES = [
+  'ignicionf', 'seg_encendido_dia', 'seg_apagado_dia', 'ignicion_tramo_desde',
+  'fecha_ignicion_dia', 'fecha_ignicion_on', 'fecha_ignicion_off'
+];
+function conIgnicionVigente(unidad) {
+  if (!unidad) return unidad;
+  const cache = unidadStateCache.get(String(unidad.imei || unidad._id || '').trim());
+  if (!cache || !cache.ignicion_tramo_desde) return unidad;
+  const tCache = new Date(cache.ignicion_tramo_desde).getTime();
+  const tDoc = unidad.ignicion_tramo_desde ? new Date(unidad.ignicion_tramo_desde).getTime() : NaN;
+  if (!Number.isFinite(tCache) || (Number.isFinite(tDoc) && tDoc >= tCache)) return unidad;
+  const copia = Object.assign({}, unidad);
+  for (const k of IGNICION_CAMPOS_VIGENTES) {
+    if (cache[k] !== undefined) copia[k] = cache[k];
+  }
+  return copia;
+}
+
 // Estado en memoria (copia de lo que hay en BD, para no consultar por trama) y
 // sincronización con el documento que devuelve la propia escritura GTFRI.
 const KM_DIARIO_DEBUG = debug || process.env.KM_DIARIO_DEBUG === '1';
@@ -2079,7 +2101,7 @@ function onClientConnected(socket) {
               // Esto garantiza que el campo `sentido` viene desde la tabla `unidads`
               // y fuerza el envío sin pasar por el throttle (opts.force = true).
               try {
-                const unidadFromDbPayload = buildUnidadPayloadRealtime(Object.assign({ type: 'unidad.updated', _raw_message: gpsData._raw_message }, unidad));
+                const unidadFromDbPayload = buildUnidadPayloadRealtime(Object.assign({ type: 'unidad.updated', _raw_message: gpsData._raw_message }, conIgnicionVigente(unidad)));
                 // Si es +RESP (no BUFF), forzar envío siempre (saltamos throttle)
                 enviarALaravelPorWS(unidadFromDbPayload, { force: isRespMessage });
               } catch (e) {
@@ -3082,7 +3104,7 @@ function onClientConnected(socket) {
               );
 
               // Persistir ignicionf='on' en el cache para que los GTFRI posteriores lo incluyan
-              buildUnidadPayloadRealtime(Object.assign({ imei: unidad.imei, _id: unidad._id, ignicionf: 'on' }, ignicionDia ? ignicionDia.set : {}));
+              buildUnidadPayloadRealtime(Object.assign({ imei: unidad.imei, _id: unidad._id, ignicionf: 'on' }, fechaIgnicionOn ? { fecha_ignicion_on: fechaIgnicionOn } : {}, ignicionDia ? ignicionDia.set : {}));
             }
 
             
@@ -3176,7 +3198,7 @@ function onClientConnected(socket) {
               );
 
               // Persistir ignicionf='off' en el cache para que los GTFRI posteriores lo incluyan
-              buildUnidadPayloadRealtime(Object.assign({ imei: unidad.imei, _id: unidad._id, ignicionf: 'off' }, ignicionDia ? ignicionDia.set : {}));
+              buildUnidadPayloadRealtime(Object.assign({ imei: unidad.imei, _id: unidad._id, ignicionf: 'off' }, fechaIgnicionOff ? { fecha_ignicion_off: fechaIgnicionOff } : {}, ignicionDia ? ignicionDia.set : {}));
             }
 
             enviarALaravelPorWS({
