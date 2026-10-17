@@ -12,8 +12,8 @@ use MongoDB\BSON\UTCDateTime;
  * Corte diario (programado a las 23:59 America/Guayaquil). Para cada unidad activa:
  *
  * - Km diario: guarda el día que termina en km_diario_historial y registra el inicio
- *   del día siguiente: mileage_inicio_dia = último mileage recibido, km_diario = 0,
- *   fecha_km_diario = día que empieza. `mileage` no se modifica.
+ *   del día siguiente: odometro_inicio_dia = último odómetro recibido (campo 19 de la
+ *   GTFRI), km_diario = 0, fecha_km_diario = día que empieza. `mileage` no se usa.
  * - Encendido / apagado acumulado: cierra el tramo en curso hasta las 23:59, guarda
  *   los totales del día (seg_encendido / seg_apagado en el mismo historial) y deja
  *   los contadores en 0, con el tramo actual empezando a las 23:59.
@@ -63,7 +63,7 @@ class ReiniciarKmDiarioCommand extends Command
                         $filtro,
                         [
                             'projection' => [
-                                'imei' => 1, 'mileage' => 1, 'mileage_inicio_dia' => 1, 'fecha_km_diario' => 1,
+                                'imei' => 1, 'odometro' => 1, 'odometro_inicio_dia' => 1, 'fecha_km_diario' => 1,
                                 'ignicionf' => 1, 'seg_encendido_dia' => 1, 'seg_apagado_dia' => 1,
                                 'ignicion_tramo_desde' => 1, 'fecha_ignicion_dia' => 1,
                             ],
@@ -104,15 +104,15 @@ class ReiniciarKmDiarioCommand extends Command
         $fechaAnterior = isset($u['fecha_km_diario']) ? (string) $u['fecha_km_diario'] : null;
         if ($fechaAnterior !== null && $fechaAnterior >= $hoy)
             return false;
-        $inicio = isset($u['mileage_inicio_dia']) && is_numeric($u['mileage_inicio_dia']) ? (float) $u['mileage_inicio_dia'] : null;
-        $mileage = isset($u['mileage']) && is_numeric($u['mileage']) ? (float) $u['mileage'] : null;
-        $mileageValido = $mileage !== null && $mileage > 0;
+        $inicio = isset($u['odometro_inicio_dia']) && is_numeric($u['odometro_inicio_dia']) ? (float) $u['odometro_inicio_dia'] : null;
+        $odometro = isset($u['odometro']) && is_numeric($u['odometro']) ? (float) $u['odometro'] : null;
+        $odometroValido = $odometro !== null && $odometro > 0;
 
         // Solo se toca la unidad si el parseador no la reinició mientras tanto.
         $modificada = $this->actualizarSiSigueIgual(
             ['_id' => $id, 'fecha_km_diario' => $fechaAnterior],
             [
-                'mileage_inicio_dia' => $mileageValido ? round($mileage, 2) : null,
+                'odometro_inicio_dia' => $odometroValido ? round($odometro, 2) : null,
                 'km_diario' => 0,
                 'fecha_km_diario' => $hoy,
             ]
@@ -120,10 +120,10 @@ class ReiniciarKmDiarioCommand extends Command
         if (!$modificada || $fechaAnterior === null || $inicio === null)
             return false;
 
-        $fin = $mileageValido ? $mileage : $inicio;
+        $fin = $odometroValido ? $odometro : $inicio;
         $this->guardarHistorial($id, $u, $fechaAnterior, [
-            'mileage_inicio' => round($inicio, 2),
-            'mileage_fin' => round($fin, 2),
+            'odometro_inicio' => round($inicio, 2),
+            'odometro_fin' => round($fin, 2),
             'km_recorridos' => round(max(0, $fin - $inicio), 2),
         ]);
 

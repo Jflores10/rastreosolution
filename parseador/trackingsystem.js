@@ -1751,36 +1751,41 @@ MongoClient.connect(connection, { useUnifiedTopology: true }, function (error, c
 
 // ===================== HEAVY ASYNC WORK =====================
 // Se ejecuta en setImmediate() para NO bloquear SSE
+// Inserta el recorrido GTFRI. isBuff: 1 = trama BUFF (atrasada), 0 = tiempo real.
+function insertarRecorrido_GTFRI(documentValue, data, indexes, isBuff) {
+  const { imei, height, sentTime } = indexes;
+  try {
+    dbTrackingSystem.collection('recorridos').insertOne({
+      imei: data[imei],
+      tipo: GTFRI,
+      voltaje: documentValue.voltaje,
+      fecha_gps: (documentValue.fecha_gps != null) ? new Date(documentValue.fecha_gps) : new Date(),
+      latitud: documentValue.latitud,
+      longitud: documentValue.longitud,
+      velocidad: documentValue.velocidad_actual,
+      mileage: documentValue.mileage,
+      bateria: (documentValue.bateria),
+      altura: toFloat(data[height]),
+      angulo: documentValue.angulo,
+      fecha_envio: (toInteger(data[sentTime]) != 0) ? (moment(data[sentTime], DEVICE_DATE_FORMAT).toDate()) : new Date(),
+      unidad_id: documentValue._id,
+      fecha: (documentValue.fecha != null) ? new Date(documentValue.fecha) : new Date(),
+      estado_movil: documentValue.estado_movil,
+      evento: documentValue.evento,
+      contador_total: documentValue.contador_total,
+      contador_diario: documentValue.contador_diario,
+      isbuff: isBuff ? 1 : 0,
+      js: true
+    }, { writeConcern: { w: 0 } }, function (err) {
+      if (err && debug) console.log(err);
+    });
+  } catch (e) { if (debug) console.log('insert recorridos ex', e); }
+}
+
 function procesarRecorridosYAlertas_GTFRI(documentValue, data, message, indexes) {
   try {
-    const { imei, voltage, speed, angle, height, longitude, latitude, datetime, battery, status, sentTime, mileage } = indexes;
-
-    // ✅ Insert recorrido (liviano)
-    try {
-      dbTrackingSystem.collection('recorridos').insertOne({
-        imei: data[imei],
-        tipo: GTFRI,
-        voltaje: documentValue.voltaje,
-        fecha_gps: (documentValue.fecha_gps != null) ? new Date(documentValue.fecha_gps) : new Date(),
-        latitud: documentValue.latitud,
-        longitud: documentValue.longitud,
-        velocidad: documentValue.velocidad_actual,
-        mileage: documentValue.mileage,
-        bateria: (documentValue.bateria),
-        altura: toFloat(data[height]),
-        angulo: documentValue.angulo,
-        fecha_envio: (toInteger(data[sentTime]) != 0) ? (moment(data[sentTime], DEVICE_DATE_FORMAT).toDate()) : new Date(),
-        unidad_id: documentValue._id,
-        fecha: (documentValue.fecha != null) ? new Date(documentValue.fecha) : new Date(),
-        estado_movil: documentValue.estado_movil,
-        evento: documentValue.evento,
-        contador_total: documentValue.contador_total,
-        contador_diario: documentValue.contador_diario,
-        js: true
-      }, { writeConcern: { w: 0 } }, function (err) {
-        if (err && debug) console.log(err);
-      });
-    } catch (e) { if (debug) console.log('insert recorridos ex', e); }
+    // ✅ Insert recorrido (liviano) — tiempo real
+    insertarRecorrido_GTFRI(documentValue, data, indexes, 0);
 
     // ⛔ Emails / alertas: mantenidas pero aquí ya NO bloquean SSE
     // (Dejé tu lógica intacta, solo la moví a este “worker” del mismo proceso)
@@ -2132,6 +2137,19 @@ function onClientConnected(socket) {
                 } catch (e) { }
               });
 
+            }
+          );
+        } else {
+          // BUFF: NO actualiza unidads; solo guarda el recorrido con los datos de la
+          // propia trama (posición/fecha GPS atrasadas). De la unidad solo se toma la identidad.
+          dbTrackingSystem.collection('unidads').findOne(
+            { imei: data[idx.imei], estado: 'A' },
+            { projection: { _id: 1, evento: 1, contador_total: 1, contador_diario: 1 } },
+            function (err, unidad) {
+              if (err || !unidad) return;
+              setImmediate(() => {
+                insertarRecorrido_GTFRI(Object.assign({}, unidad, gpsData), data, idx, 1);
+              });
             }
           );
         }

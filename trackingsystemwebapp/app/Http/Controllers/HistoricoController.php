@@ -1358,6 +1358,7 @@ class HistoricoController extends Controller
                             'fecha_gps' => $fecha_gps,
                             'evento' => $evento,
                             'tipo_marcacion' => isset($documento['origen'])?$documento['origen']:"-",
+                            'isbuff' => isset($documento['isbuff']) ? (int)$documento['isbuff'] : null,
                             'ubicacion' => $ubicacion,
                             'angulo' => $angulo_traducido,
                             'latitud'=>$latitud_geo,
@@ -1503,7 +1504,8 @@ class HistoricoController extends Controller
 						'voltaje'=>$documento["voltaje"],
 						'contador_diario'=>$documento["contador_diario"],
 						'contador_total'=>$documento["contador_total"],
-						'estado_movil'=>$documento["estado_movil"]
+						'estado_movil'=>$documento["estado_movil"],
+                        'isbuff'=>isset($documento["isbuff"]) ? (int)$documento["isbuff"] : null
 
                     ]);
                 }

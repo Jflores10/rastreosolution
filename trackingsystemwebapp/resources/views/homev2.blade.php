@@ -3010,6 +3010,7 @@ $("#velocimetro").myfunc({divFact:10});
     var processes = [];
     var estaReproduciendo=false;
     var array_marcas=[];
+    var array_marcas_buff=[]; // puntito central de las flechas BUFF, indexado igual que array_marcas
     var array_tiposMarcas=[];   
     var zoomUnidad=false;    
     var zoomUnidadID;
@@ -3286,6 +3287,28 @@ $("#velocimetro").myfunc({divFact:10});
                     icon: icon
                 }));
 
+            // Registro BUFF (dato atrasado): puntito en el centro de la flecha
+            if(recorrido.isbuff === 1 && icon.path === google.maps.SymbolPath.FORWARD_CLOSED_ARROW)
+            {
+                array_marcas_buff[index] = new google.maps.Marker({
+                    position : posicion,
+                    map : map,
+                    zIndex : google.maps.Marker.MAX_ZINDEX,
+                    icon: {
+                        path: google.maps.SymbolPath.CIRCLE,
+                        scale: 2.5,
+                        fillColor: 'yellow',
+                        fillOpacity: 1,
+                        strokeColor: 'black',
+                        strokeWeight: 1
+                    }
+                });
+                array_marcas_buff[index].addListener('click', function () {
+                    infoWindow.open(map, array_marcas[index]);
+                    velocimetro_change(recorrido.velocidad);
+                });
+            }
+
             array_tiposMarcas.push(recorrido.tipo+"-"+recorrido.entrada);
 
             if(index>0)  
@@ -3323,6 +3346,8 @@ $("#velocimetro").myfunc({divFact:10});
         {
             if (array_marcas[i] != null)
                 array_marcas[i].setMap(null);
+            if (array_marcas_buff[i] != null)
+                array_marcas_buff[i].setMap(null);
         }
     }
     function playClick()
@@ -3368,8 +3393,9 @@ $("#velocimetro").myfunc({divFact:10});
         eraseClick();
         currentIndex = 0;
         clearProcesses();            
-        array_marcas=[];     
-        array_tiposMarcas=[];           
+        array_marcas=[];
+        array_marcas_buff=[];
+        array_tiposMarcas=[];         
         //playClick();
     }
 

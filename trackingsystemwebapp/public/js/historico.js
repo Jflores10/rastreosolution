@@ -106,7 +106,7 @@ function cargaHistorico(url, id_cooperativa, valor_usuario, pagina = 1) {
                 tr_registros_historicos.append(
                     '<table class="table" id="tr-registros-historicos">' +
                     '<thead style="background-color: #FAFAFA;">' +
-                    '<th>Fecha de GPS</th><th>Fecha de servidor</th><th>Evento</th><th>Latitud</th>' +
+                    '<th>Fecha de GPS</th><th>Fecha de servidor</th><th>Evento</th><th>Origen</th><th>Latitud</th>' +
                     '<th>Longitud</th><th>Odometro</th><th>Ubicación</th><th>Punto cardinal</th>' +
                     '<th>Velocidad</th><th>Voltaje</th><th>Contador</th><th>Movimiento</th>' +
                     '</thead>' +
@@ -115,11 +115,18 @@ function cargaHistorico(url, id_cooperativa, valor_usuario, pagina = 1) {
                 );
                 var tbody = $('#div-tabla').find('tbody[id="tbody-historico"]');
                 data.array_historico.forEach(function(item) {
+                    // isbuff: 1 = trama BUFF (atrasada), 0 = tiempo real, null = registro sin el campo
+                    var origen = (item.isbuff === 1)
+                        ? '<span class="label label-warning">BUFF</span>'
+                        : (item.isbuff === 0)
+                            ? '<span class="label label-success">Tiempo real</span>'
+                            : '-';
                     tbody.append(
                         '<tr id="' + item._id + '">' +
                         '<td>' + item.fecha_gps + '</td>' +
                         '<td>' + item.fecha_servidor + '</td>' +
                         '<td>' + item.evento + '</td>' +
+                        '<td>' + origen + '</td>' +
                         '<td>' + item.latitud + '</td>' +
                         '<td>' + item.longitud + '</td>' +
                         '<td>' + item.mileage + '</td>' +

@@ -13,6 +13,7 @@ class Unidad extends Moloquent
         'estado_movil','voltaje', 'bateria', 'atm', 'velocidad','control_velocidad','contador_inicial',
         'alerta_cortetubo','alerta_fecha_cortetubo','climatizada','rampa','mileage','sentido','vigilante','tipo_in1',
         'contador_img', 'contpdabierta', 'mileage_inicio_dia', 'km_diario', 'fecha_km_diario',
+        'odometro', 'odometro_inicio_dia',
         'seg_encendido_dia', 'seg_apagado_dia', 'ignicion_tramo_desde', 'fecha_ignicion_dia'
     ];
 
@@ -21,6 +22,8 @@ class Unidad extends Moloquent
 
     protected $casts = [
         'mileage_inicio_dia' => 'float',
+        'odometro' => 'float',
+        'odometro_inicio_dia' => 'float',
     ];
 
     protected $attributes = array(
