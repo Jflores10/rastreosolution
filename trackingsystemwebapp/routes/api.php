@@ -49,7 +49,8 @@ Route::group(['prefix' => 'v2'], function () {
 		Route::post('puntos-control/buscar', 'PuntoControlApiController@search');
 		Route::post('puntos-control/buscar-json', 'PuntoControlApiController@searchJson');
 		Route::post('puntos-control', 'PuntoControlApiController@store');
-		Route::post('puntos-control/{id}', 'PuntoControlApiController@update');
+		Route::post('puntos-control/imaginarios', 'PuntoControlApiController@imaginarios');
+		Route::post('puntos-control/{id}','PuntoControlApiController@update');
 		Route::get('puntos-control/{id}', 'PuntoControlApiController@show');
 
 		Route::post('historico/unidades-meta', 'HistoricoApiController@getUnidadesMeta');
