@@ -322,6 +322,50 @@ class PuntoControlApiController extends Controller
     }
 
     /**
+     * Puntos imaginarios activos de una cooperativa (equivalente a
+     * PuntoControlController::getPuntosImaginarios). No pertenecen a rutas,
+     * por eso no vienen en cooperativas/getrutas.
+     * Requiere: cooperativa_id.
+     */
+    public function imaginarios(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'cooperativa_id' => 'required',
+        ], [
+            'cooperativa_id.required' => 'El identificador de cooperativa es obligatorio.',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'error' => true,
+                'api_version' => 'v2',
+                'messages' => $validator->errors(),
+            ], 422);
+        }
+
+        $cooperativaId = trim($request->input('cooperativa_id'));
+        if (!$this->usuarioPuedeUsarCooperativa($cooperativaId)) {
+            return response()->json([
+                'error' => true,
+                'api_version' => 'v2',
+                'messages' => ['cooperativa_id' => ['No autorizado para esta cooperativa.']],
+            ], 403);
+        }
+
+        $puntos = PuntoControl::where('pto_imaginario', true)
+            ->where('cooperativa_id', $cooperativaId)
+            ->where('estado', 'A')
+            ->orderBy('descripcion', 'asc')
+            ->get();
+
+        return response()->json([
+            'error' => false,
+            'api_version' => 'v2',
+            'puntos_control' => $puntos,
+        ]);
+    }
+
+    /**
      * Búsqueda rápida por texto (equivalente a PuntoControlController::searchJSON).
      * Requiere: search. cooperativa_id obligatorio solo para tipo usuario 1 (superadmin).
      */
