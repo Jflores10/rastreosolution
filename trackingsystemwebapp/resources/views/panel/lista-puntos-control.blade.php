@@ -183,6 +183,18 @@ Puntos de control
                         </label>
                       </div>
                     </div>
+                    <div class="form-group" id="div-imagen" style="display:none;">
+                        <label for="imagen">Imagen en el mapa</label>
+                        <input type="file" id="imagen" name="imagen" accept="image/png,image/jpeg,image/webp" />
+                        <p class="help-block">PNG, JPG o WEBP, máximo 2 MB. Se muestra en el mapa en lugar del ícono por defecto.</p>
+                        <div id="div-imagen-actual" style="display:none; margin-top:5px;">
+                            <img id="imagen_preview" src="" alt="Imagen del punto" style="width:48px;height:48px;object-fit:contain;border:1px solid #ddd;border-radius:4px;" />
+                            <label class="checkbox-inline" id="lbl-quitar-imagen" style="margin-left:10px;">
+                                <input type="checkbox" id="quitar_imagen" /> Quitar imagen
+                            </label>
+                        </div>
+                        <span class="help-block" id="span_imagen"></span>
+                    </div>
                 </div>
                 <div class="col-lg-6 col-md-6 col-sm-12">
                     <div class="form-group" id="div-cooperativa" {{ (!isset($id_cooperativa))?'style=display:none;':'' }}>

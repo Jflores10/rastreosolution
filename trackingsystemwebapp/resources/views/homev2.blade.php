@@ -3560,16 +3560,43 @@ $("#velocimetro").myfunc({divFact:10});
                 const lat = parseFloat(p.latitud);
                 const lng = parseFloat(p.longitud);
 
+                // Imagen subida en el punto de control (cuadrado normalizado en el servidor);
+                // sin imagen se usa el ícono de siempre.
+                const icon = p.imagen_url
+                    ? {
+                        url: p.imagen_url,
+                        scaledSize: new google.maps.Size(36, 36),
+                        anchor: new google.maps.Point(18, 18)
+                    }
+                    : {
+                        url: "https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f4cd.svg", // Ícono externo no circular
+                        scaledSize: new google.maps.Size(30, 30),
+                        anchor: new google.maps.Point(12, 32)
+                    };
+
                 const marker = new google.maps.Marker({
                     map,
                     position: { lat, lng },
                     title: String(name),
-                    icon: {
-                        url: "https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f4cd.svg", // Ícono externo no circular
-                        scaledSize: new google.maps.Size(30, 30),
-                        anchor: new google.maps.Point(12, 32)
-                    }
+                    icon
                 });
+
+                // Si el servidor no tiene GD la imagen se guarda sin normalizar:
+                // se ajusta a 36px por el lado mayor conservando la proporción.
+                if (p.imagen_url) {
+                    const img = new Image();
+                    img.onload = () => {
+                        if (!img.width || !img.height || img.width === img.height) return;
+                        const s = 36 / Math.max(img.width, img.height);
+                        const w = Math.round(img.width * s), h = Math.round(img.height * s);
+                        marker.setIcon({
+                            url: p.imagen_url,
+                            scaledSize: new google.maps.Size(w, h),
+                            anchor: new google.maps.Point(w / 2, h / 2)
+                        });
+                    };
+                    img.src = p.imagen_url;
+                }
 
                 const infowindow = new google.maps.InfoWindow({
                     content: `

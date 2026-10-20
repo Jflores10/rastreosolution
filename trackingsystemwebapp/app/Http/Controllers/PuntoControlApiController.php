@@ -7,12 +7,15 @@ use App\TipoUsuario;
 use Auth;
 use Illuminate\Http\Request;
 use Validator;
+use App\Http\Controllers\Concerns\ImagenPuntoControl;
 
 /**
  * API REST de puntos de control (v2). Lógica alineada con PuntoControlController (panel web).
  */
 class PuntoControlApiController extends Controller
 {
+    use ImagenPuntoControl;
+
     /**
      * Tipo 1 (superadmin): puede usar cualquier cooperativa_id permitida en el request.
      * Resto: solo la cooperativa del usuario autenticado.
@@ -194,7 +197,63 @@ class PuntoControlApiController extends Controller
             $punto_control->poligono = $request->input('poligono');
         }
         $punto_control->pto_imaginario = $request->input('pto_imaginario') == 'true' ? true : false;
+        // La imagen se sube aparte (imagen()); aquí solo se quita si deja de ser imaginario.
+        if (!$punto_control->pto_imaginario) {
+            $punto_control->eliminarImagen();
+        }
 
+        $punto_control->save();
+
+        return response()->json([
+            'error' => false,
+            'api_version' => 'v2',
+            'punto_control' => $punto_control,
+        ]);
+    }
+
+    /**
+     * Imagen del punto imaginario (POST …/puntos-control/{id}/imagen, multipart).
+     * Campos: imagen (archivo PNG/JPG/WEBP, máx. 2 MB) o quitar_imagen=true.
+     * Va aparte de store/update para que esos sigan aceptando JSON (poligono anidado).
+     */
+    public function imagenUpload(Request $request, $id)
+    {
+        $validator = Validator::make($request->all(), $this->reglasImagen(), $this->mensajesImagen());
+        $this->validarContenidoImagen($validator, $request);
+        if ($validator->fails()) {
+            return response()->json([
+                'error' => true,
+                'api_version' => 'v2',
+                'messages' => $validator->errors(),
+            ], 422);
+        }
+
+        $punto_control = PuntoControl::find($id);
+        if (!$punto_control) {
+            return response()->json([
+                'error' => true,
+                'api_version' => 'v2',
+                'messages' => ['id' => ['Punto de control no encontrado.']],
+            ], 404);
+        }
+
+        if (!$this->usuarioPuedeAccederPunto($punto_control)) {
+            return response()->json([
+                'error' => true,
+                'api_version' => 'v2',
+                'messages' => ['id' => ['No autorizado.']],
+            ], 403);
+        }
+
+        if (!$punto_control->pto_imaginario) {
+            return response()->json([
+                'error' => true,
+                'api_version' => 'v2',
+                'messages' => ['imagen' => ['Solo los puntos imaginarios pueden tener imagen.']],
+            ], 422);
+        }
+
+        $this->procesarImagen($request, $punto_control);
         $punto_control->save();
 
         return response()->json([

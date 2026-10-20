@@ -8,6 +8,10 @@ Auth::routes();
 Route::get('tipos-de-unidades/icono/{nombre}', 'TipoUnidadController@icono')
     ->where('nombre', '[A-Za-z0-9]+');
 
+// Imagen de los puntos de control imaginarios (mapa de homev2).
+Route::get('puntos-de-control/imagen/{nombre}', 'PuntoControlController@imagen')
+    ->where('nombre', '[A-Za-z0-9]+');
+
 
 Route::group(['middleware' => ['auth', 'usuario']], function () {
     Route::get('sesiones', 'SesionController@index');

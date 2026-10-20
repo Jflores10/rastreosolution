@@ -11,9 +11,31 @@ use App\PuntoControl;
 use App\Cooperativa;
 use App\TipoUsuario;
 use Auth;
+use Storage;
 use Carbon\Carbon;
+use App\Http\Controllers\Concerns\ImagenPuntoControl;
 class PuntoControlController extends Controller
 {
+    use ImagenPuntoControl;
+
+    // Sirve la imagen de un punto imaginario (ver PuntoControl::getImagenUrlAttribute).
+    // $nombre: nombre del archivo sin extensión.
+    public function imagen($nombre)
+    {
+        foreach (['png', 'jpg', 'jpeg', 'webp'] as $ext)
+        {
+            $ruta = 'puntos-control/imagenes/' . $nombre . '.' . $ext;
+            if (Storage::disk('public')->exists($ruta))
+            {
+                // El nombre es único por subida, así que se puede cachear sin riesgo de servir una vieja.
+                return response()->file(storage_path('app/public/' . $ruta), [
+                    'Cache-Control' => 'public, max-age=31536000'
+                ]);
+            }
+        }
+        abort(404);
+    }
+
     public function index()
     {
         $user = Auth::user();
@@ -87,7 +109,8 @@ class PuntoControlController extends Controller
             'poligono'        => 'required_if:tipo_mar,2|array|nullable',
             'poligono.*.lat'  => 'required_if:tipo_mar,2|numeric|nullable',
             'poligono.*.lng'  => 'required_if:tipo_mar,2|numeric|nullable',
-        ]);
+        ] + $this->reglasImagen(), $this->mensajesImagen());
+        $this->validarContenidoImagen($validator, $request);
 
         if ($validator->fails()) {
             return response()->json(['error' => true, 'messages' => $validator->errors()]);
@@ -125,6 +148,10 @@ class PuntoControlController extends Controller
 
 
         $punto_control = PuntoControl::create($puntoData);
+        if ($request->hasFile('imagen') && $punto_control->pto_imaginario) {
+            $this->procesarImagen($request, $punto_control);
+            $punto_control->save();
+        }
 
         return response()->json(['error' => false, 'punto_control' => $punto_control]);
     }
@@ -243,7 +270,8 @@ class PuntoControlController extends Controller
             'poligono'        => 'required_if:tipo_mar,2|array|nullable',
             'poligono.*.lat'  => 'required_if:tipo_mar,2|numeric|nullable',
             'poligono.*.lng'  => 'required_if:tipo_mar,2|numeric|nullable',
-        ]);
+        ] + $this->reglasImagen(), $this->mensajesImagen());
+        $this->validarContenidoImagen($validator, $request);
         if ($validator->fails())
             return response()->json(['error' => true, 'messages' => $validator->errors()]);
         else
@@ -276,6 +304,7 @@ class PuntoControlController extends Controller
                
             }
             $punto_control->pto_imaginario = $request->input('pto_imaginario') == 'true'?true:false;
+            $this->procesarImagen($request, $punto_control);
 
             $punto_control->save();
             return response()->json(['error' => false, 'punto_control' => $punto_control]);

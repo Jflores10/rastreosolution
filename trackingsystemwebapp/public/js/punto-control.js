@@ -120,6 +120,11 @@ function editarPuntoControl(url, tipo_usuario_valor, is_bloque = false) {
                 if(data.punto_control.pto_imaginario){
                     $("#pto_imaginario").prop("checked", true);
                 }
+                actualizarVisibilidadImagenPuntoControl();
+                if (data.punto_control.imagen_url) {
+                    $('#imagen_preview').data('url-guardada', data.punto_control.imagen_url);
+                    previewImagenPuntoControl(data.punto_control.imagen_url, true);
+                }
                 if (data.punto_control.tipo_mar == 2) {
                     $("input[name='tipo_mar'][value='2']").prop("checked", true).trigger("change");
 
@@ -311,7 +316,9 @@ function crearPuntoControl(url, tipo_usuario_valor, id_cooperativa)
           }
      }
 
-    $.post(url,param,
+    if (!validarImagenPuntoControl()) return;
+
+    enviarPuntoControl(url, param,
         function( data ) {
         if (data.error == false){
             alert('El punto de control ha sido creado con éxito.');
@@ -326,7 +333,7 @@ function crearPuntoControl(url, tipo_usuario_valor, id_cooperativa)
                 mensajesError(
                     data,div_descripcion,span_descripcion,div_latitud,span_latitud,
                     div_longitud,span_longitud,div_radio,span_radio,div_cooperativa,span_cooperativa,div_pdi,span_pdi);
-    }, "json");
+    });
 }
 
 
@@ -669,7 +676,9 @@ function actualizarPuntoControl(url, tipo_usuario_valor, id_cooperativa)
         }
     }
 
-    $.post(url, param
+    if (!validarImagenPuntoControl()) return;
+
+    enviarPuntoControl(url, param
        , function( data ) {
         if (data.error == false){
             alert('El punto de control ha sido actualizado con éxito.');
@@ -689,7 +698,7 @@ function actualizarPuntoControl(url, tipo_usuario_valor, id_cooperativa)
 
         }
 
-    }, "json");
+    });
 }
 
 /*function eliminarPuntoControl(url)
@@ -867,6 +876,12 @@ function cleanForm2(tipo_usuario_valor, is_bloque=false) {
     $('#entrada').prop('readonly', true);
     $('#salida').prop('readonly', true);
 
+    // Punto imaginario e imagen: sin esto un "Crear nuevo" tras editar un
+    // imaginario quedaba con el check marcado y la imagen anterior.
+    document.getElementById('pto_imaginario').checked = false;
+    resetImagenPuntoControl();
+    actualizarVisibilidadImagenPuntoControl();
+
     // --- Comportamiento según is_bloque ---
     if (is_bloque === true || is_bloque === "true" || is_bloque == 1) {
         // --- Bloque 2 ---
@@ -920,3 +935,112 @@ $.fn.bootstrapSwitch.defaults.onText = 'Activo';
 $.fn.bootstrapSwitch.defaults.offText = 'Inactivo';
 
 $("[name='chk_estado']").bootstrapSwitch();
+
+// ===================== IMAGEN DEL PUNTO IMAGINARIO =====================
+// Solo los puntos imaginarios llevan imagen; se muestra en el mapa de homev2.
+var IMAGEN_PC_MAX_BYTES = 2 * 1024 * 1024;
+var IMAGEN_PC_TIPOS = ['image/png', 'image/jpeg', 'image/webp'];
+var imagenPcObjectUrl = null;
+
+function archivoImagenPuntoControl() {
+    var input = document.getElementById('imagen');
+    return (input && input.files && input.files.length) ? input.files[0] : null;
+}
+
+function setErrorImagenPuntoControl(mensaje) {
+    var span = document.getElementById('span_imagen');
+    var div = document.getElementById('div-imagen');
+    if (span) span.innerHTML = mensaje ? '<strong>' + mensaje + '</strong>' : '';
+    if (div) div.classList.toggle('has-error', !!mensaje);
+}
+
+function validarImagenPuntoControl() {
+    var file = archivoImagenPuntoControl();
+    var error = null;
+    if (file && document.getElementById('pto_imaginario').checked) {
+        if (IMAGEN_PC_TIPOS.indexOf(file.type) === -1)
+            error = 'La imagen debe ser PNG, JPG o WEBP.';
+        else if (file.size > IMAGEN_PC_MAX_BYTES)
+            error = 'La imagen no debe superar los 2 MB.';
+    }
+    setErrorImagenPuntoControl(error);
+    return error === null;
+}
+
+function previewImagenPuntoControl(url, existente) {
+    if (url) {
+        $('#imagen_preview').attr('src', url);
+        $('#div-imagen-actual').show();
+        // "Quitar imagen" solo tiene sentido para la imagen ya guardada.
+        $('#lbl-quitar-imagen').toggle(!!existente);
+    } else {
+        $('#imagen_preview').attr('src', '');
+        $('#div-imagen-actual').hide();
+    }
+}
+
+function actualizarVisibilidadImagenPuntoControl() {
+    $('#div-imagen').toggle(document.getElementById('pto_imaginario').checked);
+}
+
+// Deja el campo de imagen como en un formulario nuevo.
+function resetImagenPuntoControl() {
+    if (imagenPcObjectUrl) { URL.revokeObjectURL(imagenPcObjectUrl); imagenPcObjectUrl = null; }
+    $('#imagen').val('');
+    $('#quitar_imagen').prop('checked', false);
+    $('#imagen_preview').data('url-guardada', null);
+    previewImagenPuntoControl(null);
+    setErrorImagenPuntoControl(null);
+}
+
+// Mismo payload que $.post(url, param) pero en multipart, para adjuntar la imagen.
+// $.param genera las mismas claves anidadas (poligono[0][lat], ...) que usa $.post.
+function enviarPuntoControl(url, param, callback) {
+    var fd = new FormData();
+    $.param(param).split('&').forEach(function (par) {
+        if (!par) return;
+        var i = par.indexOf('=');
+        var dec = function (s) { return decodeURIComponent(s.replace(/\+/g, ' ')); };
+        fd.append(dec(i < 0 ? par : par.slice(0, i)), i < 0 ? '' : dec(par.slice(i + 1)));
+    });
+    if (param.pto_imaginario) {
+        var file = archivoImagenPuntoControl();
+        if (file)
+            fd.append('imagen', file);
+        else if ($('#quitar_imagen').is(':checked'))
+            fd.append('quitar_imagen', 'true');
+    }
+    $.ajax({
+        url: url,
+        type: 'POST',
+        data: fd,
+        processData: false,
+        contentType: false,
+        dataType: 'json',
+        success: function (data) {
+            if (data.error && data.messages && data.messages.imagen)
+                setErrorImagenPuntoControl(data.messages.imagen[0]);
+            callback(data);
+        }
+    }).fail(function () {
+        alert('Error al guardar el punto de control. Revise los datos e intente de nuevo.');
+    });
+}
+
+$(function () {
+    $('#pto_imaginario').on('change', actualizarVisibilidadImagenPuntoControl);
+
+    $('#imagen').on('change', function () {
+        if (imagenPcObjectUrl) { URL.revokeObjectURL(imagenPcObjectUrl); imagenPcObjectUrl = null; }
+        var file = archivoImagenPuntoControl();
+        if (validarImagenPuntoControl() && file) {
+            imagenPcObjectUrl = URL.createObjectURL(file);
+            $('#quitar_imagen').prop('checked', false);
+            previewImagenPuntoControl(imagenPcObjectUrl, false);
+        } else {
+            // Sin archivo nuevo válido: vuelve a mostrar la guardada (si hay).
+            var guardada = $('#imagen_preview').data('url-guardada');
+            previewImagenPuntoControl(guardada || null, true);
+        }
+    });
+});
