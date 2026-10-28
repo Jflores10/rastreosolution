@@ -1768,6 +1768,7 @@ function insertarRecorrido_GTFRI(documentValue, data, indexes, isBuff) {
       longitud: documentValue.longitud,
       velocidad: documentValue.velocidad_actual,
       mileage: documentValue.mileage,
+      odometro: odometroValido(data[indexes.odometro]),
       bateria: (documentValue.bateria),
       altura: toFloat(data[height]),
       angulo: documentValue.angulo,

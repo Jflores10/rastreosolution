@@ -130,7 +130,7 @@ function cargaHistorico(url, id_cooperativa, valor_usuario, pagina = 1) {
                         '<td>' + origen + '</td>' +
                         '<td>' + item.latitud + '</td>' +
                         '<td>' + item.longitud + '</td>' +
-                        '<td>' + item.mileage + '</td>' +
+                        '<td>' + item.odometro + '</td>' +
                         '<td>' + item.ubicacion + '</td>' +
                         '<td>' + item.angulo + '</td>' +
                         '<td>' + item.velocidad + '</td>' +

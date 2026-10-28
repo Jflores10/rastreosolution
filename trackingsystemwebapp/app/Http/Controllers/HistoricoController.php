@@ -1369,6 +1369,7 @@ class HistoricoController extends Controller
                             'latitud'=>$latitud_geo,
                             'longitud'=>$longitud_geo,
                             'mileage' => ($documento["mileage"] != null) ? $documento["mileage"] . ' km/h' : '0 km/h',
+                            'odometro' => ($documento["odometro"] != null) ? $documento["odometro"] . ' km' : '-',
                             'velocidad' => ($documento["velocidad"]!= null) ? $documento["velocidad"] . ' km/h' : '0 km/h',
                         	'voltaje' => $voltaje,
                             'contador_total' => ($documento["contador_total"] != null) ? $documento["contador_total"] : '-']);
