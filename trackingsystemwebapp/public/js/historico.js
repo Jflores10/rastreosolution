@@ -77,6 +77,7 @@ function cargaHistorico(url, id_cooperativa, valor_usuario, pagina = 1) {
         opcion: 'getHistorico',
         cooperativa_id: id_coop,
         evento: document.getElementById('evento').value,
+        origen: document.getElementById('origen') ? document.getElementById('origen').value : 'T',
         page: pagina
     }, function (data) {
         var tr_registros_historicos = $('#div-tabla');

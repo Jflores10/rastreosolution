@@ -1146,6 +1146,11 @@ class HistoricoController extends Controller
                 if ($ev != 'T')
                     $cursor->where('tipo', $ev);
 
+                // Origen: 1 = BUFF (trama atrasada), 0 = tiempo real, T = todos
+                $origen = $request->input('origen', 'T');
+                if ($origen === '1' || $origen === '0')
+                    $cursor->where('isbuff', (int)$origen);
+
                    /// $cursor->where('tipo', "GTDAT");
 
                 $cursor = $cursor->paginate(50);

@@ -50,6 +50,15 @@ Reportes
                     </select>
                 </div>
 
+                <div class="form-group">
+                    <label for="origen">Origen</label>
+                    <select name="origen" id="origen" class="form-control">
+                        <option selected value="T">Todos</option>
+                        <option value="1">BUFF</option>
+                        <option value="0">Tiempo real</option>
+                    </select>
+                </div>
+
                 <div class="form-group" id="div-unidad">
                 </div>
                 <div class="form-group" id="div-fecha-inicio">

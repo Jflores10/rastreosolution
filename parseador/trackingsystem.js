@@ -59,6 +59,10 @@ const GTDTT = 'GTDTT';
 const GTDTTDGT = 'DGT';
 const ADMIN = 'ADMIN';
 const CMD_VIGILANTE_AT_GTOUT = 'AT+GTOUT=gv300,1,,,0,0,0,0,0,0,0,,0,0,,,,FFFF$';
+const CMD_VIGILANTE_ALARMA_AT_GTOUT = 'AT+GTOUT=gv300,0,,,0,2,10,0,0,0,0,,0,0,,,,FFFF$';
+// Espera tras GTIGN antes de bloquear, y separación entre bloqueo y alarma.
+const VIGILANTE_DELAY_BLOQUEO_MS = 10000;
+const VIGILANTE_DELAY_ALARMA_MS = 3000;
 const GTLOG = 'GTLOG';
 const GTGOT = 'GTGOT';
 const GTGIN = 'GTGIN';
@@ -3156,7 +3160,13 @@ function onClientConnected(socket) {
             });
 
             if (!isBuffMessage && String(unidad.vigilante || '').trim() === 'on') {
-              escribirLineaComandoAlGps(String(data[imei] || unidad.imei || '').trim(), CMD_VIGILANTE_AT_GTOUT);
+              const imeiVigilante = String(data[imei] || unidad.imei || '').trim();
+              setTimeout(function () {
+                escribirLineaComandoAlGps(imeiVigilante, CMD_VIGILANTE_AT_GTOUT);
+                setTimeout(function () {
+                  escribirLineaComandoAlGps(imeiVigilante, CMD_VIGILANTE_ALARMA_AT_GTOUT);
+                }, VIGILANTE_DELAY_ALARMA_MS);
+              }, VIGILANTE_DELAY_BLOQUEO_MS);
             }
             
 
