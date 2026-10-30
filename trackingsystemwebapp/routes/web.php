@@ -260,4 +260,5 @@ Route::get('/reproductor', function () {
 Route::get('/geocoding/reverse', 'HomeController@reverseProxy')->name('geocoding.reverse');
 Route::post('/api/internal/push-by-unidad', 'InternalPushController@pushByUnidad');
 Route::post('/api/internal/finish-despacho', 'InternalDespachoController@finish');
+Route::post('/api/internal/registrar-direccion', 'InternalPushController@registrarDireccion');
     

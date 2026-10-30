@@ -34,7 +34,7 @@ class InternalPushController extends Controller
     }
 
     /**
-     * Llamado por el parseador GPS (HTTP). Requiere LARAVEL_PUSH_SECRET.
+     * Llamado por el parseador GPS (HTTP). Requiere .
      *
      * notification_type_code: código del tipo en notification_types. Si viene informado, solo reciben push
      * los usuarios con fila en user_notification_settings y enabled=true (sin fila => no enviar).
@@ -161,5 +161,41 @@ class InternalPushController extends Controller
         }
 
         return response()->json(array('error' => false, 'sent' => $sent));
+    }
+
+    /**
+     * Desde el parseador, por cada trama GTFRI en tiempo real: registra en geocache la
+     * dirección de la posición de la unidad. Solo unidades cuya cooperativa tiene
+     * "Mostrar direcciones en tiempo real"; LocationIQ solo si geocache no la tiene.
+     * Cuerpo JSON: secret, unidad_id, latitud, longitud.
+     */
+    public function registrarDireccion(Request $request, LocationIqReverseGeocodeService $locationIq)
+    {
+        $expected = env('LARAVEL_PUSH_SECRET');
+        if ($expected === null || $expected === '') {
+            return response()->json(array('error' => true, 'message' => 'LARAVEL_PUSH_SECRET no configurado'), 503);
+        }
+        if (trim((string) $request->input('secret')) !== trim((string) $expected)) {
+            return response()->json(array('error' => true, 'message' => 'Forbidden'), 403);
+        }
+
+        $unidadId = trim((string) $request->input('unidad_id'));
+        $lat = $request->input('latitud');
+        $lng = $request->input('longitud');
+        if ($unidadId === '' || !is_numeric($lat) || !is_numeric($lng)) {
+            return response()->json(array('error' => true, 'message' => 'unidad_id, latitud y longitud requeridos'), 422);
+        }
+
+        $unidad = Unidad::with('cooperativa')->find($unidadId);
+        if (!$unidad || !$unidad->cooperativa || $unidad->cooperativa->direcciones_tiempo_real !== true) {
+            return response()->json(array('error' => true, 'message' => 'Direcciones en tiempo real no activas'), 403);
+        }
+
+        $direccion = $locationIq->reverseDireccionExacta($lat, $lng);
+        if ($direccion === null) {
+            return response()->json(array('error' => true, 'message' => 'Dirección no disponible por el momento'), 503);
+        }
+
+        return response()->json(array('error' => false, 'direccion' => $direccion));
     }
 }

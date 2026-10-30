@@ -14,5 +14,6 @@ class VerifyCsrfToken extends BaseVerifier
     protected $except = [
         'api/internal/push-by-unidad',
         'api/internal/finish-despacho',
+        'api/internal/registrar-direccion',
     ];
 }

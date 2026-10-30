@@ -107,6 +107,13 @@ const LARAVEL_FINISH_DESPACHO_URL = (process.env.LARAVEL_FINISH_DESPACHO_URL || 
     : ''
 )).trim();
 
+/** Direcciones en tiempo real (geocache): http://127.0.0.1/api/internal/registrar-direccion */
+const LARAVEL_DIRECCION_URL = (process.env.LARAVEL_DIRECCION_URL || (
+  LARAVEL_PUSH_URL
+    ? LARAVEL_PUSH_URL.replace(/push-by-unidad\/?$/, 'registrar-direccion')
+    : ''
+)).trim();
+
 /** Evita llamar end() dos veces para el mismo despacho en paralelo */
 const finishingDespachoIds = new Set();
 
@@ -1684,6 +1691,125 @@ function solicitarFinalizarDespachoLaravel(despachoId, infoLog) {
   }
 }
 
+// ===================== DIRECCIONES EN TIEMPO REAL (GEOCACHE) =====================
+// Por cada GTFRI en tiempo real de una unidad cuya cooperativa tiene
+// "Mostrar direcciones en tiempo real", Laravel registra en geocache la dirección de
+// la posición (LocationIQ solo si geocache no la tiene). Para no saturar LocationIQ:
+// - no se envía si la unidad sigue a <= DIRECCION_RADIO_M del último punto registrado
+//   (unidad detenida = sin peticiones);
+// - una petición a la vez, espaciadas DIRECCION_ESPERA_MS; por unidad solo cuenta
+//   la última posición pendiente.
+const DIRECCION_RADIO_M = 20;
+const DIRECCION_ESPERA_MS = 600;
+const DIRECCION_COOPS_TTL_MS = 60000;
+
+let direccionCoops = new Set();          // _id de cooperativas con el check
+let direccionCoopsLeidas = 0;
+const direccionUltimaPorUnidad = new Map(); // unidad_id -> { lat, lng } ya registrada
+const direccionPendientes = new Map();      // unidad_id -> { lat, lng } por registrar
+let direccionEnviando = false;
+
+function refrescarCoopsDireccion() {
+  if (!dbTrackingSystem || Date.now() - direccionCoopsLeidas < DIRECCION_COOPS_TTL_MS) return;
+  direccionCoopsLeidas = Date.now();
+  dbTrackingSystem.collection('cooperativas')
+    .find({ direcciones_tiempo_real: true }, { projection: { _id: 1 } })
+    .toArray(function (err, coops) {
+      if (err || !coops) return;
+      direccionCoops = new Set(coops.map(function (c) { return String(c._id); }));
+    });
+}
+
+function distanciaMetros(lat1, lng1, lat2, lng2) {
+  const rad = Math.PI / 180;
+  const dLat = (lat2 - lat1) * rad;
+  const dLng = (lng2 - lng1) * rad;
+  const h = Math.pow(Math.sin(dLat / 2), 2) +
+    Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.pow(Math.sin(dLng / 2), 2);
+  return 2 * 6371000 * Math.asin(Math.sqrt(h));
+}
+
+function registrarDireccionTiempoReal(unidad, lat, lng) {
+  try {
+    if (!LARAVEL_DIRECCION_URL || !LARAVEL_PUSH_SECRET || !unidad) return;
+    refrescarCoopsDireccion();
+    if (!unidad.cooperativa_id || !direccionCoops.has(String(unidad.cooperativa_id))) return;
+    if (!isFinite(lat) || !isFinite(lng) || (lat === 0 && lng === 0)) return;
+
+    const uid = String(unidad._id);
+    const ultima = direccionUltimaPorUnidad.get(uid);
+    if (ultima && distanciaMetros(ultima.lat, ultima.lng, lat, lng) <= DIRECCION_RADIO_M) {
+      direccionPendientes.delete(uid);
+      return;
+    }
+    direccionPendientes.set(uid, { lat: lat, lng: lng });
+    enviarSiguienteDireccion();
+  } catch (e) {
+    if (debug) console.error('registrarDireccionTiempoReal:', e && e.message ? e.message : e);
+  }
+}
+
+function enviarSiguienteDireccion() {
+  if (direccionEnviando) return;
+  const siguiente = direccionPendientes.entries().next();
+  if (siguiente.done) return;
+  const uid = siguiente.value[0];
+  const pos = siguiente.value[1];
+  direccionPendientes.delete(uid);
+  direccionEnviando = true;
+
+  let cerrado = false;
+  const terminar = function (ok) {
+    if (cerrado) return;
+    cerrado = true;
+    if (ok) direccionUltimaPorUnidad.set(uid, pos);
+    setTimeout(function () {
+      direccionEnviando = false;
+      enviarSiguienteDireccion();
+    }, DIRECCION_ESPERA_MS);
+  };
+
+  try {
+    const parsed = url.parse(LARAVEL_DIRECCION_URL);
+    const payload = JSON.stringify({
+      secret: LARAVEL_PUSH_SECRET,
+      unidad_id: uid,
+      latitud: pos.lat,
+      longitud: pos.lng
+    });
+    const isHttps = parsed.protocol === 'https:';
+    const mod = isHttps ? https : http;
+    const req = mod.request({
+      hostname: parsed.hostname,
+      port: parsed.port ? parseInt(parsed.port, 10) : (isHttps ? 443 : 80),
+      path: parsed.path || '/',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(payload, 'utf8')
+      },
+      timeout: 15000
+    }, (res) => {
+      res.resume();
+      res.on('aborted', () => terminar(false));
+      res.on('error', () => terminar(false));
+      res.on('end', () => {
+        if (debug && res.statusCode !== 200) console.log('registrar-direccion', uid, '| status:', res.statusCode);
+        terminar(res.statusCode === 200);
+      });
+    });
+    req.on('timeout', () => { try { req.destroy(); } catch (e) { } });
+    req.on('error', (err) => {
+      if (debug) console.error('❌ registrar-direccion', uid, err && err.message ? err.message : err);
+      terminar(false);
+    });
+    req.write(payload);
+    req.end();
+  } catch (e) {
+    terminar(false);
+  }
+}
+
 // ===================== COUNTER RESTART =====================
 function getTimeToRestartCounter() {
   const today = new Date();
@@ -2109,6 +2235,9 @@ function onClientConnected(socket) {
               if (err || !result || !result.value) return;
 
               const unidad = result.value; // 🔥 unidad ya actualizada
+
+              // Direcciones en tiempo real: geocache de la posición (solo cooperativas con el check).
+              registrarDireccionTiempoReal(unidad, gpsData.latitud, gpsData.longitud);
 
               // km diario: sincroniza con BD (corte de las 23:59, inicio del día si falta).
               if (!isBuffMessage) sincronizarKmDiario(imeiKmDiario, unidad, gpsData.odometro, fechaKmDiario, kmCalculado);
