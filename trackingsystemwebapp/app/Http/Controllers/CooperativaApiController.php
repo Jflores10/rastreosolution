@@ -78,6 +78,9 @@ class CooperativaApiController extends Controller
 		$validator = Validator::make($request->all(), [
 			'tipo_usuario' => 'required',
 			'cooperativa_id' => 'string',
+		], [
+			'tipo_usuario.required' => 'El tipo de usuario es obligatorio.',
+			'cooperativa_id.string' => 'El identificador de cooperativa debe ser texto.',
 		]);
 
 		if ($validator->fails()) {
@@ -98,7 +101,7 @@ class CooperativaApiController extends Controller
 				return response()->json([
 					'error' => true,
 					'api_version' => 'v2',
-					'message' => 'cooperativa_id es obligatorio para este tipo de usuario.',
+					'message' => 'El identificador de cooperativa es obligatorio para este tipo de usuario.',
 				], 422);
 			}
 			try {
@@ -108,7 +111,7 @@ class CooperativaApiController extends Controller
 				return response()->json([
 					'error' => true,
 					'api_version' => 'v2',
-					'message' => 'cooperativa_id inválido.',
+					'message' => 'El identificador de cooperativa es inválido.',
 				], 400);
 			}
 		}
@@ -126,6 +129,8 @@ class CooperativaApiController extends Controller
 
 		$validator = Validator::make($request->all(), [
 			'cooperativa_id' => 'required',
+		], [
+			'cooperativa_id.required' => 'El identificador de cooperativa es obligatorio.',
 		]);
 
 		if ($validator->fails()) {
@@ -168,6 +173,8 @@ class CooperativaApiController extends Controller
 
 		$validator = Validator::make($request->all(), [
 			'ruta_id' => 'required',
+		], [
+			'ruta_id.required' => 'El identificador de ruta es obligatorio.',
 		]);
 
 		if ($validator->fails()) {
@@ -187,7 +194,7 @@ class CooperativaApiController extends Controller
 			return response()->json([
 				'error' => true,
 				'api_version' => 'v2',
-				'message' => 'ruta_id inválido.',
+				'message' => 'El identificador de ruta es inválido.',
 			], 400);
 		}
 

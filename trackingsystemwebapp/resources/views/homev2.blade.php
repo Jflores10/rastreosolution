@@ -212,6 +212,22 @@
     max-width: 150px !important;  /* evita que el <li> deforme el modal */
     white-space: normal !important;
 }
+
+/* Popup: km de hoy, estado de ignición con su tramo y acumulados del día (como la app). */
+.estado-dia { max-width: 170px; margin: 2px 3px 6px; font-size: 11px; }
+.estado-dia-fila { display: flex; align-items: center; justify-content: space-between; gap: 4px; margin-bottom: 4px; }
+.estado-dia-hoy { color: #666; white-space: nowrap; }
+.estado-dia-hoy b { color: #222; }
+.estado-dia-ign { display: flex; flex-direction: column; align-items: center; }
+.estado-dia-badge { border: 1px solid; border-radius: 10px; padding: 0 6px; font-size: 10px; font-weight: 700; white-space: nowrap; }
+.estado-dia-tramo { font-weight: 800; font-variant-numeric: tabular-nums; }
+.estado-dia-chip { display: flex; justify-content: space-between; align-items: center; gap: 4px; border: 1px solid transparent; border-radius: 6px; padding: 2px 6px; margin-bottom: 3px; }
+.estado-dia-chip span { color: #555; font-size: 10px; white-space: nowrap; }
+.estado-dia-chip b { color: #222; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.estado-dia-chip.en-vivo { border-color: rgba(0, 0, 0, 0.35); }
+.estado-dia-on { background: #B7E3DE; }
+.estado-dia-off { background: #FFDDB3; }
+.estado-dia-odo { background: #D9CCEC; }
     
 #poi-bar {
     position: absolute;
@@ -1893,6 +1909,8 @@ function conectarSSE(coopId) {
                 return;
             }
             setBuffBlink(uid, false);
+            // Estado y acumulados del día para el popup del marcador (Encendido/Apagado Hoy).
+            mergeEstadoDiaUnidad(uid, msg);
 
             const li = document.getElementById(uid);
             if (!li) return;
@@ -4052,8 +4070,179 @@ $("#velocimetro").myfunc({divFact:10});
 
     setInterval(verifyGoogleMSG,100,null);
 
+    // =========================
+    // HOY / ENCENDIDO HOY / APAGADO HOY / ODÓMETRO (mismo cálculo que la app móvil)
+    // =========================
+    // El servidor guarda los segundos de los tramos cerrados del día (seg_encendido_dia /
+    // seg_apagado_dia), el inicio del tramo en curso (ignicion_tramo_desde) y el día de
+    // esos contadores (fecha_ignicion_dia, corte a las 23:59 America/Guayaquil).
+    var estadoDiaUnidades = {};
+    var ESTADO_DIA_OFFSET_MS = 5 * 60 * 60 * 1000; // America/Guayaquil (UTC-5 fijo)
+    var ESTADO_DIA_CAMPOS_IGN = ['ignicionf', 'seg_encendido_dia', 'seg_apagado_dia', 'ignicion_tramo_desde',
+        'fecha_ignicion_dia', 'fecha_ignicion_on', 'fecha_ignicion_off'];
+    var ESTADO_DIA_CAMPOS_FECHA = ['ignicion_tramo_desde', 'fecha_ignicion_on', 'fecha_ignicion_off'];
+
+    /** Instante (ms) de una fecha del documento o del SSE: ISO, número, {date} o {$date}. */
+    function estadoDiaFecha(raw) {
+        if (raw == null || raw === '') return null;
+        var v = raw;
+        if (typeof v === 'object') {
+            if (v.$date != null) v = v.$date;
+            else if (v.date != null) v = v.date;
+            if (v && typeof v === 'object' && v.$numberLong != null) v = Number(v.$numberLong);
+        }
+        var t = new Date(v).getTime();
+        return isNaN(t) ? null : t;
+    }
+
+    /** Acepta número o texto ("125,430.5"); el parseador puede guardar cualquiera. */
+    function estadoDiaNumero(v) {
+        if (v == null) return null;
+        if (typeof v === 'number') return isFinite(v) ? v : null;
+        var s = String(v).trim().replace(/,/g, '');
+        if (s === '' || s.toLowerCase() === 'null') return null;
+        var n = Number(s);
+        return isFinite(n) ? n : null;
+    }
+
+    /** Fecha local 'yyyy-mm-dd' en Guayaquil; con corte de 23:59 si conCorte. */
+    function estadoDiaDia(ahoraMs, conCorte) {
+        return new Date(ahoraMs - ESTADO_DIA_OFFSET_MS + (conCorte ? 60000 : 0)).toISOString().slice(0, 10);
+    }
+
+    /** Instante del corte (23:59:00 local del día anterior) en que empieza el día `dia`. */
+    function estadoDiaInicioDia(dia) {
+        return Date.parse(dia + 'T00:00:00Z') + ESTADO_DIA_OFFSET_MS - 60000;
+    }
+
+    /** Guarda los campos de ignición, km de hoy y odómetro que traiga el payload. */
+    function mergeEstadoDiaUnidad(uid, data) {
+        if (!uid || !data || data.is_buff) return;
+        var st = estadoDiaUnidades[uid] || (estadoDiaUnidades[uid] = {});
+        // Un tramo de ignición más viejo que el conocido no revierte el estado.
+        var tramo = estadoDiaFecha(data.ignicion_tramo_desde);
+        if (!(tramo != null && st.ignicion_tramo_desde != null && tramo < st.ignicion_tramo_desde)) {
+            var on = data.ignicionf === 'on' || data.ignicionf === 'off' ? data.ignicionf === 'on' : null;
+            var previo = st.ignicionf === 'on' || st.ignicionf === 'off' ? st.ignicionf : null;
+            ESTADO_DIA_CAMPOS_IGN.forEach(function (k) {
+                if (data[k] === undefined || k === 'ignicionf') return;
+                st[k] = ESTADO_DIA_CAMPOS_FECHA.indexOf(k) >= 0 ? estadoDiaFecha(data[k]) : data[k];
+            });
+            if (on !== null) {
+                st.ignicionf = data.ignicionf;
+                // Sin la hora del cambio (payload sin fecha) y con cambio real: hora de llegada.
+                var campoDesde = on ? 'fecha_ignicion_on' : 'fecha_ignicion_off';
+                if (data[campoDesde] == null && previo !== null && previo !== data.ignicionf) st[campoDesde] = Date.now();
+            }
+        }
+        if (data.km_diario !== undefined) st.km_diario = estadoDiaNumero(data.km_diario);
+        if (data.fecha_km_diario !== undefined) st.fecha_km_diario = data.fecha_km_diario ? String(data.fecha_km_diario) : null;
+        if (data.odometro !== undefined) st.odometro = estadoDiaNumero(data.odometro);
+    }
+
+    /** Acumulado encendido/apagado del día (segundos) y cuál corre en vivo. */
+    function estadoDiaTiempos(st, ahoraMs) {
+        var ign = st.ignicionf === 'on' ? true : st.ignicionf === 'off' ? false : null;
+        if (st.seg_encendido_dia == null && st.seg_apagado_dia == null && st.ignicion_tramo_desde == null) {
+            return { on: null, off: null, onVivo: false, offVivo: false };
+        }
+        var dia = estadoDiaDia(ahoraMs, true);
+        var on = estadoDiaNumero(st.seg_encendido_dia) || 0;
+        var off = estadoDiaNumero(st.seg_apagado_dia) || 0;
+        var desde = st.ignicion_tramo_desde;
+        // Contadores de un día anterior: en 0 y el tramo en curso cuenta desde las 23:59.
+        if (st.fecha_ignicion_dia !== dia) {
+            on = 0;
+            off = 0;
+            var inicio = estadoDiaInicioDia(dia);
+            if (desde == null || desde < inicio) desde = inicio;
+        }
+        var vivo = desde == null ? 0 : Math.max(0, Math.floor((ahoraMs - desde) / 1000));
+        if (ign === true) on += vivo;
+        if (ign === false) off += vivo;
+        return { on: Math.round(on), off: Math.round(off), onVivo: ign === true && desde != null, offVivo: ign === false && desde != null };
+    }
+
+    /** `HH:mm:ss` con horas totales; sin dato `--:--:--`. */
+    function estadoDiaHms(seg) {
+        if (seg == null) return '--:--:--';
+        var two = function (v) { return (v < 10 ? '0' : '') + v; };
+        return two(Math.floor(seg / 3600)) + ':' + two(Math.floor(seg / 60) % 60) + ':' + two(seg % 60);
+    }
+
+    function estadoDiaValores(uid, ahoraMs) {
+        var st = estadoDiaUnidades[uid] || {};
+        var t = estadoDiaTiempos(st, ahoraMs);
+        // Tramo actual: desde el último encendido o apagado (se reinicia en cada cambio).
+        var desdeTramo = st.ignicionf === 'on' ? st.fecha_ignicion_on : st.ignicionf === 'off' ? st.fecha_ignicion_off : null;
+        var km = st.fecha_km_diario === estadoDiaDia(ahoraMs, false) && st.km_diario > 0 ? st.km_diario : 0;
+        var odo = st.odometro;
+        return {
+            ignicionf: st.ignicionf === 'on' || st.ignicionf === 'off' ? st.ignicionf : null,
+            hoy: km.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' km',
+            tramo: estadoDiaHms(desdeTramo == null ? null : Math.max(0, Math.floor((ahoraMs - desdeTramo) / 1000))),
+            on: estadoDiaHms(t.on),
+            off: estadoDiaHms(t.off),
+            onVivo: t.onVivo,
+            offVivo: t.offVivo,
+            odometro: (odo == null || odo < 0) ? 'N/A' : odo.toLocaleString('en-US', { maximumFractionDigits: 1 }) + ' km'
+        };
+    }
+
+    function estadoDiaIgnHtml(ignicionf) {
+        if (!ignicionf) return '';
+        var color = ignicionf === 'on' ? '#2E7D32' : '#C62828';
+        return '<span class="estado-dia-badge" style="color:' + color + ';border-color:' + color + ';background:' + color + '1F">' +
+            '<i class="fa fa-power-off"></i> ' + (ignicionf === 'on' ? 'Encendido' : 'Apagado') + '</span>';
+    }
+
+    /** Bloque del popup; el reloj de abajo lo mantiene al día mientras esté abierto. */
+    function estadoDiaPopupHtml(uid) {
+        var v = estadoDiaValores(uid, Date.now());
+        var color = v.ignicionf === 'on' ? '#2E7D32' : '#C62828';
+        return '<div class="estado-dia" data-uid="' + uid + '">' +
+            '<div class="estado-dia-fila">' +
+                '<span class="estado-dia-hoy"><i class="fa fa-road"></i> Hoy: <b data-k="hoy">' + v.hoy + '</b></span>' +
+                '<span class="estado-dia-ign" data-k="ign"' + (v.ignicionf ? '' : ' style="display:none"') + '>' +
+                    '<span data-k="badge">' + estadoDiaIgnHtml(v.ignicionf) + '</span>' +
+                    '<span class="estado-dia-tramo" data-k="tramo" style="color:' + color + '">' + v.tramo + '</span>' +
+                '</span>' +
+            '</div>' +
+            '<div class="estado-dia-chip estado-dia-on' + (v.onVivo ? ' en-vivo' : '') + '" data-k="chip-on"><span><i class="fa fa-power-off"></i> Encendido Hoy</span><b data-k="on">' + v.on + '</b></div>' +
+            '<div class="estado-dia-chip estado-dia-off' + (v.offVivo ? ' en-vivo' : '') + '" data-k="chip-off"><span><i class="fa fa-stop-circle-o"></i> Apagado Hoy</span><b data-k="off">' + v.off + '</b></div>' +
+            '<div class="estado-dia-chip estado-dia-odo"><span><i class="fa fa-tachometer"></i> Odómetro</span><b data-k="odometro">' + v.odometro + '</b></div>' +
+            '</div>';
+    }
+
+    // Un solo reloj para los popups abiertos (los cerrados no están en el DOM).
+    setInterval(function () {
+        var bloques = document.getElementsByClassName('estado-dia');
+        if (!bloques.length) return;
+        var ahora = Date.now();
+        for (var i = 0; i < bloques.length; i++) {
+            var el = bloques[i];
+            var v = estadoDiaValores(el.getAttribute('data-uid'), ahora);
+            var q = function (k) { return el.querySelector('[data-k="' + k + '"]'); };
+            q('hoy').textContent = v.hoy;
+            q('on').textContent = v.on;
+            q('off').textContent = v.off;
+            q('odometro').textContent = v.odometro;
+            q('chip-on').classList.toggle('en-vivo', v.onVivo);
+            q('chip-off').classList.toggle('en-vivo', v.offVivo);
+            q('ign').style.display = v.ignicionf ? '' : 'none';
+            if (q('badge').getAttribute('data-ign') !== String(v.ignicionf)) {
+                q('badge').setAttribute('data-ign', String(v.ignicionf));
+                q('badge').innerHTML = estadoDiaIgnHtml(v.ignicionf);
+            }
+            q('tramo').textContent = v.tramo;
+            q('tramo').style.color = v.ignicionf === 'on' ? '#2E7D32' : '#C62828';
+        }
+    }, 1000);
+
     function setMarcadorUnidad(unidad, fecha_gps_, fecha_servidor_, _is) {
         registrarIconoUnidad(unidad);
+        var uidEstadoDia = normalizarUnidadId(unidad._id || unidad.unidad_id);
+        mergeEstadoDiaUnidad(uidEstadoDia, unidad);
 
         // =========================
         // ESTADO
@@ -4144,7 +4333,6 @@ $("#velocimetro").myfunc({divFact:10});
                 `<li><strong>Placa:</strong> ${unidad.placa || '-'}</li>` +
                 `<li><strong>Velocidad:</strong> ${unidad.velocidad_actual || 0} km/h</li>` +
                 `<li><strong>Voltaje:</strong> ${unidad.voltaje || '-'} v</li>` +
-                `<li><strong>Odometro:</strong> ${unidad.mileage || '-'} km</li>` +
                 `<li><strong>C. Total:</strong> ${unidad.contador_total != null ? unidad.contador_total : 0}</li>` +
                 `<li><strong>C. Diario:</strong> ${unidad.contador_diario != null ? unidad.contador_diario : 0}</li>` +
                 '<li><strong>C. Total 2:</strong>&nbsp' + ((unidad.contador_total_sensor_2 != undefined) ? unidad.contador_total_sensor_2 : '-') + '</li>' +
@@ -4157,6 +4345,7 @@ $("#velocimetro").myfunc({divFact:10});
                 '<li id="li_dir_actual" style="display:none"><strong>Dirección Actual:</strong><br>' +
                 '<span class="dir-wrap" id="dir_actual_marca"></span></li>' +
                 '</ul>' +
+                estadoDiaPopupHtml(uidEstadoDia) +
                 '<div class="form-group">' +
                 `<button class="btn btn-info btn-block" onclick="ver_direccion('${unidad.latitud}','${unidad.longitud}','#dir_actual_marca','#li_dir_actual')">Ver Dirección</button>` +
                 `<button class="btn btn-primary btn-block" onclick="openCommandForm('${unidad.imei}','${unidad.latitud}','${unidad.longitud}');velocimetro_change(${unidad.velocidad_actual || 0});">Consola de comando</button>` +

@@ -19,6 +19,7 @@ function editarCooperativa(url)
     let pto_bloques = document.getElementById('pto_bloques');
     let distancia_haversine = document.getElementById('distancia_haversine');
     let trafico = document.getElementById('trafico');
+    let direcciones_tiempo_real = document.getElementById('direcciones_tiempo_real');
     let dia_inicial = document.getElementById('dia_inicial');
     let hora_sync = document.getElementById('hora_sync');
 
@@ -39,6 +40,7 @@ function editarCooperativa(url)
         pto_bloques.checked = data.pto_bloques??false;
         distancia_haversine.checked = data.distancia_haversine??false;
         trafico.checked = data.trafico??false;
+        direcciones_tiempo_real.checked = data.direcciones_tiempo_real??false;
 
 
         dia_inicial.value = data.dia_inicial;
@@ -72,6 +74,7 @@ function crearCooperativa(url)
     let pto_bloques = document.getElementById('pto_bloques');
     let distancia_haversine = document.getElementById('distancia_haversine');
     let trafico = document.getElementById('trafico');
+    let direcciones_tiempo_real = document.getElementById('direcciones_tiempo_real');
 
 
     let dia_inicial = document.getElementById('dia_inicial');
@@ -99,6 +102,7 @@ function crearCooperativa(url)
         pto_bloques: pto_bloques.checked,
         distancia_haversine: distancia_haversine.checked,
         trafico: trafico.checked,
+        direcciones_tiempo_real: direcciones_tiempo_real.checked,
 
         dia_inicial: dia_inicial.value,
         hora_sync: hora_sync.value
@@ -138,6 +142,7 @@ function actualizarCooperativa(url)
     let pto_bloques = document.getElementById('pto_bloques');
     let distancia_haversine = document.getElementById('distancia_haversine');
     let trafico = document.getElementById('trafico');
+    let direcciones_tiempo_real = document.getElementById('direcciones_tiempo_real');
 
     let dia_inicial = document.getElementById('dia_inicial');
     let hora_sync = document.getElementById('hora_sync');
@@ -163,6 +168,7 @@ function actualizarCooperativa(url)
         pto_bloques: pto_bloques.checked,
         distancia_haversine: distancia_haversine.checked,
         trafico: trafico.checked,
+        direcciones_tiempo_real: direcciones_tiempo_real.checked,
 
 
         dia_inicial: dia_inicial.value,
@@ -271,6 +277,7 @@ function cleanForm() {
     document.getElementById('finalizacion_automatica').checked = false;
     document.getElementById('redondear_tiempos_atraso').checked = false;
     document.getElementById('pto_bloques').checked = false;
+    document.getElementById('direcciones_tiempo_real').checked = false;
 
     document.getElementById('dia_inicial').value = '';
     document.getElementById('hora_sync').value = '';

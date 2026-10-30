@@ -224,6 +224,13 @@ Cooperativas
                         </label>
                     </div>
                 </div>
+                <div class="form-group">
+                    <div class="checkbox">
+                        <label>
+                            <input type="checkbox" name="direcciones_tiempo_real" id="direcciones_tiempo_real" /> Mostrar direcciones en tiempo real
+                        </label>
+                    </div>
+                </div>
               <div id="div-multa-tubo" class="form-group">
                   <label for="multa_tubo" class="col-sm-2 control-label">Multa tubo</label>
                   <div class="col-sm-10">

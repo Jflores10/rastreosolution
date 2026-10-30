@@ -11,6 +11,7 @@ use App\Despacho;
 use Carbon\Carbon;
 use MongoDB\BSON\ObjectID;
 use App\User;
+use App\Services\LocationIqReverseGeocodeService;
 class UnidadApiController extends Controller
 {
     public function index(Request $request)
@@ -268,6 +269,59 @@ class UnidadApiController extends Controller
             'error' => false,
             'api_version' => 'v2',
             'unidad' => $unidad,
+        ), 200);
+    }
+
+    /**
+     * v2: dirección en texto de la posición actual de una unidad (LocationIQ con caché
+     * geocache, igual que el reporte de históricos). Solo para unidades cuya cooperativa
+     * tiene activo "Mostrar direcciones en tiempo real".
+     * Cuerpo JSON: _id (unidad), latitud, longitud.
+     */
+    public function direccion_v2(Request $request)
+    {
+        $validator = Validator::make($request->all(), array(
+            '_id' => 'required',
+            'latitud' => 'required|numeric',
+            'longitud' => 'required|numeric',
+        ), array(
+            '_id.required' => 'El identificador de la unidad es obligatorio.',
+            'latitud.required' => 'La latitud es obligatoria.',
+            'longitud.required' => 'La longitud es obligatoria.',
+        ));
+
+        if ($validator->fails()) {
+            return response()->json(array(
+                'error' => true,
+                'api_version' => 'v2',
+                'messages' => $validator->errors(),
+            ), 422);
+        }
+
+        $unidad = Unidad::with('cooperativa')->find($request->input('_id'));
+        if (!$unidad) {
+            return response()->json(array(
+                'error' => true,
+                'api_version' => 'v2',
+                'message' => 'Unidad no encontrada.',
+            ), 404);
+        }
+
+        if (!$unidad->cooperativa || $unidad->cooperativa->direcciones_tiempo_real !== true) {
+            return response()->json(array(
+                'error' => true,
+                'api_version' => 'v2',
+                'message' => 'Direcciones en tiempo real no activas para esta cooperativa.',
+            ), 403);
+        }
+
+        $direccion = app(LocationIqReverseGeocodeService::class)
+            ->reverseDisplayName($request->input('latitud'), $request->input('longitud'));
+
+        return response()->json(array(
+            'error' => false,
+            'api_version' => 'v2',
+            'direccion' => $direccion,
         ), 200);
     }
 }
