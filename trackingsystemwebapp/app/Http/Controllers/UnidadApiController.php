@@ -149,7 +149,15 @@ class UnidadApiController extends Controller
         }
 
         $rutaunidad = array();
+        $geoService = app(LocationIqReverseGeocodeService::class);
         foreach ($unidades as $unidad) {
+            // Direcciones en tiempo real: la ya guardada en geocache para la posición
+            // actual (sin llamar a LocationIQ), para que la app la muestre al abrir.
+            if ($unidad->cooperativa && $unidad->cooperativa->direcciones_tiempo_real === true
+                && is_numeric($unidad->latitud) && is_numeric($unidad->longitud)) {
+                $unidad->setAttribute('direccion_texto', $geoService->direccionExactaCacheada($unidad->latitud, $unidad->longitud));
+            }
+
             $ruta_actual = Despacho::orderBy('fecha', 'asc')->where('estado', 'P')->where('unidad_id', $unidad['_id'])
                 ->where('fecha', '>=', $desde)
                 ->where('fecha', '<=', $hasta)->first();

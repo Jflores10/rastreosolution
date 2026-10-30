@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Geocache;
 use Carbon\Carbon;
 use GuzzleHttp\Client;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -20,6 +21,13 @@ class LocationIqReverseGeocodeService
      * llevan `precision` = 4; los de 3 decimales (reporte, push) no tienen ese campo.
      */
     const COORD_DECIMALS_EXACTA = 4;
+
+    /** Una dirección en tiempo real ya guardada sirve para puntos a esta distancia. */
+    const RADIO_REUSO_METROS = 20;
+
+    /** Tras un 429 de LocationIQ no se le consulta durante este tiempo (minutos). */
+    const PAUSA_LIMITE_MINUTOS = 1;
+    const CACHE_PAUSA_LIMITE = 'locationiq_pausa_limite';
 
     /**
      * @param float|int|string|null $lat
@@ -67,9 +75,14 @@ class LocationIqReverseGeocodeService
 
         list($latR, $lngR) = $rounded;
 
-        $cached = $this->findInCache($latR, $lngR, self::COORD_DECIMALS_EXACTA);
+        $cached = $this->direccionExactaCacheada($lat, $lng);
         if ($cached !== null) {
             return $cached;
+        }
+
+        // LocationIQ respondió 429 hace poco: no se insiste hasta que pase la pausa.
+        if (Cache::has(self::CACHE_PAUSA_LIMITE)) {
+            return null;
         }
 
         $json = $this->requestLocationIq((float) $lat, (float) $lng);
@@ -81,6 +94,71 @@ class LocationIqReverseGeocodeService
         $this->saveToCache($latR, $lngR, $direccion, self::COORD_DECIMALS_EXACTA);
 
         return $direccion;
+    }
+
+    /**
+     * Dirección en tiempo real solo desde geocache, sin llamar a LocationIQ: la de la
+     * celda de ~11 m o, si no hay, la guardada más cercana a ≤ RADIO_REUSO_METROS.
+     *
+     * @param float|int|string|null $lat
+     * @param float|int|string|null $lng
+     * @return string|null
+     */
+    public function direccionExactaCacheada($lat, $lng)
+    {
+        $rounded = $this->roundCoordinates($lat, $lng, self::COORD_DECIMALS_EXACTA);
+        if ($rounded === null) {
+            return null;
+        }
+
+        list($latR, $lngR) = $rounded;
+
+        $cached = $this->findInCache($latR, $lngR, self::COORD_DECIMALS_EXACTA);
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        return $this->findCercanaEnCache((float) $lat, (float) $lng);
+    }
+
+    /**
+     * @param float $lat
+     * @param float $lng
+     * @return string|null
+     */
+    protected function findCercanaEnCache($lat, $lng)
+    {
+        // Caja de ~22 m alrededor del punto; luego se queda la más cercana dentro del radio.
+        $delta = 0.0002;
+        try {
+            $rows = Geocache::where('precision', self::COORD_DECIMALS_EXACTA)
+                ->where('lat', '>=', $lat - $delta)->where('lat', '<=', $lat + $delta)
+                ->where('lng', '>=', $lng - $delta)->where('lng', '<=', $lng + $delta)
+                ->limit(30)
+                ->get();
+        } catch (\Exception $e) {
+            Log::warning('Geocache cercana: '.$e->getMessage(), array('lat' => $lat, 'lng' => $lng));
+            return null;
+        }
+
+        $mejor = null;
+        $mejorDistancia = self::RADIO_REUSO_METROS;
+        $cosLat = cos(deg2rad($lat));
+        foreach ($rows as $row) {
+            $dir = isset($row->direccion) ? trim((string) $row->direccion) : '';
+            if ($dir === '') {
+                continue;
+            }
+            $dy = ((float) $row->lat - $lat) * 111320;
+            $dx = ((float) $row->lng - $lng) * 111320 * $cosLat;
+            $distancia = sqrt($dx * $dx + $dy * $dy);
+            if ($distancia <= $mejorDistancia) {
+                $mejorDistancia = $distancia;
+                $mejor = $dir;
+            }
+        }
+
+        return $mejor;
     }
 
     /**
@@ -289,6 +367,7 @@ class LocationIqReverseGeocodeService
 
             if ($status === 429) {
                 Log::warning('LocationIQ rate limit (429)', array('lat' => $lat, 'lng' => $lng));
+                Cache::put(self::CACHE_PAUSA_LIMITE, true, self::PAUSA_LIMITE_MINUTOS);
                 return null;
             }
 
