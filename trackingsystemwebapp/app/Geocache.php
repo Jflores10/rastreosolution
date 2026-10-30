@@ -19,6 +19,7 @@ class Geocache extends Model
         'lng',
         'direccion',
         'createdAt',
+        'precision',
     );
 
     protected $dates = array(

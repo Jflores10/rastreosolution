@@ -273,8 +273,8 @@ class UnidadApiController extends Controller
     }
 
     /**
-     * v2: dirección en texto de la posición actual de una unidad (LocationIQ con caché
-     * geocache, igual que el reporte de históricos). Solo para unidades cuya cooperativa
+     * v2: dirección en texto de la posición actual de una unidad (LocationIQ con el punto
+     * exacto del GPS y caché geocache de ~11 m). Solo para unidades cuya cooperativa
      * tiene activo "Mostrar direcciones en tiempo real".
      * Cuerpo JSON: _id (unidad), latitud, longitud.
      */
@@ -316,7 +316,16 @@ class UnidadApiController extends Controller
         }
 
         $direccion = app(LocationIqReverseGeocodeService::class)
-            ->reverseDisplayName($request->input('latitud'), $request->input('longitud'));
+            ->reverseDireccionExacta($request->input('latitud'), $request->input('longitud'));
+
+        // LocationIQ no respondió (límite 429, timeout, sin datos): la app reintenta.
+        if ($direccion === null) {
+            return response()->json(array(
+                'error' => true,
+                'api_version' => 'v2',
+                'message' => 'Dirección no disponible por el momento.',
+            ), 503);
+        }
 
         return response()->json(array(
             'error' => false,
