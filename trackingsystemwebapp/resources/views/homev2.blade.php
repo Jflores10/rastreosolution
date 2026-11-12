@@ -4239,10 +4239,177 @@ $("#velocimetro").myfunc({divFact:10});
         }
     }, 1000);
 
+    // =========================
+    // DIRECCIÓN EN TIEMPO REAL (cooperativas con "Mostrar direcciones en tiempo real")
+    // =========================
+    // Misma lógica que UnitAddressService de la app. Para no afectar el SSE ni gastar
+    // LocationIQ: con cada trama solo se guarda la posición (sin red); las direcciones
+    // se piden únicamente para los popups abiertos, una dirección sirve mientras la
+    // unidad no se aleje más de 20 m, celdas de ~11 m compartidas, máximo 2 peticiones
+    // a la vez espaciadas 600 ms y con tiempo límite. El servidor usa primero geocache.
+    @php
+        $dirTrCoops = array();
+        foreach (($cooperativas ?? array()) as $c) {
+            if ($c->direcciones_tiempo_real === true) $dirTrCoops[] = (string) $c->_id;
+        }
+    @endphp
+    var dirTr = (function () {
+        var COOPS = {!! json_encode($dirTrCoops) !!};
+        var URL = '{{ url("/unidades/direccion-tiempo-real") }}';
+        var RADIO_M = 20, REINTENTO_MS = 10000, TIEMPO_LIMITE_MS = 12000, ESPACIADO_MS = 600, MAX_SIMULTANEAS = 2;
+        var cache = {}, fallidas = {}, ultima = {}, posicion = {}, enCurso = {}, pendientes = [], esperadas = {};
+        var activas = 0, ultimoInicio = 0, espera = null;
+
+        function key(lat, lng) { return lat.toFixed(4) + ',' + lng.toFixed(4); }
+
+        function distancia(lat1, lng1, lat2, lng2) {
+            var r = 6371000, rad = Math.PI / 180;
+            var dLat = (lat2 - lat1) * rad, dLng = (lng2 - lng1) * rad;
+            var a = Math.pow(Math.sin(dLat / 2), 2) + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.pow(Math.sin(dLng / 2), 2);
+            return 2 * r * Math.asin(Math.sqrt(a));
+        }
+
+        function activa(unidad) {
+            if (!COOPS.length) return false;
+            var coopEl = document.getElementById('cooperativa');
+            var c = unidad.cooperativa_id || (coopEl ? coopEl.value : '');
+            return !!c && COOPS.indexOf(String(c)) >= 0;
+        }
+
+        /** Con cada trama: solo guarda la posición (sin peticiones). */
+        function registrar(uid, unidad) {
+            if (!uid || !activa(unidad)) return false;
+            var lat = parseFloat(unidad.latitud), lng = parseFloat(unidad.longitud);
+            if (isNaN(lat) || isNaN(lng)) return false;
+            posicion[uid] = { lat: lat, lng: lng };
+            var s = unidad.direccion_texto != null ? String(unidad.direccion_texto).trim() : '';
+            if (s && s !== 'null') ultima[uid] = { lat: lat, lng: lng, texto: s };
+            return true;
+        }
+
+        function vigente(uid, lat, lng) {
+            var u = ultima[uid];
+            if (u && distancia(u.lat, u.lng, lat, lng) <= RADIO_M) return u.texto;
+            var c = cache[key(lat, lng)];
+            if (c != null) { ultima[uid] = { lat: lat, lng: lng, texto: c }; return c; }
+            return null;
+        }
+
+        function textoInicial(uid) {
+            var p = posicion[uid];
+            var v = p ? vigente(uid, p.lat, p.lng) : null;
+            return v || (ultima[uid] && ultima[uid].texto) || 'Buscando dirección…';
+        }
+
+        function popupHtml(uid) {
+            var span = document.createElement('span');
+            span.textContent = textoInicial(uid);
+            return '<li class="dir-tr" data-uid="' + uid + '"><strong>Dirección:</strong><br>' +
+                '<span class="dir-wrap" data-k="dir">' + span.innerHTML + '</span></li>';
+        }
+
+        function pedir(uid, lat, lng) {
+            var k = key(lat, lng);
+            var falla = fallidas[k];
+            if (falla && Date.now() - falla < REINTENTO_MS) return;
+            var p = enCurso[k];
+            if (!p) {
+                p = { key: k, uid: uid, lat: lat, lng: lng, prioritario: false };
+                enCurso[k] = p;
+                pendientes.push(p);
+            }
+            if (!ultima[uid]) p.prioritario = true;
+            bombear();
+        }
+
+        function siguiente() {
+            // Descarta pedidos de celdas que ya ningún popup abierto espera.
+            pendientes = pendientes.filter(function (p) {
+                if (esperadas[p.key]) return true;
+                delete enCurso[p.key];
+                return false;
+            });
+            if (!pendientes.length) return null;
+            var i = -1;
+            for (var j = 0; j < pendientes.length; j++) { if (pendientes[j].prioritario) { i = j; break; } }
+            return pendientes.splice(i < 0 ? 0 : i, 1)[0];
+        }
+
+        function bombear() {
+            if (espera) return;
+            while (activas < MAX_SIMULTANEAS) {
+                var p = siguiente();
+                if (!p) return;
+                var falta = ESPACIADO_MS - (Date.now() - ultimoInicio);
+                if (falta > 0) {
+                    pendientes.unshift(p);
+                    espera = setTimeout(function () { espera = null; bombear(); }, falta);
+                    return;
+                }
+                ultimoInicio = Date.now();
+                activas++;
+                ejecutar(p);
+            }
+        }
+
+        function ejecutar(p) {
+            var meta = document.querySelector('meta[name="csrf-token"]');
+            $.ajax({
+                url: URL,
+                type: 'POST',
+                dataType: 'json',
+                timeout: TIEMPO_LIMITE_MS,
+                headers: meta ? { 'X-CSRF-TOKEN': meta.getAttribute('content') } : {},
+                data: { _id: p.uid, latitud: p.lat, longitud: p.lng }
+            }).done(function (r) {
+                var dir = r && !r.error && r.direccion ? String(r.direccion) : null;
+                if (dir) { cache[p.key] = dir; delete fallidas[p.key]; }
+                else fallidas[p.key] = Date.now();
+            }).fail(function () {
+                fallidas[p.key] = Date.now();
+            }).always(function () {
+                delete enCurso[p.key];
+                activas--;
+                tick();
+                bombear();
+            });
+        }
+
+        /** Actualiza las direcciones de los popups abiertos con la posición más reciente. */
+        function tick() {
+            var filas = document.getElementsByClassName('dir-tr');
+            esperadas = {};
+            for (var i = 0; i < filas.length; i++) {
+                var el = filas[i];
+                var uid = el.getAttribute('data-uid');
+                var pos = posicion[uid];
+                var span = el.querySelector('[data-k="dir"]');
+                if (!pos || !span) continue;
+                var v = vigente(uid, pos.lat, pos.lng);
+                var texto;
+                if (v) {
+                    texto = v;
+                } else {
+                    var k = key(pos.lat, pos.lng);
+                    esperadas[k] = true;
+                    pedir(uid, pos.lat, pos.lng);
+                    var falla = fallidas[k] && !enCurso[k];
+                    texto = (ultima[uid] && ultima[uid].texto) || (falla ? 'Dirección no disponible' : 'Buscando dirección…');
+                }
+                if (span.textContent !== texto) span.textContent = texto;
+            }
+        }
+
+        if (COOPS.length) setInterval(tick, 1000);
+
+        return { registrar: registrar, popupHtml: popupHtml, tick: tick };
+    })();
+
     function setMarcadorUnidad(unidad, fecha_gps_, fecha_servidor_, _is) {
         registrarIconoUnidad(unidad);
         var uidEstadoDia = normalizarUnidadId(unidad._id || unidad.unidad_id);
         mergeEstadoDiaUnidad(uidEstadoDia, unidad);
+        var conDireccionTr = dirTr.registrar(uidEstadoDia, unidad);
 
         // =========================
         // ESTADO
@@ -4342,6 +4509,7 @@ $("#velocimetro").myfunc({divFact:10});
                 `<li><strong>Estado:</strong> ${estado}</li>` +
                 `<li><strong>Fecha de servidor:</strong><br>${fecha}</li>` +
                 `<li><strong>Fecha de GPS:</strong><br>${fecha_gps}</li>` +
+                (conDireccionTr ? dirTr.popupHtml(uidEstadoDia) : '') +
                 '<li id="li_dir_actual" style="display:none"><strong>Dirección Actual:</strong><br>' +
                 '<span class="dir-wrap" id="dir_actual_marca"></span></li>' +
                 '</ul>' +
@@ -5276,6 +5444,7 @@ $("#velocimetro").myfunc({divFact:10});
                 });
             
                 mk.addListener('click', function () {
+                    google.maps.event.addListenerOnce(infoWindow, 'domready', dirTr.tick);
                     infoWindow.open(map, mk);
                     velocimetro_change(velocidad);
                 });
@@ -5332,6 +5501,7 @@ $("#velocimetro").myfunc({divFact:10});
             });
         
             mk.addListener('click', function () {
+                google.maps.event.addListenerOnce(infoWindow, 'domready', dirTr.tick);
                 infoWindow.open(map, mk);
                 velocimetro_change(velocidad);
             });

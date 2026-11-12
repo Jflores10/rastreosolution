@@ -20,7 +20,8 @@ use Illuminate\Database\Eloquent\Collection;
 use App\PuntoControlAtmOficial;
 use App\RutaAtmOficial;
 use App\Bitacora;
-use GuzzleHttp\Client;  
+use GuzzleHttp\Client;
+use App\Services\LocationIqReverseGeocodeService;  
 class HomeController extends Controller
 {
     public function showEnLinea()
@@ -589,6 +590,44 @@ class HomeController extends Controller
         $client = new \GuzzleHttp\Client();
         $response = $client->get($url);
         return response()->json(json_decode($response->getBody()));
+    }
+
+    /**
+     * homev2: dirección en tiempo real de una unidad (misma lógica que la app,
+     * UnidadApiController@direccion_v2): geocache de ~11 m primero y LocationIQ solo si
+     * no la tiene. Solo si la cooperativa tiene "Mostrar direcciones en tiempo real".
+     * Cuerpo: _id (unidad), latitud, longitud.
+     */
+    public function direccionTiempoReal(Request $request)
+    {
+        $unidadId = trim((string) $request->input('_id'));
+        $lat = $request->input('latitud');
+        $lng = $request->input('longitud');
+        if ($unidadId === '' || !is_numeric($lat) || !is_numeric($lng)) {
+            return response()->json(array('error' => true, 'message' => '_id, latitud y longitud requeridos'), 422);
+        }
+
+        $unidad = Unidad::with('cooperativa')->find($unidadId);
+        if (!$unidad) {
+            return response()->json(array('error' => true, 'message' => 'Unidad no encontrada.'), 404);
+        }
+
+        $user = Auth::user();
+        if ($user->tipo_usuario->valor != 1 && (string) $unidad->cooperativa_id !== (string) $user->cooperativa_id) {
+            return response()->json(array('error' => true, 'message' => 'Forbidden'), 403);
+        }
+
+        if (!$unidad->cooperativa || $unidad->cooperativa->direcciones_tiempo_real !== true) {
+            return response()->json(array('error' => true, 'message' => 'Direcciones en tiempo real no activas para esta cooperativa.'), 403);
+        }
+
+        $direccion = app(LocationIqReverseGeocodeService::class)->reverseDireccionExacta($lat, $lng);
+        if ($direccion === null) {
+            // LocationIQ no respondió (429, timeout, sin datos): el navegador reintenta.
+            return response()->json(array('error' => true, 'message' => 'Dirección no disponible por el momento.'), 503);
+        }
+
+        return response()->json(array('error' => false, 'direccion' => $direccion));
     }
 
     public function getAddress(Request $request){

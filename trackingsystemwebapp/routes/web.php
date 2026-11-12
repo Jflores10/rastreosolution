@@ -234,6 +234,7 @@ Route::group(['middleware' => ['auth', 'usuario']], function () {
     Route::get('/poi', 'HomeController@poi');
 
     Route::post('/get_address', 'HomeController@getAddress');
+    Route::post('/unidades/direccion-tiempo-real', 'HomeController@direccionTiempoReal');
 
 
 
