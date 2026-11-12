@@ -582,14 +582,25 @@ class HomeController extends Controller
         ]);
     }
 
+    /**
+     * Dirección de un punto (lista de unidades de home/homev2 y columnas de ubicación de
+     * los reportes): geocache primero y LocationIQ solo si no está. Responde con el mismo
+     * campo `display_name` que usaban las vistas.
+     */
     public function reverseProxy(Request $request)
     {
         $latitud = $request->input('lat');
         $longitud = $request->input('lon');
-        $url = config('app.reverse_geocoding_url') . '?lat=' . $latitud . '&lon=' . $longitud . '&format=json';
-        $client = new \GuzzleHttp\Client();
-        $response = $client->get($url);
-        return response()->json(json_decode($response->getBody()));
+        if (!is_numeric($latitud) || !is_numeric($longitud)) {
+            return response()->json(array('error' => true, 'display_name' => 'Ubicación no válida'));
+        }
+
+        $direccion = app(LocationIqReverseGeocodeService::class)->reverseDisplayName($latitud, $longitud);
+        if ($direccion === null) {
+            return response()->json(array('error' => true, 'display_name' => 'Ubicación no disponible por el momento'));
+        }
+
+        return response()->json(array('error' => false, 'display_name' => $direccion));
     }
 
     /**
@@ -634,30 +645,15 @@ class HomeController extends Controller
         $latitude = $request->input('lat');
         $longitude = $request->input('lon');
 
-        $ubicacion='Ubicación no encontrada';
-        try {
-            $client = new Client();
-            $urlFinal='https://nominatim.openstreetmap.org/reverse?format=json&lat='.$latitude. '&lon='.$longitude;
-            $res = $client->get($urlFinal, [
-                'verify' => false
-            ]);
-            $code = $res->getStatusCode();
-            if ($code === 200) {
-                $json = json_decode($res->getBody());
-                if (!isset($json->error))
-                {
-                    $ubicacion=$json->display_name;
-                }
+        // "Ver Dirección" del popup: misma dirección que el tiempo real (celdas de ~11 m,
+        // geocache primero y LocationIQ solo si no está).
+        $ubicacion = 'Ubicación no encontrada';
+        if (is_numeric($latitude) && is_numeric($longitude)) {
+            $direccion = app(LocationIqReverseGeocodeService::class)->reverseDireccionExacta($latitude, $longitude);
+            if ($direccion !== null) {
+                $ubicacion = $direccion;
             }
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'ubicacion' => $ubicacion,
-                'error' => $e->getMessage()
-            ]);
         }
-
 
         return response()->json([
             'success' => true,

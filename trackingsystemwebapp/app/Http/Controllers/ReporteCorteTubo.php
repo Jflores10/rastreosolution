@@ -13,6 +13,7 @@ use App\Ruta;
 use GuzzleHttp\Exception\GuzzleException;
 use GuzzleHttp\Client;
 use Excel;
+use App\Services\LocationIqReverseGeocodeService;
 
 class ReporteCorteTubo extends Controller
 {
@@ -56,33 +57,15 @@ class ReporteCorteTubo extends Controller
             {
                 $arrayUbicaciones = array();
                 $despachos = $despachos->get();
+                // Geocache primero, LocationIQ si no está; una instancia para toda la exportación.
+                $geo = app(LocationIqReverseGeocodeService::class);
 
                 foreach ($despachos as $documento) {
                     $ubicacion= '';
                     if(isset($documento["latitud_corte"]) && isset($documento["longitud_corte"])){
                         if($documento["latitud_corte"] != null && $documento["longitud_corte"] != null){
-                            $client = new Client();
-                            $url='https://maps.googleapis.com/maps/api/geocode/json?latlng='.$documento["latitud_corte"]. ",".$documento["longitud_corte"].'&key=AIzaSyDsCyqbckiGTpFsOzCxBcQRev1ykFIbDgE';
-                            // $res = $client->get($url);
-                            
-                            $res = $client->request('GET',$url );
-        
-                            //if($res->status)
-                            $json =json_decode($res->getBody()->getContents());
-                            $index=0;
-        
-                            if($json->status=="OK"){
-                                foreach($json->results as $item)
-                                {
-                                    if($index ==1)
-                                    {
-                                        $ubicacion=$item->formatted_address;
-                                    }
-                                    $index ++;
-                                }
-                            }else{
-                                $ubicacion='Error al traer ubicación';
-                            }
+                            $direccion = $geo->reverseDisplayName($documento["latitud_corte"], $documento["longitud_corte"]);
+                            $ubicacion = $direccion !== null ? $direccion : 'Error al traer ubicación';
 
                             array_push($arrayUbicaciones,(Object)['Ubicacion'=>$ubicacion,
                             'despacho'=>$documento]);

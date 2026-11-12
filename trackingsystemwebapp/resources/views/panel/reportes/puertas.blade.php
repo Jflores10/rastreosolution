@@ -5,51 +5,7 @@
 @endsection
 
 @section('content')
-<script>
-function selectUnidad_GEOCODE(latitud,longitud,id)
-        {
-            latitud=latitud.replace('\'','');
-            latitud=latitud.replace('\'','');
-            longitud=longitud.replace('\'','');
-            longitud=longitud.replace('\'','');
-
-            if((latitud != null && longitud != null)&& (latitud != '' && longitud != '')
-                && (latitud != 0 && longitud != 0)){
-                var request = new XMLHttpRequest();
-                request.onreadystatechange = function() {
-                    if (request.readyState === 4) {
-                        if (request.status === 200) {
-                            //document.body.className = 'ok';
-                            var obj = JSON.parse(request.responseText);
-                            
-                            if(obj.status=='OK'){
-                               // console.log(obj.results[1].formatted_address);
-                                //return (obj.results[1].formatted_address);
-                                document.getElementById(id).innerHTML=obj.results[1].formatted_address;
-                            }else{
-                                document.getElementById(id).innerHTML='Error al consultar ubicación';
-                                //return ();
-                            }
-
-                            //console.log(request.responseText);
-                        } else if (!isValid(this.response) && this.status == 0) {
-                        // document.body.className = 'error offline';
-                            document.getElementById(id).innerHTML='The computer appears to be offline.';
-                            //return 'Error al consultar ubicación';
-                            console.log("The computer appears to be offline.");                
-                        } else {
-                            return 'Error al consultar ubicación';
-                        // document.body.className = 'error';
-                        }
-                    }
-                };
-                
-                request.open("GET", "https://maps.googleapis.com/maps/api/geocode/json?latlng="+latitud+","+longitud+"&key=AIzaSyDsCyqbckiGTpFsOzCxBcQRev1ykFIbDgE" , true);
-                request.send(null);
-            }
-
-        }
-</script>
+@include('panel.reportes._direccion_geocache')
 
     <div class="page-title">
         <div class="title_left">

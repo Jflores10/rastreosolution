@@ -30,6 +30,15 @@ class LocationIqReverseGeocodeService
     const CACHE_PAUSA_LIMITE = 'locationiq_pausa_limite';
 
     /**
+     * Resultados de reverseDisplayName ya resueltos por esta instancia (clave = celda).
+     * En una exportación con una sola instancia, las filas repetidas no vuelven a
+     * consultar geocache ni LocationIQ.
+     *
+     * @var array
+     */
+    protected $memoria = array();
+
+    /**
      * @param float|int|string|null $lat
      * @param float|int|string|null $lng
      * @return string|null display_name / direccion o null
@@ -43,9 +52,20 @@ class LocationIqReverseGeocodeService
 
         list($latR, $lngR) = $rounded;
 
+        $clave = $latR.','.$lngR;
+        if (array_key_exists($clave, $this->memoria)) {
+            return $this->memoria[$clave];
+        }
+
         $cached = $this->findInCache($latR, $lngR);
         if ($cached !== null) {
-            return $cached;
+            return $this->memoria[$clave] = $cached;
+        }
+
+        // LocationIQ respondió 429 hace poco: no se insiste hasta que pase la pausa
+        // (no se memoriza, para reintentar cuando termine).
+        if (Cache::has(self::CACHE_PAUSA_LIMITE)) {
+            return null;
         }
 
         $direccion = $this->fetchFromLocationIq($latR, $lngR);
@@ -55,7 +75,7 @@ class LocationIqReverseGeocodeService
 
         $this->saveToCache($latR, $lngR, $direccion);
 
-        return $direccion;
+        return $this->memoria[$clave] = $direccion;
     }
 
     /**
@@ -193,6 +213,11 @@ class LocationIqReverseGeocodeService
         $lo = round((float) $lng, $decimales);
 
         if (!is_finite($la) || !is_finite($lo) || abs($la) > 90 || abs($lo) > 180) {
+            return null;
+        }
+
+        // 0,0 = GPS sin posición (punto en el océano): no se consulta.
+        if ($la == 0 && $lo == 0) {
             return null;
         }
 

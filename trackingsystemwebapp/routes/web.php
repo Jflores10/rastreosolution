@@ -258,7 +258,8 @@ Route::get('/reproductor', function () {
     return view('panel.reproductor');
 });
 
-Route::get('/geocoding/reverse', 'HomeController@reverseProxy')->name('geocoding.reverse');
+// Usa LocationIQ (cuota de pago): solo usuarios con sesión. Lo llaman home/homev2 y los reportes.
+Route::get('/geocoding/reverse', 'HomeController@reverseProxy')->name('geocoding.reverse')->middleware('auth');
 Route::post('/api/internal/push-by-unidad', 'InternalPushController@pushByUnidad');
 Route::post('/api/internal/finish-despacho', 'InternalDespachoController@finish');
 Route::post('/api/internal/registrar-direccion', 'InternalPushController@registrarDireccion');

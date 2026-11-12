@@ -2321,24 +2321,10 @@ class DespachoController extends Controller
         $ubicacion = '';
         $googlemaps = '';
         if (isset($despacho->latitud_corte) && isset($despacho->longitud_corte)) {
-            $client = new Client();
-            $url = 'https://maps.googleapis.com/maps/api/geocode/json?latlng=' . $despacho->latitud_corte . "," . $despacho->longitud_corte . '&key=AIzaSyDsCyqbckiGTpFsOzCxBcQRev1ykFIbDgE';
-            $res = $client->request('GET', $url);
-
-            $json = json_decode($res->getBody()->getContents());
-            $index = 0;
-            $ubicacion = '';
-
-            if ($json->status == "OK") {
-                foreach ($json->results as $item) {
-                    if ($index == 1) {
-                        $ubicacion = $item->formatted_address;
-                    }
-                    $index++;
-                }
-            } else {
-                $ubicacion = 'Error al traer ubicación';
-            }
+            // Geocache primero, LocationIQ si no está.
+            $direccion = app(\App\Services\LocationIqReverseGeocodeService::class)
+                ->reverseDisplayName($despacho->latitud_corte, $despacho->longitud_corte);
+            $ubicacion = $direccion !== null ? $direccion : 'Error al traer ubicación';
 
             $googlemaps = 'https://www.google.com.ec/maps/dir/' . $despacho->latitud_corte . ',' . $despacho->longitud_corte . '//@-2.18997,-79.894626,16z?hl=en';
         }

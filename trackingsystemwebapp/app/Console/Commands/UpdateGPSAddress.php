@@ -34,25 +34,15 @@ class UpdateGPSAddress extends Command
         parent::__construct();
     }
 
+    /** @var \App\Services\LocationIqReverseGeocodeService|null */
+    private $geo = null;
+
+    /** Geocache primero, LocationIQ si no está. null si no se pudo obtener. */
     private function getAddressFromGPS($latitude, $longitude) {
-        $client = new Client();
-        $urlFinal='https://nominatim.openstreetmap.org/reverse?format=json&lat='.$latitude. '&lon='.$longitude;
-        $res = $client->get($urlFinal, [
-            'verify' => false
-        ]);
-        $code = $res->getStatusCode();
-        if ($code === 200) {
-            $json = json_decode($res->getBody());
-            if (!isset($json->error))
-            {
-                $ubicacion=$json->display_name;
-                return $ubicacion;
-            }
-            else
-                return 'Error: ' . $json->error;
-        }else{
-            return null;
+        if ($this->geo === null) {
+            $this->geo = app(\App\Services\LocationIqReverseGeocodeService::class);
         }
+        return $this->geo->reverseDisplayName($latitude, $longitude);
     }
 
     /**

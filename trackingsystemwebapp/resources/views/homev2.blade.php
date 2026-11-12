@@ -2629,6 +2629,8 @@ function updateUnidadInList(unidad, opts) {
     }
 
     html += htmlContadorImgUnidadLi(estado, contadorImgDispDesdeUnidad(unidad));
+    // Dirección en tiempo real (solo cooperativas con la opción activa).
+    if (typeof dirTr !== 'undefined') html += dirTr.listaHtml(unidad);
 
     // Insertar o actualizar el LI sin alterar la interfaz externa
     var li = document.getElementById(unidad._id);
@@ -4243,8 +4245,9 @@ $("#velocimetro").myfunc({divFact:10});
     // DIRECCIÓN EN TIEMPO REAL (cooperativas con "Mostrar direcciones en tiempo real")
     // =========================
     // Misma lógica que UnitAddressService de la app. Para no afectar el SSE ni gastar
-    // LocationIQ: con cada trama solo se guarda la posición (sin red); las direcciones
-    // se piden únicamente para los popups abiertos, una dirección sirve mientras la
+    // LocationIQ: con cada trama solo se guarda la posición (sin red); la dirección se
+    // muestra en la fila de cada unidad del listado y solo se piden a la red las de las
+    // filas visibles (las demás muestran la última conocida); una dirección sirve mientras la
     // unidad no se aleje más de 20 m, celdas de ~11 m compartidas, máximo 2 peticiones
     // a la vez espaciadas 600 ms y con tiempo límite. El servidor usa primero geocache.
     @php
@@ -4301,11 +4304,42 @@ $("#velocimetro").myfunc({divFact:10});
             return v || (ultima[uid] && ultima[uid].texto) || 'Buscando dirección…';
         }
 
-        function popupHtml(uid) {
+        /**
+         * Línea de dirección para la fila de la unidad en el listado ('' si la
+         * cooperativa no tiene activas las direcciones en tiempo real).
+         */
+        function listaHtml(unidad) {
+            if (!unidad) return '';
+            var uid = normalizarUnidadId(unidad._id || unidad.unidad_id);
+            if (!registrar(uid, unidad)) return '';
             var span = document.createElement('span');
             span.textContent = textoInicial(uid);
-            return '<li class="dir-tr" data-uid="' + uid + '"><strong>Dirección:</strong><br>' +
-                '<span class="dir-wrap" data-k="dir">' + span.innerHTML + '</span></li>';
+            return '<div class="dir-tr" data-uid="' + uid + '" style="margin-top:4px;color:#555;font-size:12px;">' +
+                '<i class="fa fa-map-signs" title="Dirección" style="color:#1565C0"></i>&nbsp;' +
+                '<span data-k="dir">' + span.innerHTML + '</span></div>';
+        }
+
+        /** Fila visible en el listado (no oculta por filtro ni fuera del área con scroll). */
+        var scrollLista = null;
+        function visible(el) {
+            var r = el.getBoundingClientRect();
+            if (!r.height) return false;
+            var margen = 150;
+            if (r.bottom < -margen || r.top > window.innerHeight + margen) return false;
+            if (scrollLista === null) {
+                scrollLista = false;
+                var p = document.getElementById('ul_unidades');
+                while (p && p !== document.body) {
+                    var oy = window.getComputedStyle(p).overflowY;
+                    if (oy === 'auto' || oy === 'scroll') { scrollLista = p; break; }
+                    p = p.parentElement;
+                }
+            }
+            if (scrollLista) {
+                var c = scrollLista.getBoundingClientRect();
+                if (r.bottom < c.top - margen || r.top > c.bottom + margen) return false;
+            }
+            return true;
         }
 
         function pedir(uid, lat, lng) {
@@ -4375,7 +4409,10 @@ $("#velocimetro").myfunc({divFact:10});
             });
         }
 
-        /** Actualiza las direcciones de los popups abiertos con la posición más reciente. */
+        /**
+         * Actualiza la dirección de cada fila del listado con la posición más reciente.
+         * Solo las filas visibles piden a la red; las demás muestran lo ya conocido.
+         */
         function tick() {
             var filas = document.getElementsByClassName('dir-tr');
             esperadas = {};
@@ -4389,6 +4426,8 @@ $("#velocimetro").myfunc({divFact:10});
                 var texto;
                 if (v) {
                     texto = v;
+                } else if (!visible(el)) {
+                    texto = (ultima[uid] && ultima[uid].texto) || 'Buscando dirección…';
                 } else {
                     var k = key(pos.lat, pos.lng);
                     esperadas[k] = true;
@@ -4402,14 +4441,15 @@ $("#velocimetro").myfunc({divFact:10});
 
         if (COOPS.length) setInterval(tick, 1000);
 
-        return { registrar: registrar, popupHtml: popupHtml, tick: tick };
+        return { registrar: registrar, listaHtml: listaHtml, tick: tick };
     })();
 
     function setMarcadorUnidad(unidad, fecha_gps_, fecha_servidor_, _is) {
         registrarIconoUnidad(unidad);
         var uidEstadoDia = normalizarUnidadId(unidad._id || unidad.unidad_id);
         mergeEstadoDiaUnidad(uidEstadoDia, unidad);
-        var conDireccionTr = dirTr.registrar(uidEstadoDia, unidad);
+        // Solo guarda la posición para la dirección del listado (sin red).
+        dirTr.registrar(uidEstadoDia, unidad);
 
         // =========================
         // ESTADO
@@ -4509,7 +4549,6 @@ $("#velocimetro").myfunc({divFact:10});
                 `<li><strong>Estado:</strong> ${estado}</li>` +
                 `<li><strong>Fecha de servidor:</strong><br>${fecha}</li>` +
                 `<li><strong>Fecha de GPS:</strong><br>${fecha_gps}</li>` +
-                (conDireccionTr ? dirTr.popupHtml(uidEstadoDia) : '') +
                 '<li id="li_dir_actual" style="display:none"><strong>Dirección Actual:</strong><br>' +
                 '<span class="dir-wrap" id="dir_actual_marca"></span></li>' +
                 '</ul>' +
@@ -5146,6 +5185,7 @@ $("#velocimetro").myfunc({divFact:10});
                                 +'&nbsp&nbsp<font color="black">('+ruta_fecha+')</font>-<font color="red">('+ruta_hora_fin+')</font>&nbsp&nbsp<font color="black">'+ruta_conductor+'</font>'
                                 +((data.array_bitacora[i].bitacora !="")?('&nbsp&nbsp&nbsp|&nbsp&nbsp <img id="' + bId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_Bitacora(\''+ data.unidades[i]._id+'\');" width="20" height="20" src="'+((data.array_bitacora[i].bitacora=="R")?'/images/police.png"':((data.array_bitacora[i].bitacora=="M")?'/images/mantenimiento.png"':((data.array_bitacora[i].bitacora=="O")?'/images/other.png"':'#"')))+'/>'):'&nbsp&nbsp&nbsp')
                                 + htmlContadorImgUnidadLi('D', data.unidades[i])
+                                + ((typeof dirTr !== 'undefined') ? dirTr.listaHtml(data.unidades[i]) : '')
                                 +'</li>'
                         );
                         break;
@@ -5168,6 +5208,7 @@ $("#velocimetro").myfunc({divFact:10});
                                 +'&nbsp&nbsp<font color="black">('+ruta_fecha+')</font>-<font color="red">('+ruta_hora_fin+')</font>&nbsp&nbsp<font color="black">'+ruta_conductor+'</font>'
                                 +((data.array_bitacora[i].bitacora !="")?('&nbsp&nbsp&nbsp|&nbsp&nbsp <img id="' + bId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_Bitacora(\''+ data.unidades[i]._id+'\');" width="20" height="20" src="'+((data.array_bitacora[i].bitacora=="R")?'/images/police.png"':((data.array_bitacora[i].bitacora=="M")?'/images/mantenimiento.png"':((data.array_bitacora[i].bitacora=="O")?'/images/other.png"':'#"')))+'/>'):'&nbsp&nbsp&nbsp')
                                 + htmlContadorImgUnidadLi('E', data.unidades[i])
+                                + ((typeof dirTr !== 'undefined') ? dirTr.listaHtml(data.unidades[i]) : '')
                                 +'</li>'
                         );
                         break;
@@ -5189,6 +5230,7 @@ $("#velocimetro").myfunc({divFact:10});
                                 +'&nbsp&nbsp<font color="black">('+ruta_fecha+')</font>-<font color="red">('+ruta_hora_fin+')</font>&nbsp&nbsp<font color="black">'+ruta_conductor+'</font>'
                                 +((data.array_bitacora[i].bitacora !="")?('&nbsp&nbsp&nbsp|&nbsp&nbsp <img id="' + bId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_Bitacora(\''+ data.unidades[i]._id+'\');" width="20" height="20" src="'+((data.array_bitacora[i].bitacora=="R")?'/images/police.png"':((data.array_bitacora[i].bitacora=="M")?'/images/mantenimiento.png"':((data.array_bitacora[i].bitacora=="O")?'/images/other.png"':'#"')))+'/>'):'&nbsp&nbsp&nbsp')
                                 + htmlContadorImgUnidadLi('M', data.unidades[i])
+                                + ((typeof dirTr !== 'undefined') ? dirTr.listaHtml(data.unidades[i]) : '')
                                 +'</li>'
                         );
                         break;
@@ -5212,6 +5254,7 @@ $("#velocimetro").myfunc({divFact:10});
                                 +'&nbsp&nbsp<font color="black">('+ruta_fecha+')</font>-<font color="red">('+ruta_hora_fin+')</font>&nbsp&nbsp<font color="black">'+ruta_conductor+'</font>'
                                 +((data.array_bitacora[i].bitacora !="")?('&nbsp&nbsp&nbsp|&nbsp&nbsp <img id="' + bId + '" onclick="$(\'#progress\').modal(\'show\');selectUnidad_Bitacora(\''+ data.unidades[i]._id+'\');" width="20" height="20" src="'+((data.array_bitacora[i].bitacora=="R")?'/images/police.png"':((data.array_bitacora[i].bitacora=="M")?'/images/mantenimiento.png"':((data.array_bitacora[i].bitacora=="O")?'/images/other.png"':'#"')))+'/>'):'&nbsp&nbsp&nbsp')
                                 + htmlContadorImgUnidadLi(estado, data.unidades[i])
+                                + ((typeof dirTr !== 'undefined') ? dirTr.listaHtml(data.unidades[i]) : '')
                                 +'</li>'
                         );
                         break;
@@ -5444,7 +5487,6 @@ $("#velocimetro").myfunc({divFact:10});
                 });
             
                 mk.addListener('click', function () {
-                    google.maps.event.addListenerOnce(infoWindow, 'domready', dirTr.tick);
                     infoWindow.open(map, mk);
                     velocimetro_change(velocidad);
                 });
@@ -5501,7 +5543,6 @@ $("#velocimetro").myfunc({divFact:10});
             });
         
             mk.addListener('click', function () {
-                google.maps.event.addListenerOnce(infoWindow, 'domready', dirTr.tick);
                 infoWindow.open(map, mk);
                 velocimetro_change(velocidad);
             });

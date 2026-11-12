@@ -11,6 +11,7 @@ use App\Unidad;
 use GuzzleHttp\Exception\GuzzleException;
 use GuzzleHttp\Client;
 use Excel;
+use App\Services\LocationIqReverseGeocodeService;
 class ReportePuertasController extends Controller
 {
     public function index(Request $request) 
@@ -95,6 +96,16 @@ class ReportePuertasController extends Controller
 
                 $reportes = array();
                 $arrayRecorridos = array();
+                // Geocache primero, LocationIQ si no está; solo para las filas que van al Excel.
+                $geo = app(LocationIqReverseGeocodeService::class);
+                $ubicacionDe = function ($recorrido) use ($geo) {
+                    if (!isset($recorrido->latitud) || !isset($recorrido->longitud)
+                        || $recorrido->latitud == null || $recorrido->longitud == null) {
+                        return '';
+                    }
+                    $direccion = $geo->reverseDisplayName($recorrido->latitud, $recorrido->longitud);
+                    return $direccion !== null ? $direccion : 'Error al traer ubicación';
+                };
                 foreach ($unidades as $u) {
                     $mAbiertas = 0;
                     $mCerradas = 0;
@@ -109,34 +120,6 @@ class ReportePuertasController extends Controller
                             if ($ultimaFecha === null) 
                                 $ultimaFecha = new Carbon($recorrido->fecha_gps->toDateTime()->format('Y-m-d H:i:s'));
                                 
-                                $ubicacion= '';
-                                if(isset($recorrido->latitud) && isset($recorrido->longitud)){
-                                    if($recorrido->latitud != null && $recorrido->longitud != null){
-                                        $client = new Client();
-                                        $url='https://maps.googleapis.com/maps/api/geocode/json?latlng='.$recorrido->latitud. ",".$recorrido->longitud.'&key=AIzaSyDsCyqbckiGTpFsOzCxBcQRev1ykFIbDgE';
-                                        // $res = $client->get($url);
-                                        
-                                        $res = $client->request('GET',$url );
-                    
-                                        //if($res->status)
-                                        $json =json_decode($res->getBody()->getContents());
-                                        $index=0;
-                    
-                                        if($json->status=="OK"){
-                                            foreach($json->results as $item)
-                                            {
-                                                if($index ==1)
-                                                {
-                                                    $ubicacion=$item->formatted_address;
-                                                }
-                                                $index ++;
-                                            }
-                                        }else{
-                                            $ubicacion='Error al traer ubicación';
-                                        }
-                                        
-                                    }
-                                }
 
                             if ('Puerta abierta' === $recorrido->evento) {
                                 if ($puertaCerrada) {
@@ -145,7 +128,7 @@ class ReportePuertasController extends Controller
                                     $mCerradas+= $tiempo;
                                     $tf = $ultimaFecha->diff($f)->format('%h:%i:%s');
                                     array_push($arrayRecorridos, ['recorrido' => $recorrido, 'tiempo' => $tf, 'desde' => $f, 'hasta' => $ultimaFecha,
-                                    'ubicacion'=>$ubicacion]);
+                                    'ubicacion'=>$ubicacionDe($recorrido)]);
                                     $ultimaFecha = new Carbon($recorrido->fecha_gps->toDateTime()->format('Y-m-d H:i:s'));
                                 }
                                 $cantidadAbiertas++;
@@ -159,7 +142,7 @@ class ReportePuertasController extends Controller
                                     $mAbiertas+= $tiempo;
                                     $tf = $ultimaFecha->diff($f)->format('%h:%i:%s');
                                     array_push($arrayRecorridos, ['recorrido' => $recorrido, 'tiempo' => $tf, 'desde' => $f, 'hasta' => $ultimaFecha,
-                                    'ubicacion'=>$ubicacion]);
+                                    'ubicacion'=>$ubicacionDe($recorrido)]);
                                     $ultimaFecha = new Carbon($recorrido->fecha_gps->toDateTime()->format('Y-m-d H:i:s'));
                                 }
                                 $puertaCerrada = true;

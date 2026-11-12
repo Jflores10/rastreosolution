@@ -28,7 +28,71 @@ use App\Helper\FunctionsHelper;
 
 class HistoricoApiController extends Controller
 {
-    
+    /**
+     * Marca de tiempo para ordenar despachos del día por hora_programada (si existe) o por fecha.
+     */
+    private function despachoComparableParaOrdenVuelta($d)
+    {
+        $fechaBase = Carbon::today();
+        if (isset($d->fecha) && $d->fecha !== null) {
+            try {
+                if ($d->fecha instanceof \MongoDB\BSON\UTCDateTime) {
+                    $fechaBase = Carbon::createFromTimestampUTC($d->fecha->toDateTime()->getTimestamp());
+                } else {
+                    $fechaBase = Carbon::parse($d->fecha);
+                }
+            } catch (\Exception $e) {
+                $fechaBase = Carbon::today();
+            }
+        }
+
+        if (isset($d->hora_programada)) {
+            $hp = $d->hora_programada;
+            try {
+                if ($hp instanceof \MongoDB\BSON\UTCDateTime) {
+                    return Carbon::createFromTimestampUTC($hp->toDateTime()->getTimestamp())->getTimestamp();
+                }
+                if ($hp instanceof \DateTimeInterface) {
+                    return Carbon::parse($hp)->getTimestamp();
+                }
+                if (is_string($hp) && trim($hp) !== '') {
+                    $hps = trim($hp);
+                    if (preg_match('/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/', $hps, $m)) {
+                        return $fechaBase->copy()->startOfDay()->setTime((int) $m[1], (int) $m[2], isset($m[3]) ? (int) $m[3] : 0)->getTimestamp();
+                    }
+
+                    return Carbon::parse($hps)->getTimestamp();
+                }
+            } catch (\Exception $e) {
+                // continuar con fecha del despacho
+            }
+        }
+
+        try {
+            return $fechaBase->getTimestamp();
+        } catch (\Exception $e) {
+            return 0;
+        }
+    }
+
+    /**
+     * Lista ordenada de despachos (P|C) del día: 1-based vuelta actual = posición del primer P;
+     * si no hay P (todas C), devuelve la cantidad de vueltas completadas del día.
+     */
+    private function numVueltaDesdeDespachosOrdenados(array $ordenados)
+    {
+        if (count($ordenados) === 0) {
+            return 0;
+        }
+        foreach ($ordenados as $idx => $d) {
+            if (isset($d->estado) && $d->estado === 'P') {
+                return $idx + 1;
+            }
+        }
+
+        return count($ordenados);
+    }
+
     public function getUnidadesMeta(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -71,14 +135,19 @@ class HistoricoApiController extends Controller
             // Batch fetch ignicionf from unidades (single query, only the field we need)
             $unidadesIgnicion = Unidad::whereIn('_id', $toFetch)
                 ->where('estado', 'A')
-                ->get(['_id', 'ignicionf', 'tiempo_power', 'tiempo_power_update']);
+                ->get(['_id', 'ignicionf', 'tiempo_power', 'tiempo_power_update', 'tiempo_voltaje', 'tiempo_voltaje_update']);
             $ignicionByUnidad = [];
             $tiempoPowerByUnidad = [];
+            $tiempoVoltajeByUnidad = [];
             foreach ($unidadesIgnicion as $u) {
                 $ignicionByUnidad[(string)$u->_id] = $u->ignicionf ?? null;
                 $tiempoPowerByUnidad[(string)$u->_id] = [
                     'tiempo_power'        => $u->tiempo_power ?? 0,
                     'tiempo_power_update' => $u->tiempo_power_update ?? null,
+                ];
+                $tiempoVoltajeByUnidad[(string)$u->_id] = [
+                    'tiempo_voltaje'        => $u->tiempo_voltaje ?? 0,
+                    'tiempo_voltaje_update' => $u->tiempo_voltaje_update ?? null,
                 ];
             }
 
@@ -89,6 +158,37 @@ class HistoricoApiController extends Controller
                 ->where('fecha', '>=', $desde)
                 ->where('fecha', '<=', $hasta)
                 ->get();
+
+            // Despachos del día P|C (excluye I) para número de vuelta ordenado por hora_programada
+            $despachosVueltas = Despacho::whereIn('unidad_id', $toFetch)
+                ->where('fecha', '>=', $desde)
+                ->where('fecha', '<=', $hasta)
+                ->whereIn('estado', array('P', 'C'))
+                ->get();
+
+            $vueltasPorUnidad = array();
+            foreach ($toFetch as $uidKey) {
+                $vueltasPorUnidad[(string) $uidKey] = array();
+            }
+            foreach ($despachosVueltas as $dv) {
+                $uidv = (string) $dv->unidad_id;
+                if (!array_key_exists($uidv, $vueltasPorUnidad)) {
+                    continue;
+                }
+                $vueltasPorUnidad[$uidv][] = $dv;
+            }
+            foreach ($vueltasPorUnidad as $uidv => $listaV) {
+                usort($listaV, function ($a, $b) {
+                    $ta = $this->despachoComparableParaOrdenVuelta($a);
+                    $tb = $this->despachoComparableParaOrdenVuelta($b);
+                    if ($ta === $tb) {
+                        return 0;
+                    }
+
+                    return ($ta < $tb) ? -1 : 1;
+                });
+                $vueltasPorUnidad[$uidv] = $listaV;
+            }
 
             // For bitacoras, apply visibility rules similar to BitacoraController
             $user = Auth::user();
@@ -197,6 +297,32 @@ class HistoricoApiController extends Controller
                 $meta['tiempo_power']        = $tp;
                 $meta['tiempo_power_update'] = $tpu_iso;
                 $meta['bolt_activo']         = $bolt_activo;
+
+                $tvData = $tiempoVoltajeByUnidad[$uid] ?? ['tiempo_voltaje' => 0, 'tiempo_voltaje_update' => null];
+                $tv  = (float)($tvData['tiempo_voltaje'] ?? 0);
+                $tvu = $tvData['tiempo_voltaje_update'];
+
+                $tvu_iso = null;
+                if ($tvu !== null) {
+                    try {
+                        $tvu_iso = $tvu->toDateTime()->format('Y-m-d\TH:i:s\Z');
+                    } catch (\Exception $e) { $tvu_iso = null; }
+                }
+
+                $voltaje_activo = false;
+                if ($tv > 0 && $tvu_iso !== null) {
+                    $nowTv = new DateTime('now', new \DateTimeZone('UTC'));
+                    $fechaUpdateTv = new DateTime($tvu_iso, new \DateTimeZone('UTC'));
+                    $horasTranscurridasTv = ($nowTv->getTimestamp() - $fechaUpdateTv->getTimestamp()) / 3600;
+                    $voltaje_activo = ($tv - $horasTranscurridasTv) > 0;
+                }
+
+                $meta['tiempo_voltaje']        = $tv;
+                $meta['tiempo_voltaje_update'] = $tvu_iso;
+                $meta['voltaje_activo']        = $voltaje_activo;
+
+                $listaVueltas = isset($vueltasPorUnidad[(string) $uid]) ? $vueltasPorUnidad[(string) $uid] : array();
+                $meta['numvuelta'] = $this->numVueltaDesdeDespachosOrdenados($listaVueltas);
 
                 // cache short-term (even an empty object to avoid hot loops)
                 try {
