@@ -2322,6 +2322,27 @@ function onClientConnected(socket) {
           return false;
         };
 
+        /**
+         * contador_inicial / contador_diario de un sensor GTDAT.
+         * Reinicio automático (equivale al botón "Reiniciar Contador", solo para este sensor):
+         * si la lectura es menor que contador_inicial, el contador del equipo llegó a su
+         * máximo (MAX_COUNT / MAX_COUNT_C2) y volvió a empezar (o el equipo se reinició).
+         * Antes el diario quedaba fuera de rango y el sensor se congelaba hasta el reinicio
+         * manual; ahora se re-basa: inicial = lectura actual y diario = 0.
+         */
+        const calcularContadorGtdat = function (lectura, inicialBd, imeiUnidad, tag) {
+          if (inicialBd == null || !(inicialBd > 0)) {
+            return { contador_inicial: lectura, contador_diario: 0, reinicioAuto: false };
+          }
+          const diario = lectura - inicialBd;
+          if (diario >= 0) {
+            return { contador_inicial: inicialBd, contador_diario: diario, reinicioAuto: false };
+          }
+          // Las tramas BUFF (antiguas) no se guardan: no se registra reinicio por ellas.
+          if (!isBuffMessage) console.log(`[contador] Reinicio automático GTDAT imei=${imeiUnidad} sensor=${tag} lectura=${lectura} < inicial=${inicialBd} (máximo ${limiteHardwarePorTag(tag)})`);
+          return { contador_inicial: lectura, contador_diario: 0, reinicioAuto: true };
+        };
+
         let puerta1, puerta2, puerta3;
 
         if (data[flag] === '>PC' || data[flag] === '>PC3') {
@@ -2344,21 +2365,16 @@ function onClientConnected(socket) {
                 if (data[deviceName] === 'P2') { contador_diario_anterior = document.contador_diario_sensor_2; contador_inicial = document.contador_inicial_sensor_2; }
                 if (data[deviceName] === 'P3') { contador_diario_anterior = document.contador_diario_sensor_3; contador_inicial = document.contador_inicial_sensor_3; }
 
-                if (contador_inicial != null) {
-                  if (contador_inicial > 0) {
-                    contador_diario = (toInteger(data[count])) - contador_inicial;
-                    if (contador_diario < 0) {
-                      if (data[deviceName] === 'P1') contador_diario = (toInteger(data[count])) + MAX_COUNT;
-                      else contador_diario = (toInteger(data[count])) + MAX_COUNT_C2;
-                    }
-                  } else contador_inicial = toInteger(data[count]);
-                } else contador_inicial = toInteger(data[count]);
+                const calc = calcularContadorGtdat(lecturaContador, contador_inicial, document.imei, tag);
+                contador_inicial = calc.contador_inicial;
+                contador_diario = calc.contador_diario;
 
                 if (contadorDiarioFueraDeRango(contador_diario, tag)) {
                   return;
                 }
 
-                if (contador_diario >= contador_diario_anterior && !isBuffMessage) {
+                // Tras un reinicio automático el diario vuelve a 0 (menor que el anterior): se guarda igual.
+                if ((calc.reinicioAuto || contador_diario >= contador_diario_anterior) && !isBuffMessage) {
                   if (data[deviceName] === 'P1') {
                     dbTrackingSystem.collection('unidads').updateOne({ _id: document._id }, {
                       $set: { contador_total: toInteger(data[count]), contador_diario: contador_diario, contador_inicial: contador_inicial, is_atm: (message.includes(ATM) ? 1 : 0), evento: data[status] }
@@ -2421,24 +2437,16 @@ function onClientConnected(socket) {
                     return;
                   }
 
-                  let contador_diario = 0;
-                  let contador_inicial = document.contador_inicial;
-
-                  if (document.contador_inicial != null) {
-                    if (document.contador_inicial > 0) {
-                      contador_diario = (toInteger(data[count])) - document.contador_inicial;
-                      if (contador_diario < 0) {
-                        if (data[deviceName] === 'C1') contador_diario = (toInteger(data[count])) + MAX_COUNT;
-                        else contador_diario = (toInteger(data[count])) + MAX_COUNT_C2;
-                      }
-                    } else contador_inicial = toInteger(data[count]);
-                  } else contador_inicial = toInteger(data[count]);
+                  const calc = calcularContadorGtdat(lecturaContador, document.contador_inicial, document.imei, tag);
+                  const contador_inicial = calc.contador_inicial;
+                  const contador_diario = calc.contador_diario;
 
                   if (contadorDiarioFueraDeRango(contador_diario, tag)) {
                     return;
                   }
 
-                  if (contador_diario >= document.contador_diario && !isBuffMessage) {
+                  // Tras un reinicio automático el diario vuelve a 0 (menor que el anterior): se guarda igual.
+                  if ((calc.reinicioAuto || contador_diario >= document.contador_diario) && !isBuffMessage) {
                     dbTrackingSystem.collection('unidads').updateOne({ _id: document._id }, {
                       $set: { contador_total: toInteger(data[count]), contador_diario: contador_diario, contador_inicial: contador_inicial, is_atm: (message.includes(ATM) ? 1 : 0), evento: data[status] }
                     }, { writeConcern: { w: 0 } });
