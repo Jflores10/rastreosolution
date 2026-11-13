@@ -4261,6 +4261,9 @@ $("#velocimetro").myfunc({divFact:10});
         var URL = '{{ url("/unidades/direccion-tiempo-real") }}';
         var RADIO_M = 20, REINTENTO_MS = 10000, TIEMPO_LIMITE_MS = 12000, ESPACIADO_MS = 600, MAX_SIMULTANEAS = 2;
         var cache = {}, fallidas = {}, ultima = {}, posicion = {}, enCurso = {}, pendientes = [], esperadas = {};
+        // Color del ícono según el origen: azul = geocache, rojo = LocationIQ.
+        var COLOR_FUENTE = { geocache: '#1565C0', locationiq: '#C62828' };
+        function colorFuente(f) { return COLOR_FUENTE[f] || COLOR_FUENTE.geocache; }
         var activas = 0, ultimoInicio = 0, espera = null;
 
         function key(lat, lng) { return lat.toFixed(4) + ',' + lng.toFixed(4); }
@@ -4286,7 +4289,8 @@ $("#velocimetro").myfunc({divFact:10});
             if (isNaN(lat) || isNaN(lng)) return false;
             posicion[uid] = { lat: lat, lng: lng };
             var s = unidad.direccion_texto != null ? String(unidad.direccion_texto).trim() : '';
-            if (s && s !== 'null') ultima[uid] = { lat: lat, lng: lng, texto: s };
+            // direccion_texto viene ya guardada con la unidad (no de LocationIQ en esta petición).
+            if (s && s !== 'null') ultima[uid] = { lat: lat, lng: lng, texto: s, fuente: 'geocache' };
             return true;
         }
 
@@ -4294,9 +4298,11 @@ $("#velocimetro").myfunc({divFact:10});
             var u = ultima[uid];
             if (u && distancia(u.lat, u.lng, lat, lng) <= RADIO_M) return u.texto;
             var c = cache[key(lat, lng)];
-            if (c != null) { ultima[uid] = { lat: lat, lng: lng, texto: c }; return c; }
+            if (c != null) { ultima[uid] = { lat: lat, lng: lng, texto: c.texto, fuente: c.fuente }; return c.texto; }
             return null;
         }
+
+        function fuenteDe(uid) { return ultima[uid] ? ultima[uid].fuente : null; }
 
         function textoInicial(uid) {
             var p = posicion[uid];
@@ -4315,7 +4321,7 @@ $("#velocimetro").myfunc({divFact:10});
             var span = document.createElement('span');
             span.textContent = textoInicial(uid);
             return '<div class="dir-tr" data-uid="' + uid + '" style="margin-top:4px;color:#555;font-size:12px;">' +
-                '<i class="fa fa-map-signs" title="Dirección" style="color:#1565C0"></i>&nbsp;' +
+                '<i class="fa fa-map-signs" data-k="ico" title="Dirección" style="color:' + colorFuente(fuenteDe(uid)) + '"></i>&nbsp;' +
                 '<span data-k="dir">' + span.innerHTML + '</span></div>';
         }
 
@@ -4397,7 +4403,10 @@ $("#velocimetro").myfunc({divFact:10});
                 data: { _id: p.uid, latitud: p.lat, longitud: p.lng }
             }).done(function (r) {
                 var dir = r && !r.error && r.direccion ? String(r.direccion) : null;
-                if (dir) { cache[p.key] = dir; delete fallidas[p.key]; }
+                if (dir) {
+                    cache[p.key] = { texto: dir, fuente: r.fuente === 'locationiq' ? 'locationiq' : 'geocache' };
+                    delete fallidas[p.key];
+                }
                 else fallidas[p.key] = Date.now();
             }).fail(function () {
                 fallidas[p.key] = Date.now();
@@ -4436,6 +4445,13 @@ $("#velocimetro").myfunc({divFact:10});
                     texto = (ultima[uid] && ultima[uid].texto) || (falla ? 'Dirección no disponible' : 'Buscando dirección…');
                 }
                 if (span.textContent !== texto) span.textContent = texto;
+                var ico = el.querySelector('[data-k="ico"]');
+                var color = colorFuente(fuenteDe(uid));
+                if (ico && ico.getAttribute('data-color') !== color) {
+                    ico.setAttribute('data-color', color);
+                    ico.style.color = color;
+                    ico.title = color === COLOR_FUENTE.locationiq ? 'Dirección (LocationIQ)' : 'Dirección (geocache)';
+                }
             }
         }
 

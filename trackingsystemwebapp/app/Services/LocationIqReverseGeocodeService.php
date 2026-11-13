@@ -39,6 +39,14 @@ class LocationIqReverseGeocodeService
     protected $memoria = array();
 
     /**
+     * Origen de la última dirección devuelta por reverseDireccionExacta:
+     * 'geocache', 'locationiq' o null si no hubo dirección.
+     *
+     * @var string|null
+     */
+    public $ultimaFuente = null;
+
+    /**
      * @param float|int|string|null $lat
      * @param float|int|string|null $lng
      * @return string|null display_name / direccion o null
@@ -88,6 +96,7 @@ class LocationIqReverseGeocodeService
      */
     public function reverseDireccionExacta($lat, $lng)
     {
+        $this->ultimaFuente = null;
         $rounded = $this->roundCoordinates($lat, $lng, self::COORD_DECIMALS_EXACTA);
         if ($rounded === null) {
             return null;
@@ -97,6 +106,7 @@ class LocationIqReverseGeocodeService
 
         $cached = $this->direccionExactaCacheada($lat, $lng);
         if ($cached !== null) {
+            $this->ultimaFuente = 'geocache';
             return $cached;
         }
 
@@ -112,6 +122,7 @@ class LocationIqReverseGeocodeService
         }
 
         $this->saveToCache($latR, $lngR, $direccion, self::COORD_DECIMALS_EXACTA);
+        $this->ultimaFuente = 'locationiq';
 
         return $direccion;
     }

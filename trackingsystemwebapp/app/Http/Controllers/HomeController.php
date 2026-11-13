@@ -632,13 +632,15 @@ class HomeController extends Controller
             return response()->json(array('error' => true, 'message' => 'Direcciones en tiempo real no activas para esta cooperativa.'), 403);
         }
 
-        $direccion = app(LocationIqReverseGeocodeService::class)->reverseDireccionExacta($lat, $lng);
+        $geo = app(LocationIqReverseGeocodeService::class);
+        $direccion = $geo->reverseDireccionExacta($lat, $lng);
         if ($direccion === null) {
             // LocationIQ no respondió (429, timeout, sin datos): el navegador reintenta.
             return response()->json(array('error' => true, 'message' => 'Dirección no disponible por el momento.'), 503);
         }
 
-        return response()->json(array('error' => false, 'direccion' => $direccion));
+        // fuente: 'geocache' o 'locationiq' (homev2 colorea el ícono según el origen).
+        return response()->json(array('error' => false, 'direccion' => $direccion, 'fuente' => $geo->ultimaFuente));
     }
 
     public function getAddress(Request $request){
