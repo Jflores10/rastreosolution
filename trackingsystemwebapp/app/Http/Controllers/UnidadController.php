@@ -262,6 +262,11 @@ class UnidadController extends Controller
            $unidad->contador_total_sensor_3=0;
            $unidad->contador_diario_sensor_3=0;
 
+           // Acumulado del diario guardado por el parseador al reiniciarse el total (llegó al máximo).
+           $unidad->contador_diario_base=0;
+           $unidad->contador_diario_base_sensor_2=0;
+           $unidad->contador_diario_base_sensor_3=0;
+
            $unidad->save();
 
         }

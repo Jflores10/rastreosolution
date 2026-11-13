@@ -2322,25 +2322,54 @@ function onClientConnected(socket) {
           return false;
         };
 
+        // El total se considera "llegó al máximo y volvió a empezar" si la lectura baja y el
+        // total anterior estaba a esta distancia o menos del máximo del sensor.
+        const MARGEN_HASTA_MAXIMO = 1000;
+
         /**
-         * contador_inicial / contador_diario de un sensor GTDAT.
-         * Reinicio automático (equivale al botón "Reiniciar Contador", solo para este sensor):
-         * si la lectura es menor que contador_inicial, el contador del equipo llegó a su
-         * máximo (MAX_COUNT / MAX_COUNT_C2) y volvió a empezar (o el equipo se reinició).
-         * Antes el diario quedaba fuera de rango y el sensor se congelaba hasta el reinicio
-         * manual; ahora se re-basa: inicial = lectura actual y diario = 0.
+         * contador_inicial / contador_diario / contador_diario_base de un sensor GTDAT.
+         *   diario = base + (lectura - inicial)
+         * base es 0 hasta el primer reinicio automático, así que el cálculo normal es el de
+         * siempre (diario = lectura - inicial).
+         * Reinicio automático del TOTAL: cuando el contador del equipo llega a su máximo
+         * (MAX_COUNT / MAX_COUNT_C2) y vuelve a empezar, el total pasa a la lectura nueva,
+         * inicial = lectura nueva (nunca negativo) y base guarda el diario acumulado, que
+         * continúa desde donde estaba.
+         * Devuelve null cuando la trama no se guarda (mismo caso que antes: lectura menor
+         * que inicial sin haber llegado al máximo).
          */
-        const calcularContadorGtdat = function (lectura, inicialBd, imeiUnidad, tag) {
-          if (inicialBd == null || !(inicialBd > 0)) {
-            return { contador_inicial: lectura, contador_diario: 0, reinicioAuto: false };
+        const calcularContadorGtdat = function (lectura, inicialBd, totalBd, diarioBd, baseBd, imeiUnidad, tag) {
+          let inicial = (inicialBd == null || inicialBd === '') ? null : toInteger(inicialBd);
+          const diarioPrev = toInteger(diarioBd) || 0;
+          const totalPrev = toInteger(totalBd) || 0;
+          let base = Math.max(0, toInteger(baseBd) || 0);
+          const lim = limiteHardwarePorTag(tag);
+
+          // inicial negativo (versión previa de este ajuste): pasar el acumulado a base.
+          if (inicial !== null && inicial < 0) {
+            base = diarioPrev;
+            inicial = totalPrev > 0 ? totalPrev : lectura;
           }
-          const diario = lectura - inicialBd;
-          if (diario >= 0) {
-            return { contador_inicial: inicialBd, contador_diario: diario, reinicioAuto: false };
+
+          // Sin línea base, o tras "Reiniciar Contador" (inicial y diario en 0): como siempre,
+          // empieza en la lectura actual.
+          if (inicial === null || (inicial === 0 && (base === 0 || diarioPrev === 0))) {
+            return { contador_inicial: lectura, contador_diario: 0, contador_diario_base: 0, reinicioAuto: false };
           }
-          // Las tramas BUFF (antiguas) no se guardan: no se registra reinicio por ellas.
-          if (!isBuffMessage) console.log(`[contador] Reinicio automático GTDAT imei=${imeiUnidad} sensor=${tag} lectura=${lectura} < inicial=${inicialBd} (máximo ${limiteHardwarePorTag(tag)})`);
-          return { contador_inicial: lectura, contador_diario: 0, reinicioAuto: true };
+
+          // El total llegó al máximo y volvió a empezar: reinicia el total, el diario continúa.
+          if (totalPrev > 0 && lectura < totalPrev && lim - totalPrev <= MARGEN_HASTA_MAXIMO) {
+            // + lo que faltaba para el máximo (contado entre la última trama y el reinicio).
+            const diario = diarioPrev + (lim - totalPrev) + lectura;
+            // Las tramas BUFF (antiguas) no se guardan: no se registra reinicio por ellas.
+            if (!isBuffMessage) console.log(`[contador] Reinicio automático de total GTDAT imei=${imeiUnidad} sensor=${tag} total ${totalPrev} -> ${lectura} (máximo ${lim}); diario ${diarioPrev} -> ${diario}`);
+            return { contador_inicial: lectura, contador_diario: diario, contador_diario_base: diario, reinicioAuto: true };
+          }
+
+          // Cálculo de siempre, sobre la parte posterior al último reinicio.
+          const parcial = lectura - inicial;
+          if (contadorDiarioFueraDeRango(parcial, tag)) return null;
+          return { contador_inicial: inicial, contador_diario: base + parcial, contador_diario_base: base, reinicioAuto: false };
         };
 
         let puerta1, puerta2, puerta3;
@@ -2365,29 +2394,32 @@ function onClientConnected(socket) {
                 if (data[deviceName] === 'P2') { contador_diario_anterior = document.contador_diario_sensor_2; contador_inicial = document.contador_inicial_sensor_2; }
                 if (data[deviceName] === 'P3') { contador_diario_anterior = document.contador_diario_sensor_3; contador_inicial = document.contador_inicial_sensor_3; }
 
-                const calc = calcularContadorGtdat(lecturaContador, contador_inicial, document.imei, tag);
+                let total_anterior = document.contador_total;
+                let base_anterior = document.contador_diario_base;
+                if (tag === 'P2') { total_anterior = document.contador_total_sensor_2; base_anterior = document.contador_diario_base_sensor_2; }
+                if (tag === 'P3') { total_anterior = document.contador_total_sensor_3; base_anterior = document.contador_diario_base_sensor_3; }
+
+                const calc = calcularContadorGtdat(lecturaContador, contador_inicial, total_anterior, contador_diario_anterior, base_anterior, document.imei, tag);
+                if (!calc) return;
                 contador_inicial = calc.contador_inicial;
                 contador_diario = calc.contador_diario;
+                const contador_diario_base = calc.contador_diario_base;
 
-                if (contadorDiarioFueraDeRango(contador_diario, tag)) {
-                  return;
-                }
-
-                // Tras un reinicio automático el diario vuelve a 0 (menor que el anterior): se guarda igual.
+                // Tras un reinicio automático del total se guarda siempre (el diario continúa).
                 if ((calc.reinicioAuto || contador_diario >= contador_diario_anterior) && !isBuffMessage) {
                   if (data[deviceName] === 'P1') {
                     dbTrackingSystem.collection('unidads').updateOne({ _id: document._id }, {
-                      $set: { contador_total: toInteger(data[count]), contador_diario: contador_diario, contador_inicial: contador_inicial, is_atm: (message.includes(ATM) ? 1 : 0), evento: data[status] }
+                      $set: { contador_total: toInteger(data[count]), contador_diario: contador_diario, contador_inicial: contador_inicial, contador_diario_base: contador_diario_base, is_atm: (message.includes(ATM) ? 1 : 0), evento: data[status] }
                     }, { writeConcern: { w: 0 } });
                   }
                   if (data[deviceName] === 'P2') {
                     dbTrackingSystem.collection('unidads').updateOne({ _id: document._id }, {
-                      $set: { contador_total_sensor_2: toInteger(data[count]), contador_diario_sensor_2: contador_diario, contador_inicial_sensor_2: contador_inicial, is_atm: (message.includes(ATM) ? 1 : 0), evento: data[status] }
+                      $set: { contador_total_sensor_2: toInteger(data[count]), contador_diario_sensor_2: contador_diario, contador_inicial_sensor_2: contador_inicial, contador_diario_base_sensor_2: contador_diario_base, is_atm: (message.includes(ATM) ? 1 : 0), evento: data[status] }
                     }, { writeConcern: { w: 0 } });
                   }
                   if (data[deviceName] === 'P3') {
                     dbTrackingSystem.collection('unidads').updateOne({ _id: document._id }, {
-                      $set: { contador_total_sensor_3: toInteger(data[count]), contador_diario_sensor_3: contador_diario, contador_inicial_sensor_3: contador_inicial, is_atm: (message.includes(ATM) ? 1 : 0), evento: data[status] }
+                      $set: { contador_total_sensor_3: toInteger(data[count]), contador_diario_sensor_3: contador_diario, contador_inicial_sensor_3: contador_inicial, contador_diario_base_sensor_3: contador_diario_base, is_atm: (message.includes(ATM) ? 1 : 0), evento: data[status] }
                     }, { writeConcern: { w: 0 } });
                   }
                 }
@@ -2437,18 +2469,15 @@ function onClientConnected(socket) {
                     return;
                   }
 
-                  const calc = calcularContadorGtdat(lecturaContador, document.contador_inicial, document.imei, tag);
+                  const calc = calcularContadorGtdat(lecturaContador, document.contador_inicial, document.contador_total, document.contador_diario, document.contador_diario_base, document.imei, tag);
+                  if (!calc) return;
                   const contador_inicial = calc.contador_inicial;
                   const contador_diario = calc.contador_diario;
 
-                  if (contadorDiarioFueraDeRango(contador_diario, tag)) {
-                    return;
-                  }
-
-                  // Tras un reinicio automático el diario vuelve a 0 (menor que el anterior): se guarda igual.
+                  // Tras un reinicio automático del total se guarda siempre (el diario continúa).
                   if ((calc.reinicioAuto || contador_diario >= document.contador_diario) && !isBuffMessage) {
                     dbTrackingSystem.collection('unidads').updateOne({ _id: document._id }, {
-                      $set: { contador_total: toInteger(data[count]), contador_diario: contador_diario, contador_inicial: contador_inicial, is_atm: (message.includes(ATM) ? 1 : 0), evento: data[status] }
+                      $set: { contador_total: toInteger(data[count]), contador_diario: contador_diario, contador_inicial: contador_inicial, contador_diario_base: calc.contador_diario_base, is_atm: (message.includes(ATM) ? 1 : 0), evento: data[status] }
                     }, { writeConcern: { w: 0 } });
                   }
                 }
@@ -3652,33 +3681,72 @@ function onClientConnected(socket) {
           return (current - prev) > MAX_INCREMENTO;
         };
 
-        /** Calcula contador_inicial y contador_diario para un sensor GTDTT. */
-        const calcularContadoresSensorGtdtt = function (countActual, contadorInicialBd, esReinicioManual) {
+        // El total se considera "llegó al máximo y volvió a empezar" si la lectura baja y el
+        // total anterior estaba a esta distancia o menos de MAX_COUNT.
+        const MARGEN_HASTA_MAXIMO_GTDTT = 1000;
+
+        /**
+         * Calcula contador_inicial, contador_diario y contador_diario_base para un sensor GTDTT.
+         *   diario = base + (lectura - inicial)
+         * base es 0 hasta el primer reinicio automático: el cálculo normal es el de siempre.
+         * Reinicio automático del TOTAL: si el contador del equipo llegó a MAX_COUNT y volvió
+         * a empezar, inicial = lectura nueva (nunca negativo) y base guarda el diario
+         * acumulado, que continúa desde donde estaba.
+         */
+        const calcularContadoresSensorGtdtt = function (countActual, contadorInicialBd, esReinicioManual, prevTotal, prevDiario, prevBase) {
           let contador_inicial = contadorInicialBd;
           let contador_diario = 0;
 
           if (esReinicioManual) {
-            return { contador_inicial: countActual, contador_diario: 0 };
+            return { contador_inicial: countActual, contador_diario: 0, contador_diario_base: 0 };
           }
 
-          if (contador_inicial != null && contador_inicial !== '') {
-            if (toInteger(contador_inicial) > 0) {
-              if (countActual < toInteger(contador_inicial)) {
+          const totalAnt = toInteger(prevTotal) || 0;
+          const diarioAnt = toInteger(prevDiario) || 0;
+          let base = Math.max(0, toInteger(prevBase) || 0);
+          const tieneInicial = contador_inicial != null && contador_inicial !== '';
+
+          // inicial negativo (versión previa de este ajuste): pasar el acumulado a base.
+          if (tieneInicial && toInteger(contador_inicial) < 0) {
+            base = diarioAnt;
+            contador_inicial = totalAnt > 0 ? totalAnt : countActual;
+          }
+
+          // El total llegó al máximo y volvió a empezar: reinicia el total, el diario continúa.
+          if (tieneInicial && totalAnt > 0 && countActual < totalAnt && MAX_COUNT - totalAnt <= MARGEN_HASTA_MAXIMO_GTDTT) {
+            // + lo que faltaba para el máximo (contado entre la última trama y el reinicio).
+            contador_diario = diarioAnt + (MAX_COUNT - totalAnt) + countActual;
+            if (!isBuffMessage) console.log(`[contador] Reinicio automático de total GTDTT imei=${data[imei]} total ${totalAnt} -> ${countActual} (máximo ${MAX_COUNT}); diario ${diarioAnt} -> ${contador_diario}`);
+            return { contador_inicial: countActual, contador_diario, contador_diario_base: contador_diario };
+          }
+
+          // Cálculo de siempre (inicial 0 con base > 0 = reinicio automático con lectura 0).
+          if (tieneInicial) {
+            if (toInteger(contador_inicial) > 0 || (toInteger(contador_inicial) === 0 && base > 0)) {
+              if (countActual < toInteger(contador_inicial) && base > 0) {
+                // Tras un reinicio automático del total: no se pierde el diario acumulado.
+                contador_inicial = countActual;
+                contador_diario = diarioAnt;
+                base = diarioAnt;
+              } else if (countActual < toInteger(contador_inicial)) {
                 // Rollover o reinicio del equipo: total GPS menor que baseline del día.
                 contador_inicial = countActual;
                 contador_diario = 0;
+                base = 0;
               } else {
-                contador_diario = countActual - toInteger(contador_inicial);
+                contador_diario = base + countActual - toInteger(contador_inicial);
                 if (contador_diario < 0) contador_diario = countActual + MAX_COUNT;
               }
             } else {
               contador_inicial = countActual;
+              base = 0;
             }
           } else {
             contador_inicial = countActual;
+            base = 0;
           }
 
-          return { contador_inicial, contador_diario };
+          return { contador_inicial, contador_diario, contador_diario_base: base };
         };
 
         /**
@@ -3688,25 +3756,26 @@ function onClientConnected(socket) {
          * - Reinicio manual / salto imposible / diario incoherente: se re-basa al valor nuevo de la trama.
          * - Normal: total = valor nuevo, inicial se mantiene, diario = valor nuevo - inicial.
          */
-        const resolverSensorGtdtt = function (countActual, prevTotal, prevInicial, prevDiario, esReinicioManual) {
+        const resolverSensorGtdtt = function (countActual, prevTotal, prevInicial, prevDiario, esReinicioManual, prevBase) {
           const anteriorTotal = toInteger(prevTotal);
 
           // Lectura fuera de rango: no escribimos basura, mantenemos lo que ya había en este sensor.
           if (lecturaGtdttInvalida(countActual)) {
-            return { total: anteriorTotal, inicial: toInteger(prevInicial), diario: toInteger(prevDiario) };
+            return { total: anteriorTotal, inicial: toInteger(prevInicial), diario: toInteger(prevDiario), base: Math.max(0, toInteger(prevBase) || 0) };
           }
 
           // Reinicio manual o salto imposible: re-basar al valor que trae la trama.
           if (esReinicioManual || saltoImposible(anteriorTotal, countActual, esReinicioManual)) {
-            return { total: countActual, inicial: countActual, diario: 0 };
+            return { total: countActual, inicial: countActual, diario: 0, base: 0 };
           }
 
-          const calc = calcularContadoresSensorGtdtt(countActual, prevInicial, false);
-          if (diarioGtdttFueraDeRango(calc.contador_diario)) {
+          const calc = calcularContadoresSensorGtdtt(countActual, prevInicial, false, prevTotal, prevDiario, prevBase);
+          // Rango sobre la parte posterior al último reinicio automático (sin base es lo de siempre).
+          if (diarioGtdttFueraDeRango(calc.contador_diario - calc.contador_diario_base)) {
             // Diario incoherente respecto al baseline previo: re-basar.
-            return { total: countActual, inicial: countActual, diario: 0 };
+            return { total: countActual, inicial: countActual, diario: 0, base: 0 };
           }
-          return { total: countActual, inicial: calc.contador_inicial, diario: calc.contador_diario };
+          return { total: countActual, inicial: calc.contador_inicial, diario: calc.contador_diario, base: calc.contador_diario_base };
         };
 
         dbTrackingSystem.collection('unidads').findOne({ imei: data[imei], estado: 'A' }, function (err, document) {
@@ -3767,9 +3836,9 @@ function onClientConnected(socket) {
 
               // Cada sensor se resuelve por separado: un problema en uno no bloquea a los otros
               // ni descarta el mensaje. En salto imposible se re-basa al valor nuevo de la trama.
-              const s1 = resolverSensorGtdtt(count_sensor_1, document.contador_total, document.contador_inicial, document.contador_diario, reinicioS1);
-              const s2 = resolverSensorGtdtt(count_sensor_2, document.contador_total_sensor_2, document.contador_inicial_sensor_2, document.contador_diario_sensor_2, reinicioS2);
-              const s3 = resolverSensorGtdtt(count_sensor_3, document.contador_total_sensor_3, document.contador_inicial_sensor_3, document.contador_diario_sensor_3, reinicioS3);
+              const s1 = resolverSensorGtdtt(count_sensor_1, document.contador_total, document.contador_inicial, document.contador_diario, reinicioS1, document.contador_diario_base);
+              const s2 = resolverSensorGtdtt(count_sensor_2, document.contador_total_sensor_2, document.contador_inicial_sensor_2, document.contador_diario_sensor_2, reinicioS2, document.contador_diario_base_sensor_2);
+              const s3 = resolverSensorGtdtt(count_sensor_3, document.contador_total_sensor_3, document.contador_inicial_sensor_3, document.contador_diario_sensor_3, reinicioS3, document.contador_diario_base_sensor_3);
 
              
 
@@ -3784,6 +3853,9 @@ function onClientConnected(socket) {
                   contador_total_sensor_3: s3.total,
                   contador_diario_sensor_3: s3.diario,
                   contador_inicial_sensor_3: s3.inicial,
+                  contador_diario_base: s1.base,
+                  contador_diario_base_sensor_2: s2.base,
+                  contador_diario_base_sensor_3: s3.base,
                   is_atm: (message.includes(ATM) ? 1 : 0)
                 }
               }, { writeConcern: { w: 0 } });
