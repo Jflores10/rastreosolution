@@ -108,11 +108,13 @@ Route::group(['middleware' => ['auth', 'usuario']], function () {
         Route::get('/{id}/finish', 'DespachoController@end');
         Route::post('/{id}/cancel', 'DespachoController@cancel');
         Route::post('/{id}/revertirCancelacion', 'DespachoController@revertirCancelacion');
+        Route::post('/{id}/pdf-whatsapp', 'DespachoController@guardarPdfWhatsapp');
         Route::get('/error/{id}', 'DespachoController@errorATM');
         Route::post('/reenviarATM/{id}', 'DespachoController@reenviarATM');
         Route::get('/frecuencias', 'DespachoController@frecuencias');
         Route::get('/cancelados', 'DespachoController@canceladas');
         Route::get('/search', 'DespachoController@find');
+        Route::get('/reporte-pdf', 'DespachoController@reportePdf');
         Route::post('/cortetubo', 'DespachoController@cortetubo');
         Route::post('/{id}/despachomasivo', 'DespachoController@despachomasivo');
         Route::post('/despachosfinalizar', 'ReporteController@finalizarTodo');
@@ -215,6 +217,7 @@ Route::group(['middleware' => ['auth', 'usuario']], function () {
 
     Route::match(['get', 'post'], 'historico-atm', 'HistoricoController@historicoAtm');
     Route::post('historico/unidades-meta', 'HistoricoController@getUnidadesMeta');
+    Route::post('historico/exportar', 'HistoricoController@exportarHistorico');
     Route::post('historico/unidades-estadisticas', 'HistoricoController@getUnidadesCooperativaEstadisticas');
     Route::post('historico/estadisticas-contador-diario', 'HistoricoController@getEstadisticasContadorDiario');
    

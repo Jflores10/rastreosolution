@@ -231,6 +231,13 @@ Cooperativas
                         </label>
                     </div>
                 </div>
+                <div class="form-group">
+                    <div class="checkbox">
+                        <label>
+                            <input type="checkbox" name="despacho_whatsapp" id="despacho_whatsapp" /> Habilitar envío de despacho por WhatsApp
+                        </label>
+                    </div>
+                </div>
               <div id="div-multa-tubo" class="form-group">
                   <label for="multa_tubo" class="col-sm-2 control-label">Multa tubo</label>
                   <div class="col-sm-10">

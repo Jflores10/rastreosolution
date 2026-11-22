@@ -25,6 +25,7 @@ use GuzzleHttp\Client;
 use App\Bitacora;
 use Excel;
 use App\Helper\FunctionsHelper;
+use PDF;
 
 
 
@@ -429,9 +430,27 @@ class DespachoController extends Controller
                 'descripcion',
                 'asc'
             )->where('_id', $user->cooperativa_id)->get();
+        $despachos = $this->consultaBusquedaDespachos($request->input('unidades'), $desde, $hasta, $tipo,
+            $request->input('errorAtm'));
+
+        $despachos = $despachos->paginate(60);
+        $despachos->setPath($request->fullUrl());
+        return view('panel.despachos', [
+            'cooperativas' => $cooperativas, 'despachos' => $despachos,
+            'tipo' => $tipo, 'desde' => $desde1, 'hasta' => $hasta1, 'cooperativa_search' => $request->input('cooperativa'),
+            'unidades_search' => $request->input('unidades'), 'filtro_fecha' => $request->input('filtro_fecha')
+        ]);
+    }
+
+    /**
+     * Consulta de la búsqueda de despachos (tabla de la pestaña y su reporte PDF).
+     * $tipo: L = En Curso, F = Culminados, C = Cancelados. $desde/$hasta ya en UTC.
+     */
+    private function consultaBusquedaDespachos($unidades, $desde, $hasta, $tipo, $errorAtm)
+    {
         $despachos = Despacho::orderBy('fecha', 'desc')->whereIn(
             'unidad_id',
-            $request->input('unidades')
+            $unidades
         )->where('fecha', '>=', $desde)->where('fecha', '<=', $hasta);
         if ($tipo === 'L')
             $despachos->where('estado', 'P');
@@ -442,17 +461,70 @@ class DespachoController extends Controller
                 $despachos->where('estado', 'I');
         }
 
-        if ($request->input('errorAtm')) {
+        if ($errorAtm) {
             $despachos->where('error_ATM', 'exists', true);
         }
 
-        $despachos = $despachos->paginate(60);
-        $despachos->setPath($request->fullUrl());
-        return view('panel.despachos', [
-            'cooperativas' => $cooperativas, 'despachos' => $despachos,
-            'tipo' => $tipo, 'desde' => $desde1, 'hasta' => $hasta1, 'cooperativa_search' => $request->input('cooperativa'),
-            'unidades_search' => $request->input('unidades'), 'filtro_fecha' => $request->input('filtro_fecha')
+        return $despachos;
+    }
+
+    /**
+     * Reporte PDF de la pestaña actual (En Curso, Culminados o Cancelados) con los mismos
+     * filtros de la búsqueda, incluyendo todos los registros (no solo la página visible).
+     * Si no se eligen unidades, incluye todas las de la cooperativa.
+     */
+    public function reportePdf(Request $request)
+    {
+        $this->validate($request, [
+            'desde' => 'required|date',
+            'hasta' => 'required|date',
+            'tipo' => 'required|in:L,F,C',
+            'cooperativa' => 'required|exists:cooperativas,_id',
+            'unidades' => 'nullable|array'
         ]);
+        set_time_limit(0);
+        ini_set('memory_limit', '1024M');
+
+        $user = Auth::user();
+        $cooperativaId = $request->input('cooperativa');
+        if ($user->tipo_usuario->valor != 1 && (string) $user->cooperativa_id !== (string) $cooperativaId)
+            abort(403, 'No posee permisos para esta cooperativa.');
+        $cooperativa = Cooperativa::findOrFail($cooperativaId);
+
+        // Solo unidades de la cooperativa (y, para el despachador especial, las suyas).
+        $unidadesCoop = Unidad::where('cooperativa_id', $cooperativaId)->pluck('_id')
+            ->map(function ($id) { return (string) $id; })->all();
+        if ($user->tipo_usuario->valor == 5)
+            $unidadesCoop = array_values(array_intersect($unidadesCoop,
+                array_map('strval', (array) $user->unidades_pertenecientes)));
+        $unidades = $request->input('unidades');
+        $unidades = empty($unidades) ? $unidadesCoop :
+            array_values(array_intersect(array_map('strval', $unidades), $unidadesCoop));
+
+        $desde = new Carbon($request->input('desde') . ' 00:00:00');
+        $hasta = new Carbon($request->input('hasta') . ' 23:59:59');
+        date_sub($desde, date_interval_create_from_date_string('5 hours'));
+        date_sub($hasta, date_interval_create_from_date_string('5 hours'));
+        $tipo = $request->input('tipo');
+
+        $despachos = $this->consultaBusquedaDespachos($unidades, $desde, $hasta, $tipo, $request->input('errorAtm'))
+            ->with('unidad', 'ruta', 'conductor', 'creador', 'user_end', 'user_recalculo')
+            ->get();
+
+        $titulos = ['L' => 'En Curso', 'F' => 'Culminados', 'C' => 'Cancelados'];
+        $nombre = 'Despachos_' . str_replace(' ', '_', $titulos[$tipo]) . '_' . $request->input('desde') .
+            '_' . $request->input('hasta') . '.pdf';
+
+        return PDF::loadView('panel.despachos.reporte-pdf', [
+            'despachos' => $despachos,
+            'tipo' => $tipo,
+            'titulo' => $titulos[$tipo],
+            'cooperativa' => $cooperativa,
+            'desde' => $request->input('desde'),
+            'hasta' => $request->input('hasta'),
+            'soloErrorAtm' => (bool) $request->input('errorAtm'),
+            'usuario' => $user->name
+        ])->setPaper('a4', 'landscape')->stream($nombre);
     }
 
     public function end_v2(Request $request, $id)
@@ -2466,6 +2538,46 @@ class DespachoController extends Controller
             $cooperativa
         )->where('estado', 'A')->get());
     }
+    /**
+     * Guarda el PDF del ticket de un despacho (generado en el navegador, igual al de
+     * Imprimir) para enviarlo por WhatsApp al conductor. Devuelve un enlace público con
+     * nombre aleatorio. Solo para cooperativas con "Habilitar envío de despacho por WhatsApp".
+     * Los PDF de más de 7 días se eliminan.
+     */
+    public function guardarPdfWhatsapp(Request $request, $id)
+    {
+        $despacho = Despacho::with('unidad.cooperativa')->where('_id', $id)->first();
+        if ($despacho == null || $despacho->unidad == null || $despacho->unidad->cooperativa == null)
+            return response()->json(['error' => true, 'message' => 'Despacho no encontrado.'], 404);
+
+        $cooperativa = $despacho->unidad->cooperativa;
+        $user = Auth::user();
+        if ($user->tipo_usuario->valor != 1 && (string) $user->cooperativa_id !== (string) $cooperativa->_id)
+            return response()->json(['error' => true, 'message' => 'No autorizado.'], 403);
+        if ($cooperativa->despacho_whatsapp !== true)
+            return response()->json(['error' => true, 'message' => 'Envío por WhatsApp no habilitado para esta cooperativa.'], 403);
+
+        $archivo = $request->file('pdf');
+        if ($archivo == null || !$archivo->isValid() || $archivo->getSize() > 5 * 1024 * 1024
+            || strtolower($archivo->getClientMimeType()) !== 'application/pdf'
+            || file_get_contents($archivo->getRealPath(), false, null, 0, 4) !== '%PDF')
+            return response()->json(['error' => true, 'message' => 'Archivo PDF inválido.'], 422);
+
+        $carpeta = public_path('despachos_pdf');
+        if (!is_dir($carpeta))
+            mkdir($carpeta, 0755, true);
+
+        foreach (glob($carpeta . DIRECTORY_SEPARATOR . '*.pdf') as $anterior) {
+            if (is_file($anterior) && filemtime($anterior) < time() - 7 * 24 * 3600)
+                @unlink($anterior);
+        }
+
+        $nombre = str_random(40) . '.pdf';
+        $archivo->move($carpeta, $nombre);
+
+        return response()->json(['error' => false, 'url' => asset('despachos_pdf/' . $nombre)]);
+    }
+
     public function getRutas($cooperativa)
     {
         $coop = Cooperativa::findOrFail($cooperativa);

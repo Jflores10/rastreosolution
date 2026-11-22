@@ -71,6 +71,7 @@ class CooperativaController extends Controller
                 'distancia_haversine' => $request->input('distancia_haversine') == 'true'?true:false,
                 'trafico' => $request->input('trafico') == 'true'?true:false,
                 'direcciones_tiempo_real' => $request->input('direcciones_tiempo_real') == 'true'?true:false,
+                'despacho_whatsapp' => $request->input('despacho_whatsapp') == 'true'?true:false,
 
                 'tolerancia_buffer_minutos' => $request->input('tolerancia_buffer_minutos')
             ]);
@@ -127,6 +128,7 @@ class CooperativaController extends Controller
             $cooperativa->distancia_haversine = $request->input('distancia_haversine') == 'true'?true:false;
             $cooperativa->trafico = $request->input('trafico') == 'true'?true:false;
             $cooperativa->direcciones_tiempo_real = $request->input('direcciones_tiempo_real') == 'true'?true:false;
+            $cooperativa->despacho_whatsapp = $request->input('despacho_whatsapp') == 'true'?true:false;
 
             $cooperativa->dia_inicial = $request->input('dia_inicial');
             $cooperativa->hora_sync = $request->input('hora_sync');

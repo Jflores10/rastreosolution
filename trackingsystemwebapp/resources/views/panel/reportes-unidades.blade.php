@@ -84,8 +84,8 @@ Reportes
                         <i class="fa fa-file"></i> Exportar <span class="caret"></span>
                     </button>
                     <ul class="dropdown-menu">
-                        <li><button id="btn-pdf" type="button"><i class="fa fa-file-pdf-o"></i> XML</button></li>
-                        <li><button id="btn-excel" type="button"><i class="fa fa-file-excel-o"></i> Excel</button></li>
+                        <li><button id="btn-pdf" type="button" onclick="exportar('xml');"><i class="fa fa-file-code-o"></i> XML</button></li>
+                        <li><button id="btn-excel" type="button" onclick="exportar('excel');"><i class="fa fa-file-excel-o"></i> Excel</button></li>
                     </ul>
                 </div>
             </form>
@@ -101,33 +101,17 @@ Reportes
 
 @section('scripts')
     <script src="{{ asset('js/historico.js') }}"></script>
-    <script type="text/javascript" src="{{ asset('js/toExport/tableExport.js') }}" ></script>
-    <script type="text/javascript" src="{{ asset('js/toExport/jquery.base64.js') }}" ></script>
-    <script type="text/javascript" src="{{ asset('js/toExport/html2canvas.js') }}" ></script>
-    <script type="text/javascript" src="{{ asset('js/toExport/jspdf/jspdf.js') }}" ></script>
-    <script type="text/javascript" src="{{ asset('js/toExport/jspdf/libs/sprintf.js') }}" ></script>
-    <script type="text/javascript" src="{{ asset('js/toExport/jspdf/libs/base64.js') }}" ></script>
 
     <script type="text/javascript">
-        $(document).ready(function(e)
+        // Exporta en el servidor TODO el histórico que cumple los filtros (no solo lo visible).
+        function exportar(formato)
         {
-           $("#btn-pdf").click(function(e)
-           {
-               $("#tr-registros-historicos").tableExport({
-                   type: 'xml',
-                   escape : false
-
-               });
-           });
-            $("#btn-excel").click(function(e)
-            {
-                $("#tr-registros-historicos").tableExport({
-                    type: 'excel',
-                    escape : false
-                });
-            });
-        });
-
+            @if(isset($cooperativa))
+                exportarHistorico('{{url('/historico/exportar')}}', '{{$cooperativa->_id}}', '2', formato);
+            @else
+                exportarHistorico('{{url('/historico/exportar')}}', null, '1', formato);
+            @endif
+        }
     </script>
     <script>
         var id_cooperativa=null;

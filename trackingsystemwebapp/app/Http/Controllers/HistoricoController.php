@@ -1131,259 +1131,25 @@ class HistoricoController extends Controller
                 return response()->json(['error' => true, 'messages' => $validator->errors()]);
             else
                 {
-                $ini = new Carbon($request->input('fecha_inicio'));
-                $fin = new Carbon($request->input('fecha_fin'));
-                date_add($ini, date_interval_create_from_date_string('5 hours'));
-                date_add($fin, date_interval_create_from_date_string('5 hours'));
-                $ini = new UTCDateTime(($ini->getTimestamp()) * 1000);
-                $fin = new UTCDateTime(($fin->getTimestamp()) * 1000);
+                // 50 por página por defecto; la tabla con scroll virtual pide páginas de hasta 200.
+                $porPagina = (int) $request->input('per_page', 50);
+                if ($porPagina < 1 || $porPagina > 200)
+                    $porPagina = 50;
 
-                 $cursor= Recorrido::where("unidad_id", new ObjectID($request->input('unidad_id')))
-                        ->where('fecha_gps','>=',$ini)
-                        ->where('fecha_gps','<=',$fin);
-                        
-                $ev = $request->input('evento');
-                if ($ev != 'T')
-                    $cursor->where('tipo', $ev);
-
-                // Origen: 1 = BUFF (trama atrasada), 0 = tiempo real, T = todos
-                $origen = $request->input('origen', 'T');
-                if ($origen === '1' || $origen === '0')
-                    $cursor->where('isbuff', (int)$origen);
-
-                   /// $cursor->where('tipo', "GTDAT");
-
-                $cursor = $cursor->paginate(50);
+                $cursor = $this->consultaHistorico($request)->paginate($porPagina);
+                $contexto = $this->contextoFilasHistorico();
                 $array_historico = [];
-                $evento='--';
-                $ubicacion= '';
-                $angulo_traducido='-';
-                $tipo='';
-                $geoService = app(LocationIqReverseGeocodeService::class);
-                $direccionPorCoordenadas = array();
+                $tipo = '';
                 foreach ($cursor as $documento) {
-                        $fecha = $documento["fecha"];
-                        $voltaje = (isset($documento["voltaje"])?$documento["voltaje"]:'-');
-                        $fecha = $fecha->toDateTime();
-                        $tipo=$documento['tipo'];
-                        //date_sub($fecha, date_interval_create_from_date_string('10 hours'));
-
-                        $time = $fecha->format(DATE_RSS);
-                        $dateInUTC = $time;
-                        $time = strtotime($dateInUTC . ' UTC');
-                        $fecha = date("d-m-Y H:i:s", $time);
-
-                        $fecha_gps = $documento["fecha_gps"];
-                        $fecha_gps = $fecha_gps->toDateTime();
-                        date_sub($fecha_gps, date_interval_create_from_date_string('5 hours'));
-                        $time = $fecha_gps->format(DATE_RSS);
-                        $dateInUTC = $time;
-                        $time = strtotime($dateInUTC . ' UTC');
-                        $fecha_gps = date("d-m-Y H:i:s", $time);
-                        $evento=(String)$documento["pdi"] ." PDI " .$request->input('cooperativa_id')." COOP ".(String)new ObjectID($request->input('unidad_id'))." UNIDAD";
-
-                        if ($documento["tipo"] == 'GTGEO') {
-
-              						if(Auth::user()->tipo_usuario->valor==1)
-                           {
-                             /*if (($documento["tipo"] === 'GPRMC' && $documento["evento"] >= 38))
-                             {
-                               $residuo = $documento["evento"] % 2;
-                               if ($residuo != 0)
-                                $documento["evento"] = $documento["evento"] - 1;
-                               $punto_control = PuntoControl::
-                                  where('cooperativa_id', $request->input('cooperativa_id'))
-                                      ->where('pdi', (String)$documento["evento"])->first();
-                             }
-                             else*/
-                             $punto_control = PuntoControl::
-                                where('cooperativa_id', $request->input('cooperativa_id'))
-                                    ->where('pdi', (String)$documento["pdi"])->first();
-                           }
-              						else
-              							 {
-                               /*if (($documento["tipo"] === 'GPRMC' && $documento["evento"] >= 38))
-                               {
-                                 $residuo = $documento["evento"] % 2;
-                                 if ($residuo != 0)
-                                  $documento["evento"] = $documento["evento"] - 1;
-                                $punto_control = PuntoControl::
-                                                 where('cooperativa_id', Auth::user()->cooperativa_id)
-                                       ->where('pdi', (String)$documento["evento"])->first();
-                               }
-                               else*/
-                               $punto_control = PuntoControl::
-                                                where('cooperativa_id', Auth::user()->cooperativa_id)
-                                      ->where('pdi', (String)$documento["pdi"])->first();
-                             }
-
-
-                          if($punto_control!=null)
-                          {
-                              if ($documento["entrada"] == 1)
-                                  $evento = "Entrada al punto de control " . $punto_control->descripcion;
-                              else
-                                  $evento = "Salida del punto de control " . $punto_control->descripcion;
-                          }
-                        }
-                        else
-                        {
-                            if ($documento['tipo'] == 'GTVIRTUAL') {
-                                $puntoVirtual = PuntoVirtual::find($documento['punto_virtual_id']);
-                                if (isset($puntoVirtual))
-                                    $evento = 'Aproximación a punto virtual ' . $puntoVirtual->descripcion;
-                            }
-                            else if($documento["tipo"] == 'GTFRI' || ($documento["tipo"] === 'GPRMC'))
-                            {                               
-
-                                //if ($ev != 'T'){
-                                    
-                               // }
-                                switch ($documento["evento"])
-                                {
-                                    case 'N<':
-                                        $evento = 'Reporte por tiempo (móvil encendido) ';
-                                        break;
-                                    case 'D<':
-                                        $evento = 'Reporte por tiempo (móvil apagado) ';
-                                        break;
-                                    case 'E<':
-                                        $evento = 'Reporte por tiempo (encerado manual) ';
-                                        break;
-                                    case 'I<':
-                                        $evento = 'Reporte por tiempo (conexión de energía) ';
-                                        break;
-                                    case 13:
-                                      $evento = 'Reporte por tiempo (móvil apagado) ';
-                                      break;
-                                    case 14:
-                                      $evento = 'Móvil encendido ';
-                                      break;
-                                    case 15:
-                                      $evento ='Reporte móvil apagado  ';
-                                      break;
-                                    case 16:
-                                      $evento = 'Distancia por distancia ';
-                                      break;
-                                    case 18:
-                                      $evento = 'Reporte por tiempo (móvil encendido) ';
-                                      break;
-                                    default :
-                                        $evento = 'Reporte por tiempo (móvil encendido) ';
-                                        break;
-                                }
-                            }else{
-                                if($documento["tipo"]=='GTDIS'){
-                                    $evento=$documento["evento"];
-                                }else if ($documento["tipo"]=='GTIGF'){
-                                    $evento='Desconexion de dispositivo';
-                                }else if ($documento["tipo"]=='GTIGN'){
-                                    $evento='Conexion de dispositivo';
-                                }else if ($documento["tipo"]=='GTSOS'){
-                                    $evento='Botón de pánico activado';
-                                }
-                            }
-                        }
-                        if($documento["angulo"]==0)
-                            $angulo_traducido="N";
-                        else
-                        {
-                            if($documento["angulo"]!=null)
-                            {
-                                if($documento["angulo"]>90 && $documento["angulo"]<180)
-                                    $angulo_traducido="SE";
-                                else
-                                {
-                                    if($documento["angulo"]>180 && $documento["angulo"]<270)
-                                        $angulo_traducido="SO";
-                                    else
-                                    {
-                                        if($documento["angulo"]>270 && $documento["angulo"]<360)
-                                            $angulo_traducido="NO";
-                                        else
-                                        {
-                                            if($documento["angulo"]>0 && $documento["angulo"]<90)
-                                                $angulo_traducido="NE";
-                                            else
-                                            {
-                                                if($documento["angulo"]==90)
-                                                    $angulo_traducido="E";
-                                                else
-                                                {
-                                                    if($documento["angulo"]==270)
-                                                        $angulo_traducido="O";
-                                                    else
-                                                    {
-                                                      if($documento["angulo"]==180)
-                                                         $angulo_traducido="S";
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        $ubicacion = '';
-                        $latitud_geo = '--';
-                        $longitud_geo = '--';
-                        if (isset($documento['latitud']) && isset($documento['longitud'])
-                            && $documento['latitud'] != null && $documento['longitud'] != null
-                            && $documento['latitud'] !== '' && $documento['longitud'] !== ''
-                            && is_numeric($documento['latitud']) && is_numeric($documento['longitud'])) {
-                            $latitud_geo = $documento['latitud'];
-                            $longitud_geo = $documento['longitud'];
-                            $latF = (float) $documento['latitud'];
-                            $lngF = (float) $documento['longitud'];
-                            $rounded = $geoService->roundCoordinates($latF, $lngF);
-                            if ($rounded !== null) {
-                                $coordCacheKey = $rounded[0] . ',' . $rounded[1];
-                                if (!array_key_exists($coordCacheKey, $direccionPorCoordenadas)) {
-                                    $direccionPorCoordenadas[$coordCacheKey] = $geoService->reverseDisplayName($latF, $lngF);
-                                }
-                                $dir = $direccionPorCoordenadas[$coordCacheKey];
-                                if ($dir !== null && trim((string) $dir) !== '') {
-                                    $ubicacion = trim((string) $dir);
-                                    $gpsPrev = isset($documento['gps_address']) ? trim((string) $documento['gps_address']) : '';
-                                    if ($gpsPrev === '') {
-                                        $documento['gps_address'] = $ubicacion;
-                                        $documento->save();
-                                    }
-                                }
-                            }
-                        }
-                        if ($ubicacion === '') {
-                            $gpsGuardada = isset($documento['gps_address']) ? trim((string) $documento['gps_address']) : '';
-                            $ubicacion = ($gpsGuardada !== '') ? $gpsGuardada : 'Ubicacion no disponible';
-                        }
-                        array_push($array_historico, (Object)[
-                            '_id' => $documento["_id"],
-                            'fecha_servidor' => $fecha,
-                            'fecha_gps' => $fecha_gps,
-                            'evento' => $evento,
-                            'tipo_marcacion' => isset($documento['origen'])?$documento['origen']:"-",
-                            'isbuff' => isset($documento['isbuff']) ? (int)$documento['isbuff'] : null,
-                            'ubicacion' => $ubicacion,
-                            'angulo' => $angulo_traducido,
-                            'latitud'=>$latitud_geo,
-                            'longitud'=>$longitud_geo,
-                            'mileage' => ($documento["mileage"] != null) ? $documento["mileage"] . ' km/h' : '0 km/h',
-                            'odometro' => ($documento["odometro"] != null) ? $documento["odometro"] . ' km' : '-',
-                            'velocidad' => ($documento["velocidad"]!= null) ? $documento["velocidad"] . ' km/h' : '0 km/h',
-                        	'voltaje' => $voltaje,
-                            'contador_total' => ($documento["contador_total"] != null) ? $documento["contador_total"] : '-']);
-
-                        $evento='-';
-                        $ubicacion='-';
-                        $angulo_traducido='-';
-                    }
+                    $tipo = $documento['tipo'];
+                    array_push($array_historico, $this->filaHistorico($documento, $request, $contexto));
+                }
 
                 return response()->json([
                 'error' => false,
                 'array_historico' => $array_historico,
                 'tipo'=>$tipo,
-                'ev'=>$ev ,  
+                'ev'=>$request->input('evento') ,
                 'total' => $cursor->total(),
                 'per_page' => $cursor->perPage(),
                 'current_page' => $cursor->currentPage(),
@@ -1591,6 +1357,296 @@ class HistoricoController extends Controller
     /**
      * Listado ligero de unidades activas para la pantalla de estadísticas (sin despachos ni bitácoras).
      */
+    /**
+     * Consulta del histórico de una unidad con los filtros de la pantalla (fechas, evento y
+     * origen), ordenada por fecha GPS. La usan la tabla (paginada) y la exportación (completa).
+     */
+    private function consultaHistorico(Request $request)
+    {
+        $ini = new Carbon($request->input('fecha_inicio'));
+        $fin = new Carbon($request->input('fecha_fin'));
+        date_add($ini, date_interval_create_from_date_string('5 hours'));
+        date_add($fin, date_interval_create_from_date_string('5 hours'));
+        $ini = new UTCDateTime(($ini->getTimestamp()) * 1000);
+        $fin = new UTCDateTime(($fin->getTimestamp()) * 1000);
+
+        $cursor = Recorrido::where("unidad_id", new ObjectID($request->input('unidad_id')))
+            ->where('fecha_gps', '>=', $ini)
+            ->where('fecha_gps', '<=', $fin);
+
+        $ev = $request->input('evento');
+        if ($ev != 'T')
+            $cursor->where('tipo', $ev);
+
+        // Origen: 1 = BUFF (trama atrasada), 0 = tiempo real, T = todos
+        $origen = $request->input('origen', 'T');
+        if ($origen === '1' || $origen === '0')
+            $cursor->where('isbuff', (int) $origen);
+
+        return $cursor->orderBy('fecha_gps', 'asc');
+    }
+
+    /** Memorias compartidas al armar varias filas: direcciones por coordenada y puntos de control. */
+    private function contextoFilasHistorico()
+    {
+        return (object) [
+            'geoService' => app(LocationIqReverseGeocodeService::class),
+            'direcciones' => [],
+            'puntosControl' => [],
+        ];
+    }
+
+    private function puntoControlPorPdi($cooperativaId, $pdi, $contexto)
+    {
+        $clave = (string) $cooperativaId . '|' . (string) $pdi;
+        if (!array_key_exists($clave, $contexto->puntosControl)) {
+            $contexto->puntosControl[$clave] = PuntoControl::where('cooperativa_id', $cooperativaId)
+                ->where('pdi', (String) $pdi)->first();
+        }
+        return $contexto->puntosControl[$clave];
+    }
+
+    /**
+     * Una fila del histórico tal como se muestra en la pantalla: fechas en hora local, evento
+     * traducido, punto cardinal y ubicación (geocache y, si no está, LocationIQ).
+     */
+    private function filaHistorico($documento, Request $request, $contexto)
+    {
+        $angulo_traducido = '-';
+
+        $fecha = $documento["fecha"];
+        $voltaje = (isset($documento["voltaje"]) ? $documento["voltaje"] : '-');
+        $fecha = $fecha->toDateTime();
+
+        $time = $fecha->format(DATE_RSS);
+        $dateInUTC = $time;
+        $time = strtotime($dateInUTC . ' UTC');
+        $fecha = date("d-m-Y H:i:s", $time);
+
+        $fecha_gps = $documento["fecha_gps"];
+        $fecha_gps = $fecha_gps->toDateTime();
+        date_sub($fecha_gps, date_interval_create_from_date_string('5 hours'));
+        $time = $fecha_gps->format(DATE_RSS);
+        $dateInUTC = $time;
+        $time = strtotime($dateInUTC . ' UTC');
+        $fecha_gps = date("d-m-Y H:i:s", $time);
+        $evento = (String) $documento["pdi"] . " PDI " . $request->input('cooperativa_id') . " COOP " . (String) new ObjectID($request->input('unidad_id')) . " UNIDAD";
+
+        if ($documento["tipo"] == 'GTGEO') {
+            $cooperativaPuntos = (Auth::user()->tipo_usuario->valor == 1)
+                ? $request->input('cooperativa_id')
+                : Auth::user()->cooperativa_id;
+            $punto_control = $this->puntoControlPorPdi($cooperativaPuntos, $documento["pdi"], $contexto);
+
+            if ($punto_control != null) {
+                if ($documento["entrada"] == 1)
+                    $evento = "Entrada al punto de control " . $punto_control->descripcion;
+                else
+                    $evento = "Salida del punto de control " . $punto_control->descripcion;
+            }
+        } else {
+            if ($documento['tipo'] == 'GTVIRTUAL') {
+                $puntoVirtual = PuntoVirtual::find($documento['punto_virtual_id']);
+                if (isset($puntoVirtual))
+                    $evento = 'Aproximación a punto virtual ' . $puntoVirtual->descripcion;
+            } else if ($documento["tipo"] == 'GTFRI' || ($documento["tipo"] === 'GPRMC')) {
+                switch ($documento["evento"]) {
+                    case 'N<':
+                        $evento = 'Reporte por tiempo (móvil encendido) ';
+                        break;
+                    case 'D<':
+                        $evento = 'Reporte por tiempo (móvil apagado) ';
+                        break;
+                    case 'E<':
+                        $evento = 'Reporte por tiempo (encerado manual) ';
+                        break;
+                    case 'I<':
+                        $evento = 'Reporte por tiempo (conexión de energía) ';
+                        break;
+                    case 13:
+                        $evento = 'Reporte por tiempo (móvil apagado) ';
+                        break;
+                    case 14:
+                        $evento = 'Móvil encendido ';
+                        break;
+                    case 15:
+                        $evento = 'Reporte móvil apagado  ';
+                        break;
+                    case 16:
+                        $evento = 'Distancia por distancia ';
+                        break;
+                    case 18:
+                        $evento = 'Reporte por tiempo (móvil encendido) ';
+                        break;
+                    default:
+                        $evento = 'Reporte por tiempo (móvil encendido) ';
+                        break;
+                }
+            } else {
+                if ($documento["tipo"] == 'GTDIS') {
+                    $evento = $documento["evento"];
+                } else if ($documento["tipo"] == 'GTIGF') {
+                    $evento = 'Desconexion de dispositivo';
+                } else if ($documento["tipo"] == 'GTIGN') {
+                    $evento = 'Conexion de dispositivo';
+                } else if ($documento["tipo"] == 'GTSOS') {
+                    $evento = 'Botón de pánico activado';
+                }
+            }
+        }
+        if ($documento["angulo"] == 0)
+            $angulo_traducido = "N";
+        else if ($documento["angulo"] != null) {
+            if ($documento["angulo"] > 90 && $documento["angulo"] < 180)
+                $angulo_traducido = "SE";
+            else if ($documento["angulo"] > 180 && $documento["angulo"] < 270)
+                $angulo_traducido = "SO";
+            else if ($documento["angulo"] > 270 && $documento["angulo"] < 360)
+                $angulo_traducido = "NO";
+            else if ($documento["angulo"] > 0 && $documento["angulo"] < 90)
+                $angulo_traducido = "NE";
+            else if ($documento["angulo"] == 90)
+                $angulo_traducido = "E";
+            else if ($documento["angulo"] == 270)
+                $angulo_traducido = "O";
+            else if ($documento["angulo"] == 180)
+                $angulo_traducido = "S";
+        }
+
+        $ubicacion = '';
+        $latitud_geo = '--';
+        $longitud_geo = '--';
+        if (isset($documento['latitud']) && isset($documento['longitud'])
+            && $documento['latitud'] != null && $documento['longitud'] != null
+            && $documento['latitud'] !== '' && $documento['longitud'] !== ''
+            && is_numeric($documento['latitud']) && is_numeric($documento['longitud'])) {
+            $latitud_geo = $documento['latitud'];
+            $longitud_geo = $documento['longitud'];
+            $latF = (float) $documento['latitud'];
+            $lngF = (float) $documento['longitud'];
+            $rounded = $contexto->geoService->roundCoordinates($latF, $lngF);
+            if ($rounded !== null) {
+                $coordCacheKey = $rounded[0] . ',' . $rounded[1];
+                if (!array_key_exists($coordCacheKey, $contexto->direcciones)) {
+                    $contexto->direcciones[$coordCacheKey] = $contexto->geoService->reverseDisplayName($latF, $lngF);
+                }
+                $dir = $contexto->direcciones[$coordCacheKey];
+                if ($dir !== null && trim((string) $dir) !== '') {
+                    $ubicacion = trim((string) $dir);
+                    $gpsPrev = isset($documento['gps_address']) ? trim((string) $documento['gps_address']) : '';
+                    if ($gpsPrev === '') {
+                        $documento['gps_address'] = $ubicacion;
+                        $documento->save();
+                    }
+                }
+            }
+        }
+        if ($ubicacion === '') {
+            $gpsGuardada = isset($documento['gps_address']) ? trim((string) $documento['gps_address']) : '';
+            $ubicacion = ($gpsGuardada !== '') ? $gpsGuardada : 'Ubicacion no disponible';
+        }
+
+        return (Object) [
+            '_id' => $documento["_id"],
+            'fecha_servidor' => $fecha,
+            'fecha_gps' => $fecha_gps,
+            'evento' => $evento,
+            'tipo_marcacion' => isset($documento['origen']) ? $documento['origen'] : "-",
+            'isbuff' => isset($documento['isbuff']) ? (int) $documento['isbuff'] : null,
+            'ubicacion' => $ubicacion,
+            'angulo' => $angulo_traducido,
+            'latitud' => $latitud_geo,
+            'longitud' => $longitud_geo,
+            'mileage' => ($documento["mileage"] != null) ? $documento["mileage"] . ' km/h' : '0 km/h',
+            'odometro' => ($documento["odometro"] != null) ? $documento["odometro"] . ' km' : '-',
+            'velocidad' => ($documento["velocidad"] != null) ? $documento["velocidad"] . ' km/h' : '0 km/h',
+            'voltaje' => $voltaje,
+            'contador_total' => ($documento["contador_total"] != null) ? $documento["contador_total"] : '-'];
+    }
+
+    /**
+     * Exporta TODO el histórico que cumple los filtros de la pantalla (no solo la página
+     * visible) a Excel (.xls) o XML. Se procesa por bloques y se envía mientras se genera,
+     * para no cargar todos los registros en memoria.
+     */
+    public function exportarHistorico(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'fecha_inicio' => 'required',
+            'fecha_fin' => 'required',
+            'unidad_id' => 'required',
+            'evento' => 'required',
+            'formato' => 'required|in:excel,xml'
+        ]);
+        if ($validator->fails())
+            return response()->json(['error' => true, 'messages' => $validator->errors()], 422);
+
+        set_time_limit(0);
+        $formato = $request->input('formato');
+        $unidad = Unidad::find($request->input('unidad_id'));
+        $nombreUnidad = $unidad != null ? $unidad->descripcion : 'unidad';
+        $nombreArchivo = 'Historico_' . preg_replace('/[^A-Za-z0-9_\-]+/', '_', $nombreUnidad) . '_' .
+            date('Ymd_His') . ($formato === 'excel' ? '.xls' : '.xml');
+
+        $columnas = [
+            'fecha_gps' => 'Fecha de GPS', 'fecha_servidor' => 'Fecha de servidor', 'evento' => 'Evento',
+            'origen' => 'Origen', 'latitud' => 'Latitud', 'longitud' => 'Longitud', 'odometro' => 'Odometro',
+            'ubicacion' => 'Ubicación', 'angulo' => 'Punto cardinal', 'velocidad' => 'Velocidad',
+            'voltaje' => 'Voltaje', 'contador_total' => 'Contador', 'tipo_marcacion' => 'Movimiento'
+        ];
+        $esc = function ($valor) {
+            return htmlspecialchars((string) $valor, ENT_QUOTES | ENT_XML1, 'UTF-8');
+        };
+
+        $consulta = $this->consultaHistorico($request);
+        $contexto = $this->contextoFilasHistorico();
+
+        $callback = function () use ($consulta, $contexto, $request, $formato, $columnas, $esc, $nombreUnidad) {
+            if ($formato === 'excel') {
+                echo '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">';
+                echo '<head><meta charset="UTF-8"><style>td{mso-number-format:"\@";}</style></head><body>';
+                echo '<table border="1"><thead><tr>';
+                foreach ($columnas as $titulo)
+                    echo '<th>' . $esc($titulo) . '</th>';
+                echo '</tr></thead><tbody>';
+            } else {
+                echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
+                echo '<historico unidad="' . $esc($nombreUnidad) . '" desde="' . $esc($request->input('fecha_inicio')) .
+                    '" hasta="' . $esc($request->input('fecha_fin')) . '">' . "\n";
+            }
+
+            $consulta->chunk(500, function ($documentos) use ($contexto, $request, $formato, $columnas, $esc) {
+                foreach ($documentos as $documento) {
+                    $fila = $this->filaHistorico($documento, $request, $contexto);
+                    $fila->origen = ($fila->isbuff === 1) ? 'BUFF' : (($fila->isbuff === 0) ? 'Tiempo real' : '-');
+                    if ($formato === 'excel') {
+                        echo '<tr>';
+                        foreach ($columnas as $campo => $titulo)
+                            echo '<td>' . $esc($fila->$campo) . '</td>';
+                        echo '</tr>';
+                    } else {
+                        echo '  <registro>';
+                        foreach ($columnas as $campo => $titulo)
+                            echo '<' . $campo . '>' . $esc($fila->$campo) . '</' . $campo . '>';
+                        echo "</registro>\n";
+                    }
+                }
+                if (ob_get_level() > 0)
+                    @ob_flush();
+                flush();
+            });
+
+            echo ($formato === 'excel') ? '</tbody></table></body></html>' : "</historico>\n";
+        };
+
+        return response()->stream($callback, 200, [
+            'Content-Type' => ($formato === 'excel' ? 'application/vnd.ms-excel' : 'application/xml') . '; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="' . $nombreArchivo . '"',
+            'Cache-Control' => 'no-cache, no-store',
+            'X-Accel-Buffering' => 'no',
+        ]);
+    }
+
     public function getUnidadesCooperativaEstadisticas(Request $request)
     {
         $validator = Validator::make($request->all(), [

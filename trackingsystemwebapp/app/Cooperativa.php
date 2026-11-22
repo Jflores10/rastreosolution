@@ -11,7 +11,7 @@ class Cooperativa extends Moloquent
         'taxis', 'ruc', 'despachos_atm', 'email','despachos_job','mascara',
         'importador_despachos', 'finalizacion_automatica',
         'redondear_tiempos_atraso', 'tolerancia_buffer_minutos','pto_bloques','dia_inicial','hora_sync','distancia_haversine','trafico',
-        'direcciones_tiempo_real'
+        'direcciones_tiempo_real', 'despacho_whatsapp'
     ];
     public function creador()
     {
