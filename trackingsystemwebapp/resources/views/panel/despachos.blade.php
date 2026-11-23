@@ -69,7 +69,6 @@
             margin-right: 3px;
         }
 
-
     </style>
 
 
@@ -182,8 +181,6 @@
                                 <br />
                                 <input onclick="buscar();" type="button" value="Buscar"
                                     class="btn btn-primary search-options__button" />
-                                <button onclick="reportePdf();" type="button" class="btn btn-default"><i
-                                        class="fa fa-file-pdf-o"></i> Reporte PDF</button>
                                 {{-- <button type="submit" class="btn btn-default">Buscar</button> --}}
                                 @if ($tipo === 'L')
                                     <input onclick="finalizarTodos();" id="btnRecalculoAll" type="button"
@@ -434,12 +431,6 @@
                                     type="time" id="hora" />
                                 <span class="help-block" id="span_hora"></span>
                             </div>
-                            <div id="div_celular_conductor" class="form-group" style="display:none;">
-                                <label><i class="fa fa-whatsapp"></i> Celular del conductor</label>
-                                <input placeholder="09XXXXXXXX" autocomplete="off" class="form-control" type="tel"
-                                    id="celular_conductor" />
-                                <span class="help-block">Se usará para compartir el despacho por WhatsApp.</span>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -452,71 +443,74 @@
         </div>
     </div>
 
-    <div class="modal fade" id="despacho_notificacion" tabindex="-1" role="dialog"
-        aria-labelledby="confirmarDespachoLabel">
-        <div class="modal-dialog" role="document">
+    <div class="modal fade bs-example-modal-lg" id="despacho_notificacion" tabindex="-1" role="dialog"
+        aria-labelledby="modalLabel">
+        <div class="modal-dialog  modal-lg" role="document">
             <div class="modal-content">
                 <div class="modal-header">
                     <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span
                             aria-hidden="true">&times;</span></button>
-                    <h4 class="modal-title text-danger" id="confirmarDespachoLabel">¿Está seguro que desea crear el
-                        siguiente despacho?</h4>
+                    <h4 class="modal-title" id="modalLabel">
+                        <font color="red" size="6">Esta seguro que desea crear el siguiente despacho?</font>
+                    </h4>
                 </div>
                 <div class="modal-body">
-                    <div id="confirmar_paso_datos" class="row">
+                    <div class="row">
                         <div class="col-lg-6 col-md-6 col-sm-12">
-                            <div class="form-group">
-                                <label>Cooperativa</label>
-                                <input class="form-control" id="cooperativa_warning" readonly />
+                            <div id="div_conductor_warning" class="form-group">
+                                <label>
+                                    <font size="5">Cooperativa</font>
+                                </label>
+                                <input class="form-control" style="font-size:25px;" autocomplete="off" autocorrect="off"
+                                    name="cooperativa_warning" id="cooperativa_warning" readonly />
                             </div>
                             <div class="form-group">
-                                <label>Unidad</label>
-                                <input class="form-control" id="unidad_warning" readonly />
+                                <label>
+                                    <font size="5">Unidad</font>
+                                </label>
+                                <input class="form-control" style="font-size:25px;" autocomplete="off" autocorrect="off"
+                                    name="unidad_warning" id="unidad_warning" readonly />
                             </div>
-                            <div class="form-group">
-                                <label>Ruta</label>
-                                <input class="form-control" id="ruta_warning" readonly />
+                            <div id="div_ruta_warning" class="form-group">
+                                <label>
+                                    <font size="5">Ruta</font>
+                                </label>
+                                <input class="form-control" style="font-size:25px;" autocomplete="off" autocorrect="off"
+                                    name="ruta_warning" id="ruta_warning" readonly />
                             </div>
                         </div>
                         <div class="col-lg-6 col-md-6 col-sm-12">
-                            <div class="form-group">
-                                <label>Conductor</label>
-                                <input class="form-control" id="conductor_warning" readonly />
+                            <div id="div_conductor_warning" class="form-group">
+                                <label>
+                                    <font size="5">Conductor</font>
+                                </label>
+                                <input class="form-control" style="font-size:25px;" autocomplete="off" autocorrect="off"
+                                    name="conductor_warning" id="conductor_warning" readonly />
                             </div>
-                            <div class="form-group">
-                                <label>Fecha</label>
-                                <input class="form-control" id="fecha_warning" readonly />
+                            <div id="div_fecha_warning" class="form-group">
+                                <label>
+                                    <font size="5">Fecha</font>
+                                </label>
+                                <input class="form-control" style="font-size:25px;" autocomplete="off" autocorrect="off"
+                                    name="fecha_warning" id="fecha_warning" readonly />
                             </div>
-                            <div class="form-group">
-                                <label>Hora</label>
-                                <input class="form-control" id="hora_warning" readonly />
+                            <div id="div_hora_warning" class="form-group">
+                                <label>
+                                    <font size="5">Hora</font>
+                                </label>
+                                <input class="form-control" style="font-size:25px;" autocomplete="off" autocorrect="off"
+                                    name="hora_warning" id="hora_warning" readonly />
                             </div>
                         </div>
-                        <div id="div_celular_warning" class="col-lg-12 col-md-12 col-sm-12" style="display:none;">
-                            <div class="form-group">
-                                <label>Celular del conductor</label>
-                                <input class="form-control" type="tel" autocomplete="off" placeholder="09XXXXXXXX"
-                                    id="celular_warning" />
-                            </div>
-                        </div>
-                    </div>
-                    <div id="confirmar_paso_compartir" style="display:none;">
-                        <p id="compartir_estado"></p>
-                        <p id="compartir_ayuda" class="text-muted" style="display:none;"></p>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" id="btn_crear_despacho" class="btn btn-primary"
-                        onclick="crearDespacho();"><i class="fa fa-check"></i> Crear</button>
-                    <button type="button" id="btn_crear_compartir_despacho" class="btn btn-success"
-                        style="display:none;" onclick="crearYCompartirDespacho();"><i class="fa fa-whatsapp"></i> Crear
-                        y Compartir</button>
-                    <button type="button" id="btn_enviar_pdf_despacho" class="btn btn-success"
-                        style="display:none;" onclick="enviarPdfDespacho();"><i class="fa fa-whatsapp"></i> Enviar
-                        por WhatsApp</button>
-                    <button type="button" id="btn_finalizar_despacho" class="btn btn-default"
-                        style="display:none;" onclick="location.reload(true);"><i class="fa fa-close"></i>
-                        Cerrar</button>
+                    <button class="btn btn-primary" onclick="save();">
+                        <font size="5">Si</font>
+                    </button>
+                    <button type="button" class="btn btn-default" data-dismiss="modal"><i class="fa fa-close"></i>
+                        <font size="5"> Cerrar</font>
+                    </button>
                 </div>
             </div>
         </div>
@@ -595,26 +589,6 @@
             var form = document.getElementById('formDespacho');
             form.action = "{{ url('/despachos/search') }}";
             form.submit();
-        }
-
-        // Reporte PDF de la pestaña actual con los filtros del formulario (todas las páginas).
-        // Sin unidades seleccionadas, el reporte incluye todas las de la cooperativa.
-        function reportePdf() {
-            if (!$('#cooperativa_search').val()) {
-                alert('Seleccione una cooperativa.');
-                return;
-            }
-            if (!$('#desde').val() || !$('#hasta').val()) {
-                alert('Seleccione el rango de fechas.');
-                return;
-            }
-            var form = document.getElementById('formDespacho');
-            var actionAnterior = form.action;
-            form.action = "{{ url('/despachos/reporte-pdf') }}";
-            form.target = '_blank';
-            form.submit();
-            form.target = '';
-            form.action = actionAnterior;
         }
 
         function eliminarTodos() {
@@ -741,9 +715,7 @@
         function getConductores(coop) {
             $.get('{{ url('/despachos') }}' + '/' + coop + '/conductores', function(data) {
                 $('#conductor').empty();
-                conductoresDespacho = {};
                 for (var i = 0; i < data.length; i++) {
-                    conductoresDespacho[data[i]._id] = data[i];
                     $('#conductor').append('<option value="' + data[i]._id + '">' + data[i].nombre + '</option>');
                     $('#conductor').trigger("chosen:updated");
                 }
@@ -752,7 +724,6 @@
                     $('#conductor').trigger('chosen:updated');
                     $('#conductor').trigger('change');
                 @endif
-                cargarCelularConductor();
             }, 'json');
 
         }
@@ -781,64 +752,10 @@
             $('#ruta_warning').val($('#ruta option:selected').text());
             $('#unidad_warning').val($('#unidad option:selected').text());
             $('#cooperativa_warning').val($('#cooperativa option:selected').text());
-
-            // "Crear y Compartir" y el celular solo para cooperativas con envío por WhatsApp.
-            var conWhatsapp = cooperativaTieneWhatsapp($('#cooperativa').val());
-            $('#celular_warning').val($('#celular_conductor').val());
-            $('#div_celular_warning').toggle(conWhatsapp);
-            $('#btn_crear_compartir_despacho').toggle(conWhatsapp);
-            $('#btn_crear_despacho').show();
-            $('#btn_enviar_pdf_despacho, #btn_finalizar_despacho').hide();
-            $('#confirmar_paso_datos').show();
-            $('#confirmar_paso_compartir').hide();
-            habilitarBotonesConfirmacion(true);
             $('#despacho_notificacion').modal('show');
         }
 
-        function habilitarBotonesConfirmacion(habilitar) {
-            $('#btn_crear_despacho, #btn_crear_compartir_despacho').prop('disabled', !habilitar);
-        }
-
-        function crearDespacho() {
-            habilitarBotonesConfirmacion(false);
-            save(null);
-        }
-
-        // Crea el despacho y prepara su PDF para enviarlo por WhatsApp al conductor.
-        function crearYCompartirDespacho() {
-            var numero = normalizarCelularWhatsapp($('#celular_warning').val());
-            if (!numero) {
-                alert('Ingrese un número de celular válido del conductor (ej. 0991234567).');
-                $('#celular_warning').focus();
-                return;
-            }
-            habilitarBotonesConfirmacion(false);
-            // La pestaña de WhatsApp se abre en este clic (si se abre después, el navegador la
-            // bloquea) y se dirige al chat del conductor cuando el enlace del PDF está listo.
-            var ventana = window.open('', 'whatsapp_web');
-            if (ventana) {
-                try {
-                    ventana.document.write('<p style="font-family:sans-serif;padding:20px;">' +
-                        'Preparando el despacho para enviarlo por WhatsApp...</p>');
-                } catch (e) {
-                    // La pestaña ya tenía WhatsApp Web abierto: se reutiliza tal cual.
-                }
-            }
-            save({ numero: numero, celular: $('#celular_warning').val().trim(), ventana: ventana });
-        }
-
-        function cerrarVentanaWhatsapp(compartir) {
-            if (compartir && compartir.ventana && !compartir.ventana.closed) {
-                try {
-                    if (compartir.ventana.location.href === 'about:blank') compartir.ventana.close();
-                } catch (e) {
-                    // Pestaña con WhatsApp Web ya abierto (otro origen): se deja abierta.
-                }
-            }
-        }
-
-        // compartir: null = solo crear; { numero, celular } = crear y compartir el PDF por WhatsApp.
-        function save(compartir) {
+        function save() {
             var url = '{{ url('/despachos') }}';
             var unidad = document.getElementById('unidad');
             var ruta = document.getElementById('ruta');
@@ -866,12 +783,7 @@
                 ruta: ruta.value,
                 fecha: fecha.value + ' ' + $('#hora').val()
             }, function(data) {
-                if (data.error == true || data.despacho == null)
-                    cerrarVentanaWhatsapp(compartir);
                 if (data.error == true) {
-                    // Los errores se muestran en el formulario: se vuelve a él.
-                    habilitarBotonesConfirmacion(true);
-                    $('#despacho_notificacion').modal('hide');
                     if (data.messages.hasOwnProperty('fecha')) {
                         div_fecha.classList.add('has-error');
                         span_fecha.appendChild(document.createTextNode(data.messages.fecha[0]));
@@ -889,10 +801,6 @@
                         span_ruta.appendChild(document.createTextNode(data.messages.ruta[0]));
                     }
                 } else if (data.despacho != null) {
-                    if (compartir) {
-                        compartirDespachoCreado(data.despacho._id, $('#cooperativa').val(), compartir);
-                        return;
-                    }
                     alert('El despacho fue creado con éxito.');
                     fecha.value = null;
                     conductor.value = null;
@@ -907,15 +815,9 @@
                         construirImpresion(data.despacho._id);
                     }*/
                     location.reload(true);
-                } else {
-                    habilitarBotonesConfirmacion(true);
+                } else
                     alert('El despacho ya ha sido creado con anterioridad.');
-                }
-            }, 'json').fail(function() {
-                cerrarVentanaWhatsapp(compartir);
-                habilitarBotonesConfirmacion(true);
-                alert('Ocurrió un error al crear el despacho. Intente nuevamente.');
-            });
+            }, 'json');
         }
 
         getUnidades(document.getElementById('cooperativa').value);
@@ -1319,39 +1221,22 @@
             }, 'json');
         }
 
-        // Formato de ticket que usa cada cooperativa (mismo criterio del botón Imprimir).
-        function tipoTicketCooperativa(cooperativaId) {
-            if (cooperativaId == '588d3d677aea915d897ff041' || cooperativaId == '62d762dd2243df1cd73a79e2' ||
-                cooperativaId == '63e58b552243df4233755082')
-                return 'albosao';
-            if (cooperativaId == '646253b12243df426b1e2a82')
-                return 'orquideas';
-            return 'general';
-        }
-
         function construirImpresion(id) {
+            var desc1=0;
+            var desc2=0;
             if ($('#cooperativa_search').val() == null || $('#cooperativa_search').val() == undefined) {
                 alert('Seleccione una cooperativa a buscar');
             } else {
-                var tipoTicket = tipoTicketCooperativa($('#cooperativa_search').val());
-                if (tipoTicket == 'albosao') {
+                if ($('#cooperativa_search').val() == '588d3d677aea915d897ff041' || $('#cooperativa_search').val() ==
+                    '62d762dd2243df1cd73a79e2' || $('#cooperativa_search').val() ==
+                    '63e58b552243df4233755082') {
                     construirImpresionAlbosao(id);
-                } else if (tipoTicket == 'orquideas') {
+                } else if ($('#cooperativa_search').val() == '646253b12243df426b1e2a82') {
                     construirImpresionOrquideas(id);
                 } else {
                     var url = '{{ url('/despachos') }}' + '/' + id;
                     var w = window.open("", "Imprimir", "width=250,height=400");
                     $.get(url, function(data) {
-                        w.document.body.innerHTML = htmlTicketGeneral(data);
-                    }, 'json');
-                }
-            }
-        }
-
-        // HTML del ticket general (usado por Imprimir y por Compartir Despacho).
-        function htmlTicketGeneral(data) {
-                        var desc1 = 0;
-                        var desc2 = 0;
                         var tabla = [];
                         tabla.push('<!DOCTYPE html>');
                         tabla.push('<html>');
@@ -1502,7 +1387,12 @@
                         tabla.push('</div>');
                         tabla.push('</body>');
                         tabla.push('</html>');
-                        return tabla.join('');
+                        html = tabla.join('');
+                        w.document.body.innerHTML = html;
+                    }, 'json');
+                }
+            }
+
         }
 
         function construirImpresionAlbosao(id) {
@@ -1512,13 +1402,6 @@
             $.get(url, function(data) {
                 // console.log(data);
                 $('#progress').modal('hide');
-                w.document.write(htmlTicketAlbosao(data));
-                w.document.close();
-            }, 'json');
-        }
-
-        // HTML del ticket Albosao (usado por Imprimir y por Compartir Despacho).
-        function htmlTicketAlbosao(data) {
                 var tabla = [];
                 tabla.push('<!DOCTYPE html>');
                 tabla.push('<html>');
@@ -1795,7 +1678,10 @@
                 tabla.push('}');
                 tabla.push('<\/script>');
                 tabla.push('</html>');
-                return tabla.join('');
+                html = tabla.join('');
+                w.document.write(html);
+                w.document.close();
+            }, 'json');
         }
 
 
@@ -1819,12 +1705,6 @@
             var url = '{{ url('/despachos') }}' + '/' + id;
             var w = window.open("", "Imprimir", "width=250,height=400");
             $.get(url, function(data) {
-                w.document.body.innerHTML = htmlTicketOrquideas(data);
-            }, 'json');
-        }
-
-        // HTML del ticket Orquídeas (usado por Imprimir y por Compartir Despacho).
-        function htmlTicketOrquideas(data) {
                 var tabla = [];
                 tabla.push('<!DOCTYPE html>');
                 tabla.push('<html>');
@@ -1883,212 +1763,9 @@
                 tabla.push('</div>');
                 tabla.push('</body>');
                 tabla.push('</html>');
-                return tabla.join('');
-        }
-
-        /* ===================== COMPARTIR DESPACHO POR WHATSAPP ===================== */
-        // Cooperativas con "Habilitar envío de despacho por WhatsApp".
-        var cooperativasDespachoWhatsapp = {!! json_encode(
-            $cooperativas->filter(function ($c) { return $c->despacho_whatsapp === true; })
-                ->map(function ($c) { return (string) $c->_id; })->values()
-        ) !!};
-        var conductoresDespacho = {}; // conductores de la cooperativa del modal, por _id
-
-        function cooperativaTieneWhatsapp(cooperativaId) {
-            return cooperativasDespachoWhatsapp.indexOf(String(cooperativaId)) !== -1;
-        }
-
-        // El campo "Celular del conductor" solo se muestra si la cooperativa tiene el envío por WhatsApp.
-        function actualizarCampoCelularConductor() {
-            $('#div_celular_conductor').toggle(cooperativaTieneWhatsapp($('#cooperativa').val()));
-        }
-
-        // Rellena el celular con el registrado en el conductor (celular, o teléfono si no tiene).
-        function cargarCelularConductor() {
-            var conductor = conductoresDespacho[$('#conductor').val()];
-            var numero = conductor ? (conductor.celular || conductor.telefono || '') : '';
-            $('#celular_conductor').val(String(numero).trim());
-        }
-
-        // Número en formato internacional para WhatsApp (sin +). Números locales de Ecuador
-        // (09XXXXXXXX o 9XXXXXXXX) se convierten a 593. Devuelve null si no es válido.
-        function normalizarCelularWhatsapp(valor) {
-            var digitos = String(valor || '').replace(/\D/g, '');
-            if (digitos.indexOf('00') === 0) digitos = digitos.substring(2);
-            if (digitos.length === 10 && digitos.charAt(0) === '0') digitos = '593' + digitos.substring(1);
-            else if (digitos.length === 9 && digitos.charAt(0) === '9') digitos = '593' + digitos;
-            return (digitos.length >= 11 && digitos.length <= 15) ? digitos : null;
-        }
-
-        var pdfDespacho = null; // { numero, celular, texto, url }
-
-        function cargarScript(url) {
-            return new Promise(function(resolve, reject) {
-                $.ajax({ url: url, dataType: 'script', cache: true }).done(function() { resolve(); })
-                    .fail(function() { reject(new Error('No se pudo cargar ' + url)); });
-            });
-        }
-
-        // html2canvas + jsPDF se cargan solo cuando se va a compartir.
-        function cargarLibreriasPdf() {
-            var pendientes = [];
-            if (typeof window.html2canvas === 'undefined')
-                pendientes.push(cargarScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'));
-            if (typeof window.jspdf === 'undefined')
-                pendientes.push(cargarScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'));
-            return Promise.all(pendientes);
-        }
-
-        // Obtiene el HTML del ticket con el mismo formato y datos que el botón Imprimir.
-        function obtenerHtmlTicket(id, cooperativaId) {
-            var tipoTicket = tipoTicketCooperativa(cooperativaId);
-            var url = (tipoTicket == 'albosao') ? '{{ url('/despachos/ticketalbosao') }}' + '/' + id :
-                '{{ url('/despachos') }}' + '/' + id;
-            var builder = (tipoTicket == 'albosao') ? htmlTicketAlbosao :
-                (tipoTicket == 'orquideas') ? htmlTicketOrquideas : htmlTicketGeneral;
-            return new Promise(function(resolve, reject) {
-                $.get(url, function(data) {
-                    try {
-                        resolve(builder(data));
-                    } catch (e) {
-                        reject(e);
-                    }
-                }, 'json').fail(function() { reject(new Error('No se pudo obtener el despacho')); });
-            });
-        }
-
-        // Renderiza el ticket en un iframe oculto (sus estilos no afectan la página) y lo
-        // convierte a un PDF de ancho de ticket (80 mm) con el alto que ocupe el contenido.
-        function generarPdfTicket(html) {
-            return new Promise(function(resolve, reject) {
-                var iframe = document.createElement('iframe');
-                iframe.setAttribute('aria-hidden', 'true');
-                iframe.style.cssText = 'position:fixed;left:-10000px;top:0;width:320px;height:200px;border:0;';
-                document.body.appendChild(iframe);
-                var doc = iframe.contentDocument || iframe.contentWindow.document;
-                doc.open();
-                doc.write(html);
-                doc.close();
-                // Los botones "Imprimir" del ticket no van en el PDF.
-                Array.prototype.slice.call(doc.querySelectorAll('input[type=button]')).forEach(function(el) {
-                    el.parentNode.removeChild(el);
-                });
-                doc.body.style.margin = '8px';
-                doc.body.style.background = '#ffffff';
-                doc.body.style.color = '#000000';
-
-                setTimeout(function() {
-                    iframe.style.height = (doc.body.scrollHeight + 16) + 'px';
-                    html2canvas(doc.body, { scale: 2, backgroundColor: '#ffffff' }).then(function(canvas) {
-                        var anchoMm = 80;
-                        var altoMm = canvas.height * anchoMm / canvas.width;
-                        var pdf = new window.jspdf.jsPDF({
-                            orientation: altoMm >= anchoMm ? 'portrait' : 'landscape',
-                            unit: 'mm',
-                            format: [anchoMm, altoMm]
-                        });
-                        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, anchoMm, altoMm);
-                        resolve(pdf.output('blob'));
-                    }).catch(reject).then(function() {
-                        if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
-                    });
-                }, 150);
-            });
-        }
-
-        // Sube el PDF al servidor y devuelve el enlace público para enviarlo por WhatsApp.
-        function subirPdfDespacho(id, blob, nombre) {
-            var formData = new FormData();
-            formData.append('pdf', blob, nombre);
-            return new Promise(function(resolve, reject) {
-                $.ajax({
-                    url: '{{ url('/despachos') }}' + '/' + id + '/pdf-whatsapp',
-                    type: 'POST',
-                    data: formData,
-                    processData: false,
-                    contentType: false,
-                    dataType: 'json'
-                }).done(function(resp) {
-                    if (resp && !resp.error && resp.url) resolve(resp.url);
-                    else reject(new Error((resp && resp.message) || 'No se pudo subir el PDF'));
-                }).fail(function(xhr) {
-                    reject(new Error((xhr.responseJSON && xhr.responseJSON.message) || 'No se pudo subir el PDF'));
-                });
-            });
-        }
-
-        function esDispositivoMovil() {
-            if (navigator.userAgentData && typeof navigator.userAgentData.mobile === 'boolean')
-                return navigator.userAgentData.mobile;
-            return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
-        }
-
-        // Chat del conductor con el mensaje y el enlace al PDF: WhatsApp Web en PC (sin instalar
-        // nada en el computador) y la app de WhatsApp en celular.
-        function urlWhatsappDespacho() {
-            // El enlace va solo en su línea para que WhatsApp lo detecte y lo vuelva clicable.
-            var texto = encodeURIComponent(pdfDespacho.texto + '\n\nVer PDF del despacho:\n' + pdfDespacho.url);
-            return esDispositivoMovil() ?
-                'https://wa.me/' + pdfDespacho.numero + '?text=' + texto :
-                'https://web.whatsapp.com/send?phone=' + pdfDespacho.numero + '&text=' + texto;
-        }
-
-        // Tras crear el despacho con "Crear y Compartir": genera el PDF (igual al de Imprimir), lo
-        // sube y lleva la pestaña abierta en el clic al chat de WhatsApp del conductor.
-        function compartirDespachoCreado(id, cooperativaId, compartir) {
-            var conductor = $('#conductor_warning').val() || '';
-            var unidad = $('#unidad_warning').val() || '';
-            var ruta = $('#ruta_warning').val() || '';
-            var fecha = $('#fecha_warning').val() || '';
-            var hora = $('#hora_warning').val() || '';
-            var nombre = ('Despacho_' + unidad + '_' + fecha + '_' + hora).replace(/[^A-Za-z0-9_\-]+/g, '_') + '.pdf';
-            var texto = 'Despacho' +
-                '\nConductor: ' + conductor +
-                '\nUnidad: ' + unidad +
-                '\nRuta: ' + ruta +
-                '\nFecha: ' + fecha + ' ' + hora;
-
-            // El despacho ya existe: el modal pasa al paso de compartir y al cerrarlo se recarga.
-            $('#form').modal('hide');
-            $('#confirmar_paso_datos').hide();
-            $('#confirmar_paso_compartir').show();
-            $('#btn_crear_despacho, #btn_crear_compartir_despacho').hide();
-            $('#btn_finalizar_despacho').show();
-            $('#compartir_ayuda').hide();
-            $('#compartir_estado').html('<i class="fa fa-spinner fa-spin"></i> Despacho creado. Preparando PDF...');
-            $('#despacho_notificacion').one('hidden.bs.modal', function() { location.reload(true); });
-
-            Promise.all([cargarLibreriasPdf(), obtenerHtmlTicket(id, cooperativaId)])
-                .then(function(res) { return generarPdfTicket(res[1]); })
-                .then(function(blob) { return subirPdfDespacho(id, blob, nombre); })
-                .then(function(url) {
-                    pdfDespacho = { numero: compartir.numero, celular: compartir.celular, texto: texto, url: url };
-                    if (compartir.ventana && !compartir.ventana.closed) {
-                        // WhatsApp queda abierto en su pestaña: se cierra el modal (y se recarga la lista).
-                        compartir.ventana.location.href = urlWhatsappDespacho();
-                        $('#despacho_notificacion').modal('hide');
-                        return;
-                    }
-                    // Solo si el navegador bloqueó la pestaña: botón para abrir WhatsApp manualmente.
-                    $('#compartir_estado').html('<i class="fa fa-check text-success"></i> ' +
-                        'Despacho creado. El navegador bloqueó la ventana de WhatsApp.');
-                    $('#compartir_ayuda').text('Pulse "Enviar por WhatsApp" para abrir el chat del conductor (' +
-                        compartir.celular + ').').show();
-                    $('#btn_enviar_pdf_despacho').show().prop('disabled', false);
-                })
-                .catch(function(err) {
-                    console.error(err);
-                    cerrarVentanaWhatsapp(compartir);
-                    $('#compartir_estado').html('<i class="fa fa-exclamation-triangle text-danger"></i> ' +
-                        'Despacho creado, pero no se pudo preparar el PDF para WhatsApp. Puede imprimirlo desde la tabla.');
-                });
-        }
-
-        // Abre (de nuevo) el chat del conductor con el enlace al PDF.
-        function enviarPdfDespacho() {
-            if (!pdfDespacho) return;
-            window.open(urlWhatsappDespacho(), 'whatsapp_web');
-            $('#despacho_notificacion').modal('hide');
+                html = tabla.join('');
+                w.document.body.innerHTML = html;
+            }, 'json');
         }
 
         $(function() {
@@ -2098,9 +1775,7 @@
                 getUnidades($(this).val());
                 getRutas($(this).val());
                 getConductores($(this).val());
-                actualizarCampoCelularConductor();
             });
-            actualizarCampoCelularConductor();
             $('#unidad').chosen({
                 width: '100%'
             }).change(function() {
@@ -2108,8 +1783,6 @@
             });
             $('#conductor').chosen({
                 width: '100%'
-            }).change(function() {
-                cargarCelularConductor();
             });
             $('#ruta').chosen({
                 width: '100%'
