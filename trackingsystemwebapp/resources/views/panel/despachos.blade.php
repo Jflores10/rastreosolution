@@ -695,18 +695,54 @@
             }
         }
 
+        // Ruta que debe seleccionarse cuando termine de cargarse la lista de rutas
+        // (p. ej. la del último despacho de la unidad, si llega antes que las rutas).
+        var rutaPendiente = null;
+        var rutasCargadas = false;
+
+        // Evita que la respuesta de una cooperativa anterior pise la lista actual.
+        function esCooperativaActual(coop) {
+            return coop === $('#cooperativa').val();
+        }
+
+        function existeOpcion(select, valor) {
+            return valor != null && valor !== '' && $(select).find('option[value="' + valor + '"]').length > 0;
+        }
+
+        function seleccionarRuta(rutaId) {
+            if (!rutasCargadas) {
+                rutaPendiente = rutaId;
+                return;
+            }
+            if (existeOpcion('#ruta', rutaId)) {
+                $('#ruta').val(rutaId);
+                $('#ruta').trigger('chosen:updated');
+                $('#ruta').trigger('change');
+            }
+        }
+
+        function cargarListasCooperativa(coop) {
+            rutaPendiente = null;
+            rutasCargadas = false;
+            getUnidades(coop);
+            getRutas(coop);
+            getConductores(coop);
+        }
+
         function getUnidades(coop) {
             $.get('{{ url('/despachos') }}' + '/' + coop + '/unidades', function(data) {
+                if (!esCooperativaActual(coop)) return;
                 $('#unidad').empty();
                 for (var i = 0; i < data.length; i++) {
                     $('#unidad').append('<option value="' + data[i]._id + '">' + data[i].descripcion + '</option>');
-                    $('#unidad').trigger("chosen:updated");
                 }
+                $('#unidad').trigger("chosen:updated");
 
                 @if (Session::has('unidad'))
-                    $('#unidad').val("{{ Session::get('unidad') }}");
-                    $('#unidad').trigger('chosen:updated');
-                    $('#unidad').trigger('change');
+                    if (existeOpcion('#unidad', "{{ Session::get('unidad') }}")) {
+                        $('#unidad').val("{{ Session::get('unidad') }}");
+                        $('#unidad').trigger('chosen:updated');
+                    }
                 @endif
             }, 'json');
 
@@ -714,6 +750,7 @@
 
         function getConductores(coop) {
             $.get('{{ url('/despachos') }}' + '/' + coop + '/conductores', function(data) {
+                if (!esCooperativaActual(coop)) return;
                 $('#conductor').empty();
                 for (var i = 0; i < data.length; i++) {
                     $('#conductor').append('<option value="' + data[i]._id + '">' + data[i].nombre + '</option>');
@@ -730,17 +767,21 @@
 
         function getRutas(coop) {
             $.get('{{ url('/despachos') }}' + '/' + coop + '/rutas', function(data) {
+                if (!esCooperativaActual(coop)) return;
                 $('#ruta').empty();
                 for (var i = 0; i < data.length; i++) {
                     $('#ruta').append('<option value="' + data[i]._id + '">' + data[i].descripcion + '</option>');
-                    $('#ruta').trigger("chosen:updated");
                 }
+                $('#ruta').trigger("chosen:updated");
+                rutasCargadas = true;
+
+                // Prioridad: ruta del último despacho de la unidad; si no, la última usada.
+                var preseleccion = rutaPendiente;
+                rutaPendiente = null;
                 @if (Session::has('ruta'))
-                    var a = "{{ Session::get('ruta') }}";
-                    $('#ruta').val("{{ Session::get('ruta') }}");
-                    $('#ruta').trigger('chosen:updated');
-                    $('#ruta').trigger('change');
+                    if (preseleccion == null) preseleccion = "{{ Session::get('ruta') }}";
                 @endif
+                if (preseleccion != null) seleccionarRuta(preseleccion);
             }, 'json');
 
         }
@@ -820,9 +861,10 @@
             }, 'json');
         }
 
-        getUnidades(document.getElementById('cooperativa').value);
-        getConductores(document.getElementById('cooperativa').value);
-        getRutas(document.getElementById('cooperativa').value);
+        // Si hay cooperativa en sesión, la carga se hace una sola vez al seleccionarla (más abajo).
+        @if (!Session::has('cooperativa'))
+            cargarListasCooperativa(document.getElementById('cooperativa').value);
+        @endif
         var ruta = null
         var localpunto = null
         var localpuntocorte = null;
@@ -1686,16 +1728,17 @@
 
 
         function getUltimoDespacho(unidad, coop) {
+            if (unidad == null || unidad === '') return;
             $.get('{{ url('/despachos') }}' + '/' + unidad + '/' + coop + '/ultimo_despacho', function(data) {
                 //console.log('ultimo despacho'+data);
                 // $('#conductor').val("{{ Session::get('conductor') }}");
+                // Ignorar si mientras tanto cambió la unidad o la cooperativa.
+                if (unidad !== $('#unidad').val() || !esCooperativaActual(coop)) return;
                 if (!data.error) {
                     $('#conductor').val(data.despacho.conductor_id);
                     $('#conductor').trigger('chosen:updated');
                     $('#conductor').trigger('change');
-                    $('#ruta').val(data.ruta);
-                    $('#ruta').trigger('chosen:updated');
-                    $('#ruta').trigger('change');
+                    seleccionarRuta(data.ruta);
                 }
             }, 'json');
 
@@ -1772,9 +1815,7 @@
             $('#cooperativa').chosen({
                 width: '100%'
             }).change(function() {
-                getUnidades($(this).val());
-                getRutas($(this).val());
-                getConductores($(this).val());
+                cargarListasCooperativa($(this).val());
             });
             $('#unidad').chosen({
                 width: '100%'
@@ -1837,15 +1878,15 @@
             @endif
 
             @if (Session::has('cooperativa'))
-                $('#cooperativa').val("{{ Session::get('cooperativa') }}");
+                if (existeOpcion('#cooperativa', "{{ Session::get('cooperativa') }}")) {
+                    $('#cooperativa').val("{{ Session::get('cooperativa') }}");
+                } else {
+                    $('#cooperativa').prop('selectedIndex', 0);
+                }
                 $('#cooperativa').trigger('chosen:updated');
                 $('#cooperativa').trigger('change');
             @endif
         });
-
-        $('#unidad').val("{{ Session::get('unidad') }}");
-        $('#unidad').trigger('chosen:updated');
-        $('#unidad').trigger('change');
     </script>
     <script>
         var today = new Date();

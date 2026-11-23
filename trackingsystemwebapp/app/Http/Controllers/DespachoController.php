@@ -2630,7 +2630,11 @@ class DespachoController extends Controller
 
         if ($coop->mascara == 'S' && $ruta->tipo_ruta == 'P') {
             $hijaSeleccionada = null;
-            foreach ($ruta->hijas()->where('estado', '!=', 'I')->get() as $hija) {
+            // Solo hijas reales, activas y de la misma cooperativa: una ruta que fue
+            // hija y luego se cambió de tipo/cooperativa puede conservar ruta_padre.
+            $hijas = $ruta->hijas()->where('tipo_ruta', 'H')->where('estado', 'A')
+                ->where('cooperativa_id', $ruta->cooperativa_id)->get();
+            foreach ($hijas as $hija) {
                 $cron = $hija->cronogramas->where(
                     'desde',
                     '<=',

@@ -192,6 +192,11 @@ class RutaController extends Controller
                 if ($request->input('tipo_ruta_padre') != null) {
                     $ruta->ruta_padre = $request->input('tipo_ruta_padre');
                 }
+                // Solo una ruta Hija puede tener padre; si cambia de tipo se limpia
+                // para que no siga apareciendo como hija al crear despachos.
+                if ($ruta->tipo_ruta != 'H') {
+                    $ruta->ruta_padre = '';
+                }
                 if ($request->input('tipo_ruta_atm') != null) {
                     $ruta->ruta_atm = $request->input('tipo_ruta_atm');
                 }
