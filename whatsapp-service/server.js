@@ -48,6 +48,8 @@ const whatsapp = new WhatsAppManager({
     sessionDir: SESSION_DIR,
     chromePath: process.env.CHROME_PATH,
     webVersion: process.env.WWEBJS_WEB_VERSION,
+    timeoutMs: parseInt(process.env.TIMEOUT_INICIO_MS || '120000', 10),
+    carpetaLogs: path.resolve('./logs'),
 });
 
 const cola = new ColaEnvios({

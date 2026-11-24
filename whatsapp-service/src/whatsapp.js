@@ -1,5 +1,7 @@
 'use strict';
 
+const fs = require('fs');
+const path = require('path');
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcodeTerminal = require('qrcode-terminal');
 const log = require('./logger');
@@ -11,10 +13,13 @@ const log = require('./logger');
  *  - reconexión automática con espera creciente ante "disconnected" o fallos al iniciar.
  */
 class WhatsAppManager {
-    constructor({ sessionDir, chromePath, webVersion }) {
+    constructor({ sessionDir, chromePath, webVersion, timeoutMs, carpetaLogs }) {
         this.sessionDir = sessionDir;
         this.chromePath = chromePath || undefined;
         this.webVersion = webVersion || undefined;
+        // Tiempo máximo para que cargue WhatsApp Web (servidores lentos necesitan más de 30 s)
+        this.timeoutMs = timeoutMs > 0 ? timeoutMs : 120000;
+        this.carpetaLogs = carpetaLogs;
 
         this.client = null;
         this.listo = false;
@@ -32,9 +37,12 @@ class WhatsAppManager {
     _crearCliente() {
         const opciones = {
             authStrategy: new LocalAuth({ dataPath: this.sessionDir }),
+            authTimeoutMs: this.timeoutMs,
             puppeteer: {
                 headless: true,
                 executablePath: this.chromePath,
+                timeout: this.timeoutMs,
+                protocolTimeout: this.timeoutMs,
                 // Argumentos necesarios para Chrome en servidores Linux / Docker
                 args: [
                     '--no-sandbox',
@@ -103,7 +111,22 @@ class WhatsAppManager {
         } catch (err) {
             this.listo = false;
             log.error('No se pudo iniciar el cliente de WhatsApp.', { error: err.message });
+            await this._capturarPantalla();
             this._programarReconexion();
+        }
+    }
+
+    /** Guarda una captura de lo que muestra WhatsApp Web, para diagnosticar fallos al iniciar. */
+    async _capturarPantalla() {
+        const pagina = this.client && this.client.pupPage;
+        if (!pagina || !this.carpetaLogs) return;
+        try {
+            fs.mkdirSync(this.carpetaLogs, { recursive: true });
+            const archivo = path.join(this.carpetaLogs, 'error-inicio.png');
+            await pagina.screenshot({ path: archivo, fullPage: true });
+            log.info(`Captura de WhatsApp Web guardada en ${archivo}`, { url: pagina.url() });
+        } catch (e) {
+            log.error('No se pudo guardar la captura de pantalla.', { error: e.message });
         }
     }
 
