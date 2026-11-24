@@ -474,6 +474,14 @@
                                     type="time" id="hora" />
                                 <span class="help-block" id="span_hora"></span>
                             </div>
+                            {{-- Solo visible si la cooperativa tiene habilitado el envío de despacho por WhatsApp --}}
+                            <div id="div_whatsapp_numero" class="form-group" style="display:none;">
+                                <label for="whatsapp_numero"><i class="fa fa-whatsapp"></i> Celular WhatsApp</label>
+                                <input type="tel" class="form-control" autocomplete="off" maxlength="20"
+                                    name="whatsapp_numero" id="whatsapp_numero" placeholder="Ej. 0991234567" />
+                                <span class="help-block" id="span_whatsapp_numero">Para enviar el ticket con «Crear y
+                                    Enviar».</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -538,13 +546,10 @@
                     <div class="row" id="div_whatsapp_warning" style="display:none;">
                         <div class="col-sm-12">
                             <div class="confirmar-whatsapp">
-                                <div id="div_whatsapp_numero" class="form-group">
-                                    <label for="whatsapp_numero"><i class="fa fa-whatsapp"></i> Celular para enviar el
-                                        ticket por WhatsApp</label>
-                                    <input type="tel" class="form-control" autocomplete="off" maxlength="20"
-                                        name="whatsapp_numero" id="whatsapp_numero" placeholder="Ej. 0991234567" />
-                                    <span class="help-block" id="span_whatsapp_numero">Se usa solo con «Crear y
-                                        Enviar». Se completa con el celular del conductor si lo tiene registrado.</span>
+                                <div class="form-group">
+                                    <label><i class="fa fa-whatsapp"></i> Celular WhatsApp (Crear y Enviar)</label>
+                                    <input class="form-control" autocomplete="off" autocorrect="off"
+                                        name="whatsapp_warning" id="whatsapp_warning" readonly />
                                 </div>
                             </div>
                         </div>
@@ -807,6 +812,7 @@
                     $('#conductor option:last').attr('data-celular', data[i].celular || data[i].telefono || '');
                     $('#conductor').trigger("chosen:updated");
                 }
+                prellenarWhatsapp();
                 @if (Session::has('conductor'))
                     $('#conductor').val("{{ Session::get('conductor') }}");
                     $('#conductor').trigger('chosen:updated');
@@ -848,9 +854,7 @@
             var conWhatsapp = $('#cooperativa option:selected').data('whatsapp') == 1;
             $('#btn_crear_enviar').toggle(conWhatsapp);
             $('#div_whatsapp_warning').toggle(conWhatsapp);
-            $('#div_whatsapp_numero').removeClass('has-error');
-            // Prellenar con el celular registrado del conductor (se puede cambiar)
-            $('#whatsapp_numero').val($('#conductor option:selected').attr('data-celular') || '');
+            $('#whatsapp_warning').val($.trim($('#whatsapp_numero').val()) || 'Sin número');
             $('#btn_crear, #btn_crear_enviar').prop('disabled', false);
             $('#despacho_notificacion').modal('show');
         }
@@ -864,9 +868,11 @@
                 // Validar el celular antes de crear el despacho
                 var digitos = numeroWhatsapp.replace(/\D/g, '');
                 if (!/^\+?[\d\s()-]+$/.test(numeroWhatsapp) || digitos.length < 9 || digitos.length > 15) {
+                    // Volver al modal Despacho para corregir el número
                     $('#div_whatsapp_numero').addClass('has-error');
-                    $('#whatsapp_numero').focus();
                     alert('Ingrese un número de celular válido para enviar el ticket por WhatsApp.');
+                    $('#despacho_notificacion').modal('hide');
+                    $('#whatsapp_numero').focus();
                     return;
                 }
                 $('#div_whatsapp_numero').removeClass('has-error');
@@ -1909,6 +1915,17 @@
         // Envío del ticket por WhatsApp ("Crear y Enviar")
         // ---------------------------------------------------------------------
 
+        // Muestra el campo "Celular WhatsApp" del modal Despacho solo si la cooperativa lo tiene habilitado.
+        function actualizarWhatsappForm() {
+            $('#div_whatsapp_numero').toggle($('#cooperativa option:selected').data('whatsapp') == 1);
+        }
+
+        // Prellena el celular con el registrado del conductor seleccionado (se puede editar).
+        function prellenarWhatsapp() {
+            $('#div_whatsapp_numero').removeClass('has-error');
+            $('#whatsapp_numero').val($('#conductor option:selected').attr('data-celular') || '');
+        }
+
         // Imita la ventana de impresión: captura el HTML del ticket que las funciones
         // construirImpresion* escriben (document.write/close o document.body.innerHTML).
         function crearVentanaCaptura(alObtenerHtml) {
@@ -2036,6 +2053,10 @@
             $('#conductor').chosen({
                 width: '100%'
             });
+            // Celular WhatsApp: visible según la cooperativa y prellenado con el del conductor
+            $('#cooperativa').on('change', actualizarWhatsappForm);
+            $('#conductor').on('change', prellenarWhatsapp);
+            actualizarWhatsappForm();
             $('#ruta').chosen({
                 width: '100%'
             });
