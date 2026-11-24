@@ -2578,6 +2578,79 @@ class DespachoController extends Controller
         return response()->json(['error' => false, 'url' => asset('despachos_pdf/' . $nombre)]);
     }
 
+    /**
+     * Envía por WhatsApp al conductor la imagen PNG del ticket del despacho (generada en el
+     * navegador a partir del mismo ticket de Imprimir), usando el microservicio whatsapp-service.
+     * Solo para cooperativas con "Habilitar envío de despacho por WhatsApp".
+     */
+    public function enviarTicketWhatsapp(Request $request, $id)
+    {
+        $despacho = Despacho::with('unidad.cooperativa', 'conductor', 'ruta')->where('_id', $id)->first();
+        if ($despacho == null || $despacho->unidad == null || $despacho->unidad->cooperativa == null)
+            return response()->json(['error' => true, 'message' => 'Despacho no encontrado.'], 404);
+
+        $cooperativa = $despacho->unidad->cooperativa;
+        $user = Auth::user();
+        if ($user->tipo_usuario->valor != 1 && (string) $user->cooperativa_id !== (string) $cooperativa->_id)
+            return response()->json(['error' => true, 'message' => 'No autorizado.'], 403);
+        if ($cooperativa->despacho_whatsapp !== true)
+            return response()->json(['error' => true, 'message' => 'Envío por WhatsApp no habilitado para esta cooperativa.'], 403);
+
+        $conductor = $despacho->conductor;
+        $numero = $conductor != null ? trim((string) ($conductor->celular ?: $conductor->telefono)) : '';
+        if ($numero === '')
+            return response()->json(['error' => true, 'message' => 'El conductor no tiene celular registrado.'], 422);
+
+        // Imagen como data URL PNG: "data:image/png;base64,...."
+        $imagen = (string) $request->input('imagen', '');
+        if (strpos($imagen, 'data:image/png;base64,') === 0)
+            $imagen = substr($imagen, strlen('data:image/png;base64,'));
+        $binario = base64_decode($imagen, true);
+        if ($binario === false || strlen($binario) > 5 * 1024 * 1024 || substr($binario, 0, 8) !== "\x89PNG\r\n\x1a\n")
+            return response()->json(['error' => true, 'message' => 'Imagen del ticket inválida.'], 422);
+
+        $url = rtrim((string) config('services.whatsapp.url'), '/');
+        $clave = (string) config('services.whatsapp.key');
+        if ($url === '' || $clave === '')
+            return response()->json(['error' => true, 'message' => 'El servicio de WhatsApp no está configurado.'], 500);
+
+        $texto = 'Despacho - Unidad ' . ($despacho->unidad->descripcion ?: '')
+            . ($despacho->ruta != null ? ' - Ruta ' . $despacho->ruta->descripcion : '');
+
+        try {
+            // La cola del microservicio espera 3-8 s entre mensajes: dar margen al timeout.
+            $cliente = new \GuzzleHttp\Client(['timeout' => 120, 'connect_timeout' => 5, 'http_errors' => false]);
+            $respuesta = $cliente->post($url . '/enviar-base64', [
+                'headers' => ['x-api-key' => $clave],
+                'json' => [
+                    'numero' => $numero,
+                    'base64' => base64_encode($binario),
+                    'mimetype' => 'image/png',
+                    'texto' => $texto,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('WhatsApp despacho ' . $id . ': ' . $e->getMessage());
+            return response()->json(['error' => true, 'message' => 'No se pudo conectar con el servicio de WhatsApp.'], 502);
+        }
+
+        $estado = $respuesta->getStatusCode();
+        $cuerpo = json_decode((string) $respuesta->getBody(), true);
+        if ($estado == 200 && is_array($cuerpo) && !empty($cuerpo['ok']))
+            return response()->json(['error' => false, 'message' => 'Ticket enviado por WhatsApp al conductor (' . $numero . ').']);
+
+        $mensajes = [
+            400 => 'El celular del conductor (' . $numero . ') no es válido.',
+            404 => 'El celular del conductor (' . $numero . ') no tiene WhatsApp.',
+            429 => 'Hay demasiados envíos de WhatsApp en cola. Intente más tarde.',
+            503 => 'WhatsApp no está conectado en el servidor.',
+        ];
+        $mensaje = isset($mensajes[$estado]) ? $mensajes[$estado]
+            : 'Error del servicio de WhatsApp' . (is_array($cuerpo) && !empty($cuerpo['error']) ? ': ' . $cuerpo['error'] : '.');
+        \Log::warning('WhatsApp despacho ' . $id . ': HTTP ' . $estado . ' ' . (string) $respuesta->getBody());
+        return response()->json(['error' => true, 'message' => $mensaje], 502);
+    }
+
     public function getRutas($cooperativa)
     {
         $coop = Cooperativa::findOrFail($cooperativa);

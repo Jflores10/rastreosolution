@@ -29,6 +29,12 @@ return [
         'secret' => env('SPARKPOST_SECRET'),
     ],
 
+    // Microservicio whatsapp-service (envío del ticket de despacho al conductor)
+    'whatsapp' => [
+        'url' => env('WHATSAPP_SERVICE_URL', 'http://127.0.0.1:3100'),
+        'key' => env('WHATSAPP_SERVICE_KEY'),
+    ],
+
     'stripe' => [
         'model' => App\User::class,
         'key' => env('STRIPE_KEY'),

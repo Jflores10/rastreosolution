@@ -109,6 +109,7 @@ Route::group(['middleware' => ['auth', 'usuario']], function () {
         Route::post('/{id}/cancel', 'DespachoController@cancel');
         Route::post('/{id}/revertirCancelacion', 'DespachoController@revertirCancelacion');
         Route::post('/{id}/pdf-whatsapp', 'DespachoController@guardarPdfWhatsapp');
+        Route::post('/{id}/whatsapp', 'DespachoController@enviarTicketWhatsapp');
         Route::get('/error/{id}', 'DespachoController@errorATM');
         Route::post('/reenviarATM/{id}', 'DespachoController@reenviarATM');
         Route::get('/frecuencias', 'DespachoController@frecuencias');

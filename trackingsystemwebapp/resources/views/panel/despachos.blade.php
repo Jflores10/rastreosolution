@@ -389,7 +389,7 @@
                                 <label>Cooperativa</label>
                                 <select autofocus class="form-control" id="cooperativa" name="cooperativa">
                                     @foreach ($cooperativas as $cooperativa)
-                                        <option value="{{ $cooperativa->_id }}">{{ $cooperativa->descripcion }}</option>
+                                        <option value="{{ $cooperativa->_id }}" data-whatsapp="{{ $cooperativa->despacho_whatsapp === true ? 1 : 0 }}">{{ $cooperativa->descripcion }}</option>
                                     @endforeach
                                 </select>
                             </div>
@@ -505,8 +505,12 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button class="btn btn-primary" onclick="save();">
-                        <font size="5">Si</font>
+                    <button type="button" id="btn_crear" class="btn btn-primary" onclick="save(false);">
+                        <font size="5">Crear</font>
+                    </button>
+                    <button type="button" id="btn_crear_enviar" class="btn btn-success" onclick="save(true);"
+                        style="display:none;">
+                        <i class="fa fa-whatsapp"></i> <font size="5">Crear y Enviar</font>
                     </button>
                     <button type="button" class="btn btn-default" data-dismiss="modal"><i class="fa fa-close"></i>
                         <font size="5"> Cerrar</font>
@@ -793,11 +797,17 @@
             $('#ruta_warning').val($('#ruta option:selected').text());
             $('#unidad_warning').val($('#unidad option:selected').text());
             $('#cooperativa_warning').val($('#cooperativa option:selected').text());
+            // "Crear y Enviar" solo si la cooperativa tiene habilitado el envío de despacho por WhatsApp
+            $('#btn_crear_enviar').toggle($('#cooperativa option:selected').data('whatsapp') == 1);
+            $('#btn_crear, #btn_crear_enviar').prop('disabled', false);
             $('#despacho_notificacion').modal('show');
         }
 
-        function save() {
+        function save(enviar) {
             var url = '{{ url('/despachos') }}';
+            var coop = $('#cooperativa').val();
+            enviar = enviar === true && $('#cooperativa option:selected').data('whatsapp') == 1;
+            $('#btn_crear, #btn_crear_enviar').prop('disabled', true);
             var unidad = document.getElementById('unidad');
             var ruta = document.getElementById('ruta');
             var conductor = document.getElementById('conductor');
@@ -824,6 +834,8 @@
                 ruta: ruta.value,
                 fecha: fecha.value + ' ' + $('#hora').val()
             }, function(data) {
+                if (data.error == true || data.despacho == null)
+                    $('#btn_crear, #btn_crear_enviar').prop('disabled', false);
                 if (data.error == true) {
                     if (data.messages.hasOwnProperty('fecha')) {
                         div_fecha.classList.add('has-error');
@@ -842,6 +854,19 @@
                         span_ruta.appendChild(document.createTextNode(data.messages.ruta[0]));
                     }
                 } else if (data.despacho != null) {
+                    if (enviar) {
+                        // Generar la imagen del ticket (igual al de Imprimir) y enviarla al conductor
+                        enviarTicketWhatsapp(data.despacho._id, coop).then(function(mensaje) {
+                            alert('El despacho fue creado con éxito.\n' + mensaje);
+                        }, function(err) {
+                            alert('El despacho fue creado con éxito, pero no se pudo enviar por WhatsApp:\n' +
+                                err.message);
+                        }).then(function() {
+                            $('#progress').modal('hide');
+                            location.reload(true);
+                        });
+                        return;
+                    }
                     alert('El despacho fue creado con éxito.');
                     fecha.value = null;
                     conductor.value = null;
@@ -858,7 +883,9 @@
                     location.reload(true);
                 } else
                     alert('El despacho ya ha sido creado con anterioridad.');
-            }, 'json');
+            }, 'json').fail(function() {
+                $('#btn_crear, #btn_crear_enviar').prop('disabled', false);
+            });
         }
 
         // Si hay cooperativa en sesión, la carga se hace una sola vez al seleccionarla (más abajo).
@@ -1263,21 +1290,24 @@
             }, 'json');
         }
 
-        function construirImpresion(id) {
+        // destino (opcional): ventana de captura de crearVentanaCaptura() en lugar de abrir la ventana de impresión.
+        // coopId (opcional): cooperativa del despacho; por defecto la del buscador.
+        function construirImpresion(id, destino, coopId) {
             var desc1=0;
             var desc2=0;
-            if ($('#cooperativa_search').val() == null || $('#cooperativa_search').val() == undefined) {
+            var coopTicket = coopId || $('#cooperativa_search').val();
+            if (coopTicket == null || coopTicket == undefined) {
                 alert('Seleccione una cooperativa a buscar');
             } else {
-                if ($('#cooperativa_search').val() == '588d3d677aea915d897ff041' || $('#cooperativa_search').val() ==
-                    '62d762dd2243df1cd73a79e2' || $('#cooperativa_search').val() ==
+                if (coopTicket == '588d3d677aea915d897ff041' || coopTicket ==
+                    '62d762dd2243df1cd73a79e2' || coopTicket ==
                     '63e58b552243df4233755082') {
-                    construirImpresionAlbosao(id);
-                } else if ($('#cooperativa_search').val() == '646253b12243df426b1e2a82') {
-                    construirImpresionOrquideas(id);
+                    construirImpresionAlbosao(id, destino);
+                } else if (coopTicket == '646253b12243df426b1e2a82') {
+                    construirImpresionOrquideas(id, destino);
                 } else {
                     var url = '{{ url('/despachos') }}' + '/' + id;
-                    var w = window.open("", "Imprimir", "width=250,height=400");
+                    var w = destino || window.open("", "Imprimir", "width=250,height=400");
                     $.get(url, function(data) {
                         var tabla = [];
                         tabla.push('<!DOCTYPE html>');
@@ -1437,10 +1467,10 @@
 
         }
 
-        function construirImpresionAlbosao(id) {
+        function construirImpresionAlbosao(id, destino) {
             var url = '{{ url('/despachos/ticketalbosao') }}' + '/' + id;
             $('#progress').modal('show');
-            var w = window.open("", "Imprimir", "width=257,height=400");
+            var w = destino || window.open("", "Imprimir", "width=257,height=400");
             $.get(url, function(data) {
                 // console.log(data);
                 $('#progress').modal('hide');
@@ -1744,9 +1774,9 @@
 
         }
 
-        function construirImpresionOrquideas(id) {
+        function construirImpresionOrquideas(id, destino) {
             var url = '{{ url('/despachos') }}' + '/' + id;
-            var w = window.open("", "Imprimir", "width=250,height=400");
+            var w = destino || window.open("", "Imprimir", "width=250,height=400");
             $.get(url, function(data) {
                 var tabla = [];
                 tabla.push('<!DOCTYPE html>');
@@ -1809,6 +1839,123 @@
                 html = tabla.join('');
                 w.document.body.innerHTML = html;
             }, 'json');
+        }
+
+        // ---------------------------------------------------------------------
+        // Envío del ticket por WhatsApp ("Crear y Enviar")
+        // ---------------------------------------------------------------------
+
+        // Imita la ventana de impresión: captura el HTML del ticket que las funciones
+        // construirImpresion* escriben (document.write/close o document.body.innerHTML).
+        function crearVentanaCaptura(alObtenerHtml) {
+            var entregado = false;
+            var partes = [];
+            function entregar(html) {
+                if (entregado) return;
+                entregado = true;
+                alObtenerHtml(html);
+            }
+            var body = {};
+            Object.defineProperty(body, 'innerHTML', {
+                set: function(html) { entregar(html); },
+                get: function() { return ''; }
+            });
+            return {
+                document: {
+                    write: function(html) { partes.push(html); },
+                    close: function() { entregar(partes.join('')); },
+                    body: body
+                },
+                close: function() {},
+                focus: function() {}
+            };
+        }
+
+        // Obtiene el HTML del mismo ticket que muestra el botón Imprimir.
+        function obtenerHtmlTicket(id, coop) {
+            return new Promise(function(resolve, reject) {
+                var limite = setTimeout(function() {
+                    reject(new Error('No se pudo generar el ticket del despacho.'));
+                }, 30000);
+                construirImpresion(id, crearVentanaCaptura(function(html) {
+                    clearTimeout(limite);
+                    resolve(html);
+                }), coop);
+            });
+        }
+
+        function cargarHtml2canvas() {
+            if (window.html2canvas) return Promise.resolve();
+            return new Promise(function(resolve, reject) {
+                var s = document.createElement('script');
+                s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+                s.onload = function() { resolve(); };
+                s.onerror = function() { reject(new Error('No se pudo cargar el generador de imágenes.')); };
+                document.head.appendChild(s);
+            });
+        }
+
+        // Renderiza el HTML del ticket en un iframe fuera de pantalla y lo convierte a PNG (data URL).
+        function htmlTicketAImagen(html) {
+            return new Promise(function(resolve, reject) {
+                var iframe = document.createElement('iframe');
+                iframe.setAttribute('aria-hidden', 'true');
+                iframe.style.cssText = 'position:fixed;left:-10000px;top:0;width:320px;height:600px;border:0;';
+                document.body.appendChild(iframe);
+                function limpiar() { if (iframe.parentNode) iframe.parentNode.removeChild(iframe); }
+                try {
+                    var doc = iframe.contentDocument;
+                    doc.open();
+                    doc.write(html);
+                    doc.close();
+                    // Quitar botones "Imprimir" y dar fondo blanco
+                    $(doc).find('input[type=button], button').remove();
+                    doc.body.style.background = '#ffffff';
+                    doc.body.style.margin = '8px';
+                    iframe.style.height = (doc.documentElement.scrollHeight + 20) + 'px';
+                } catch (e) {
+                    limpiar();
+                    reject(new Error('No se pudo preparar la imagen del ticket.'));
+                    return;
+                }
+                setTimeout(function() {
+                    html2canvas(doc.body, { backgroundColor: '#ffffff', scale: 2, logging: false })
+                        .then(function(canvas) {
+                            limpiar();
+                            resolve(canvas.toDataURL('image/png'));
+                        }, function() {
+                            limpiar();
+                            reject(new Error('No se pudo generar la imagen del ticket.'));
+                        });
+                }, 150);
+            });
+        }
+
+        // Genera la imagen del ticket y la envía al celular del conductor. Resuelve con el mensaje del servidor.
+        function enviarTicketWhatsapp(id, coop) {
+            $('#progress').modal('show');
+            return cargarHtml2canvas().then(function() {
+                return obtenerHtmlTicket(id, coop);
+            }).then(function(html) {
+                $('#progress').modal('show');
+                return htmlTicketAImagen(html);
+            }).then(function(imagen) {
+                return new Promise(function(resolve, reject) {
+                    $.ajax({
+                        url: '{{ url('/despachos') }}' + '/' + id + '/whatsapp',
+                        method: 'POST',
+                        data: { imagen: imagen },
+                        dataType: 'json'
+                    }).done(function(resp) {
+                        if (resp && resp.error === false) resolve(resp.message);
+                        else reject(new Error((resp && resp.message) || 'Error desconocido.'));
+                    }).fail(function(xhr) {
+                        var msg = (xhr.responseJSON && xhr.responseJSON.message) ||
+                            'Error de comunicación con el servidor.';
+                        reject(new Error(msg));
+                    });
+                });
+            });
         }
 
         $(function() {
