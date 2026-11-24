@@ -50,6 +50,8 @@ const whatsapp = new WhatsAppManager({
     webVersion: process.env.WWEBJS_WEB_VERSION,
     timeoutMs: parseInt(process.env.TIMEOUT_INICIO_MS || '120000', 10),
     carpetaLogs: path.resolve('./logs'),
+    // Número que envía los mensajes, para vincular con código en vez de QR (opcional)
+    numeroVinculacion: normalizarNumero(process.env.NUMERO_VINCULACION, CODIGO_PAIS) || undefined,
 });
 
 const cola = new ColaEnvios({

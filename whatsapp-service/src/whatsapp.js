@@ -13,7 +13,10 @@ const log = require('./logger');
  *  - reconexión automática con espera creciente ante "disconnected" o fallos al iniciar.
  */
 class WhatsAppManager {
-    constructor({ sessionDir, chromePath, webVersion, timeoutMs, carpetaLogs }) {
+    constructor({ sessionDir, chromePath, webVersion, timeoutMs, carpetaLogs, numeroVinculacion }) {
+        // Si se define, se vincula con código de 8 caracteres en lugar de QR
+        this.numeroVinculacion = numeroVinculacion || undefined;
+        this.ultimoCodigo = null;
         this.sessionDir = sessionDir;
         this.chromePath = chromePath || undefined;
         this.webVersion = webVersion || undefined;
@@ -64,9 +67,26 @@ class WhatsAppManager {
             };
         }
 
+        // Vinculación por número: WhatsApp > Dispositivos vinculados > Vincular un dispositivo >
+        // "Vincular con el número de teléfono" y escribir el código que sale en el log.
+        if (this.numeroVinculacion) {
+            opciones.pairWithPhoneNumber = {
+                phoneNumber: this.numeroVinculacion,
+                showNotification: true,
+                intervalMs: 180000,
+            };
+        }
+
         const client = new Client(opciones);
 
+        client.on('code', (codigo) => {
+            this.ultimoCodigo = codigo;
+            log.info(`CÓDIGO DE VINCULACIÓN: ${codigo}  -> En el teléfono: WhatsApp > Dispositivos vinculados > ` +
+                'Vincular un dispositivo > "Vincular con el número de teléfono" y escriba este código.');
+        });
+
         client.on('qr', (qr) => {
+            if (this.numeroVinculacion) return; // con vinculación por número no se usa el QR
             this.ultimoQr = qr;
             log.info('QR recibido. Escanéalo desde WhatsApp > Dispositivos vinculados (o abre GET /qr).');
             qrcodeTerminal.generate(qr, { small: true });
@@ -84,6 +104,7 @@ class WhatsAppManager {
         client.on('ready', () => {
             this.listo = true;
             this.ultimoQr = null;
+            this.ultimoCodigo = null;
             this.intentos = 0;
             log.info('WhatsApp listo para enviar mensajes.', { numero: client.info && client.info.wid ? client.info.wid.user : null });
         });
