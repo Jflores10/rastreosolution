@@ -82,30 +82,12 @@
 
         #despacho_notificacion .confirmar-header .modal-title {
             color: #c9302c;
-            font-size: 26px;
             font-weight: 600;
-        }
-
-        #despacho_notificacion .confirmar-body {
-            padding: 20px 25px 5px;
-        }
-
-        #despacho_notificacion .confirmar-body label {
-            font-size: 18px;
-            font-weight: 600;
-            color: #555;
         }
 
         #despacho_notificacion .confirmar-body label .fa {
-            width: 22px;
+            width: 18px;
             color: #73879c;
-        }
-
-        #despacho_notificacion .confirmar-body .form-control {
-            font-size: 24px;
-            height: auto;
-            padding: 6px 12px;
-            border-radius: 4px;
         }
 
         #despacho_notificacion .confirmar-body .form-control[readonly] {
@@ -118,9 +100,8 @@
         #despacho_notificacion .confirmar-whatsapp {
             border: 1px solid #b2dfc0;
             background-color: #f2fbf5;
-            border-radius: 6px;
-            padding: 12px 15px 0;
-            margin-bottom: 15px;
+            border-radius: 4px;
+            padding: 10px 12px 0;
         }
 
         #despacho_notificacion .confirmar-whatsapp label .fa {
@@ -128,9 +109,7 @@
         }
 
         #despacho_notificacion .confirmar-footer .btn {
-            font-size: 20px;
-            padding: 8px 20px;
-            margin-left: 6px;
+            padding: 6px 12px;
         }
 
     </style>
@@ -509,7 +488,7 @@
 
     <div class="modal fade bs-example-modal-lg" id="despacho_notificacion" tabindex="-1" role="dialog"
         aria-labelledby="modalLabel">
-        <div class="modal-dialog  modal-lg" role="document">
+        <div class="modal-dialog" role="document">
             <div class="modal-content">
                 <div class="modal-header confirmar-header">
                     <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span
