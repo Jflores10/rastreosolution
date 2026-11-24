@@ -2596,8 +2596,16 @@ class DespachoController extends Controller
         if ($cooperativa->despacho_whatsapp !== true)
             return response()->json(['error' => true, 'message' => 'Envío por WhatsApp no habilitado para esta cooperativa.'], 403);
 
-        $conductor = $despacho->conductor;
-        $numero = $conductor != null ? trim((string) ($conductor->celular ?: $conductor->telefono)) : '';
+        // Número ingresado en la confirmación; si no viene, el celular registrado del conductor
+        $numero = trim((string) $request->input('numero', ''));
+        if ($numero !== '') {
+            $digitos = preg_replace('/\D/', '', $numero);
+            if (!preg_match('/^\+?[\d\s()-]+$/', $numero) || strlen($digitos) < 9 || strlen($digitos) > 15)
+                return response()->json(['error' => true, 'message' => 'El número de celular ingresado no es válido.'], 422);
+        } else {
+            $conductor = $despacho->conductor;
+            $numero = $conductor != null ? trim((string) ($conductor->celular ?: $conductor->telefono)) : '';
+        }
         if ($numero === '')
             return response()->json(['error' => true, 'message' => 'El conductor no tiene celular registrado.'], 422);
 

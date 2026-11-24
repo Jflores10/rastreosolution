@@ -69,6 +69,70 @@
             margin-right: 3px;
         }
 
+        /* Modal de confirmación de despacho */
+        #despacho_notificacion .modal-content {
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        #despacho_notificacion .confirmar-header {
+            background-color: #fdf2f2;
+            border-bottom: 3px solid #d9534f;
+        }
+
+        #despacho_notificacion .confirmar-header .modal-title {
+            color: #c9302c;
+            font-size: 26px;
+            font-weight: 600;
+        }
+
+        #despacho_notificacion .confirmar-body {
+            padding: 20px 25px 5px;
+        }
+
+        #despacho_notificacion .confirmar-body label {
+            font-size: 18px;
+            font-weight: 600;
+            color: #555;
+        }
+
+        #despacho_notificacion .confirmar-body label .fa {
+            width: 22px;
+            color: #73879c;
+        }
+
+        #despacho_notificacion .confirmar-body .form-control {
+            font-size: 24px;
+            height: auto;
+            padding: 6px 12px;
+            border-radius: 4px;
+        }
+
+        #despacho_notificacion .confirmar-body .form-control[readonly] {
+            background-color: #f7f9fb;
+            color: #2a3f54;
+            font-weight: 600;
+            cursor: default;
+        }
+
+        #despacho_notificacion .confirmar-whatsapp {
+            border: 1px solid #b2dfc0;
+            background-color: #f2fbf5;
+            border-radius: 6px;
+            padding: 12px 15px 0;
+            margin-bottom: 15px;
+        }
+
+        #despacho_notificacion .confirmar-whatsapp label .fa {
+            color: #25d366;
+        }
+
+        #despacho_notificacion .confirmar-footer .btn {
+            font-size: 20px;
+            padding: 8px 20px;
+            margin-left: 6px;
+        }
+
     </style>
 
 
@@ -447,74 +511,76 @@
         aria-labelledby="modalLabel">
         <div class="modal-dialog  modal-lg" role="document">
             <div class="modal-content">
-                <div class="modal-header">
+                <div class="modal-header confirmar-header">
                     <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span
                             aria-hidden="true">&times;</span></button>
                     <h4 class="modal-title" id="modalLabel">
-                        <font color="red" size="6">Esta seguro que desea crear el siguiente despacho?</font>
+                        <i class="fa fa-exclamation-triangle"></i> ¿Está seguro que desea crear el siguiente despacho?
                     </h4>
                 </div>
-                <div class="modal-body">
+                <div class="modal-body confirmar-body">
                     <div class="row">
                         <div class="col-lg-6 col-md-6 col-sm-12">
-                            <div id="div_conductor_warning" class="form-group">
-                                <label>
-                                    <font size="5">Cooperativa</font>
-                                </label>
-                                <input class="form-control" style="font-size:25px;" autocomplete="off" autocorrect="off"
+                            <div id="div_cooperativa_warning" class="form-group">
+                                <label><i class="fa fa-building"></i> Cooperativa</label>
+                                <input class="form-control" autocomplete="off" autocorrect="off"
                                     name="cooperativa_warning" id="cooperativa_warning" readonly />
                             </div>
                             <div class="form-group">
-                                <label>
-                                    <font size="5">Unidad</font>
-                                </label>
-                                <input class="form-control" style="font-size:25px;" autocomplete="off" autocorrect="off"
+                                <label><i class="fa fa-bus"></i> Unidad</label>
+                                <input class="form-control" autocomplete="off" autocorrect="off"
                                     name="unidad_warning" id="unidad_warning" readonly />
                             </div>
                             <div id="div_ruta_warning" class="form-group">
-                                <label>
-                                    <font size="5">Ruta</font>
-                                </label>
-                                <input class="form-control" style="font-size:25px;" autocomplete="off" autocorrect="off"
+                                <label><i class="fa fa-road"></i> Ruta</label>
+                                <input class="form-control" autocomplete="off" autocorrect="off"
                                     name="ruta_warning" id="ruta_warning" readonly />
                             </div>
                         </div>
                         <div class="col-lg-6 col-md-6 col-sm-12">
                             <div id="div_conductor_warning" class="form-group">
-                                <label>
-                                    <font size="5">Conductor</font>
-                                </label>
-                                <input class="form-control" style="font-size:25px;" autocomplete="off" autocorrect="off"
+                                <label><i class="fa fa-user"></i> Conductor</label>
+                                <input class="form-control" autocomplete="off" autocorrect="off"
                                     name="conductor_warning" id="conductor_warning" readonly />
                             </div>
                             <div id="div_fecha_warning" class="form-group">
-                                <label>
-                                    <font size="5">Fecha</font>
-                                </label>
-                                <input class="form-control" style="font-size:25px;" autocomplete="off" autocorrect="off"
+                                <label><i class="fa fa-calendar"></i> Fecha</label>
+                                <input class="form-control" autocomplete="off" autocorrect="off"
                                     name="fecha_warning" id="fecha_warning" readonly />
                             </div>
                             <div id="div_hora_warning" class="form-group">
-                                <label>
-                                    <font size="5">Hora</font>
-                                </label>
-                                <input class="form-control" style="font-size:25px;" autocomplete="off" autocorrect="off"
+                                <label><i class="fa fa-clock-o"></i> Hora</label>
+                                <input class="form-control" autocomplete="off" autocorrect="off"
                                     name="hora_warning" id="hora_warning" readonly />
                             </div>
                         </div>
                     </div>
+                    {{-- Solo visible si la cooperativa tiene habilitado el envío de despacho por WhatsApp --}}
+                    <div class="row" id="div_whatsapp_warning" style="display:none;">
+                        <div class="col-sm-12">
+                            <div class="confirmar-whatsapp">
+                                <div id="div_whatsapp_numero" class="form-group">
+                                    <label for="whatsapp_numero"><i class="fa fa-whatsapp"></i> Celular para enviar el
+                                        ticket por WhatsApp</label>
+                                    <input type="tel" class="form-control" autocomplete="off" maxlength="20"
+                                        name="whatsapp_numero" id="whatsapp_numero" placeholder="Ej. 0991234567" />
+                                    <span class="help-block" id="span_whatsapp_numero">Se usa solo con «Crear y
+                                        Enviar». Se completa con el celular del conductor si lo tiene registrado.</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div class="modal-footer">
+                <div class="modal-footer confirmar-footer">
                     <button type="button" id="btn_crear" class="btn btn-primary" onclick="save(false);">
-                        <font size="5">Crear</font>
+                        <i class="fa fa-check"></i> Crear
                     </button>
                     <button type="button" id="btn_crear_enviar" class="btn btn-success" onclick="save(true);"
                         style="display:none;">
-                        <i class="fa fa-whatsapp"></i> <font size="5">Crear y Enviar</font>
+                        <i class="fa fa-whatsapp"></i> Crear y Enviar
                     </button>
                     <button type="button" class="btn btn-default" data-dismiss="modal"><i class="fa fa-close"></i>
-                        <font size="5"> Cerrar</font>
-                    </button>
+                        Cerrar</button>
                 </div>
             </div>
         </div>
@@ -758,6 +824,8 @@
                 $('#conductor').empty();
                 for (var i = 0; i < data.length; i++) {
                     $('#conductor').append('<option value="' + data[i]._id + '">' + data[i].nombre + '</option>');
+                    // Celular del conductor para prellenar el número de WhatsApp en la confirmación
+                    $('#conductor option:last').attr('data-celular', data[i].celular || data[i].telefono || '');
                     $('#conductor').trigger("chosen:updated");
                 }
                 @if (Session::has('conductor'))
@@ -798,7 +866,12 @@
             $('#unidad_warning').val($('#unidad option:selected').text());
             $('#cooperativa_warning').val($('#cooperativa option:selected').text());
             // "Crear y Enviar" solo si la cooperativa tiene habilitado el envío de despacho por WhatsApp
-            $('#btn_crear_enviar').toggle($('#cooperativa option:selected').data('whatsapp') == 1);
+            var conWhatsapp = $('#cooperativa option:selected').data('whatsapp') == 1;
+            $('#btn_crear_enviar').toggle(conWhatsapp);
+            $('#div_whatsapp_warning').toggle(conWhatsapp);
+            $('#div_whatsapp_numero').removeClass('has-error');
+            // Prellenar con el celular registrado del conductor (se puede cambiar)
+            $('#whatsapp_numero').val($('#conductor option:selected').attr('data-celular') || '');
             $('#btn_crear, #btn_crear_enviar').prop('disabled', false);
             $('#despacho_notificacion').modal('show');
         }
@@ -807,6 +880,18 @@
             var url = '{{ url('/despachos') }}';
             var coop = $('#cooperativa').val();
             enviar = enviar === true && $('#cooperativa option:selected').data('whatsapp') == 1;
+            var numeroWhatsapp = $.trim($('#whatsapp_numero').val());
+            if (enviar) {
+                // Validar el celular antes de crear el despacho
+                var digitos = numeroWhatsapp.replace(/\D/g, '');
+                if (!/^\+?[\d\s()-]+$/.test(numeroWhatsapp) || digitos.length < 9 || digitos.length > 15) {
+                    $('#div_whatsapp_numero').addClass('has-error');
+                    $('#whatsapp_numero').focus();
+                    alert('Ingrese un número de celular válido para enviar el ticket por WhatsApp.');
+                    return;
+                }
+                $('#div_whatsapp_numero').removeClass('has-error');
+            }
             $('#btn_crear, #btn_crear_enviar').prop('disabled', true);
             var unidad = document.getElementById('unidad');
             var ruta = document.getElementById('ruta');
@@ -856,7 +941,7 @@
                 } else if (data.despacho != null) {
                     if (enviar) {
                         // Generar la imagen del ticket (igual al de Imprimir) y enviarla al conductor
-                        enviarTicketWhatsapp(data.despacho._id, coop).then(function(mensaje) {
+                        enviarTicketWhatsapp(data.despacho._id, coop, numeroWhatsapp).then(function(mensaje) {
                             alert('El despacho fue creado con éxito.\n' + mensaje);
                         }, function(err) {
                             alert('El despacho fue creado con éxito, pero no se pudo enviar por WhatsApp:\n' +
@@ -1932,7 +2017,7 @@
         }
 
         // Genera la imagen del ticket y la envía al celular del conductor. Resuelve con el mensaje del servidor.
-        function enviarTicketWhatsapp(id, coop) {
+        function enviarTicketWhatsapp(id, coop, numero) {
             $('#progress').modal('show');
             return cargarHtml2canvas().then(function() {
                 return obtenerHtmlTicket(id, coop);
@@ -1944,7 +2029,7 @@
                     $.ajax({
                         url: '{{ url('/despachos') }}' + '/' + id + '/whatsapp',
                         method: 'POST',
-                        data: { imagen: imagen },
+                        data: { imagen: imagen, numero: numero || '' },
                         dataType: 'json'
                     }).done(function(resp) {
                         if (resp && resp.error === false) resolve(resp.message);
