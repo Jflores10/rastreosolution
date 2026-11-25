@@ -864,18 +864,14 @@
             var coop = $('#cooperativa').val();
             enviar = enviar === true && $('#cooperativa option:selected').data('whatsapp') == 1;
             var numeroWhatsapp = $.trim($('#whatsapp_numero').val());
+            // El envío es independiente de la creación: un número inválido no impide crear el despacho,
+            // solo se omite el envío y se avisa al final.
+            var motivoSinEnvio = null;
             if (enviar) {
-                // Validar el celular antes de crear el despacho
                 var digitos = numeroWhatsapp.replace(/\D/g, '');
-                if (!/^\+?[\d\s()-]+$/.test(numeroWhatsapp) || digitos.length < 9 || digitos.length > 15) {
-                    // Volver al modal Despacho para corregir el número
-                    $('#div_whatsapp_numero').addClass('has-error');
-                    alert('Ingrese un número de celular válido para enviar el ticket por WhatsApp.');
-                    $('#despacho_notificacion').modal('hide');
-                    $('#whatsapp_numero').focus();
-                    return;
-                }
-                $('#div_whatsapp_numero').removeClass('has-error');
+                if (!/^\+?[\d\s()-]+$/.test(numeroWhatsapp) || digitos.length < 9 || digitos.length > 15)
+                    motivoSinEnvio = numeroWhatsapp === '' ? 'No se ingresó un número de celular.' :
+                        'El número de celular "' + numeroWhatsapp + '" no es válido.';
             }
             $('#btn_crear, #btn_crear_enviar').prop('disabled', true);
             var unidad = document.getElementById('unidad');
@@ -925,8 +921,29 @@
                     }
                 } else if (data.despacho != null) {
                     if (enviar) {
-                        // Generar la imagen del ticket (igual al de Imprimir) y enviarla al conductor
-                        enviarTicketWhatsapp(data.despacho._id, coop, numeroWhatsapp).then(function(mensaje) {
+                        // createDespacho puede devolver un error (p. ej. ruta sin cronograma) dentro de "despacho":
+                        // en ese caso no hay despacho creado ni ticket que enviar.
+                        if (!data.despacho._id) {
+                            $('#btn_crear, #btn_crear_enviar').prop('disabled', false);
+                            var original = data.despacho.original || {};
+                            var mensajes = original.messages || {};
+                            alert('No se creó el despacho' + (mensajes.ruta ? ':\n' + mensajes.ruta[0] : '.'));
+                            return;
+                        }
+                        if (motivoSinEnvio) {
+                            alert('El despacho fue creado con éxito, pero no se envió por WhatsApp:\n' + motivoSinEnvio);
+                            location.reload(true);
+                            return;
+                        }
+                        // Generar la imagen del ticket (igual al de Imprimir) y enviarla al conductor.
+                        // Cualquier error del envío solo se informa: el despacho ya quedó creado.
+                        var envio;
+                        try {
+                            envio = enviarTicketWhatsapp(data.despacho._id, coop, numeroWhatsapp);
+                        } catch (e) {
+                            envio = Promise.reject(e);
+                        }
+                        envio.then(function(mensaje) {
                             alert('El despacho fue creado con éxito.\n' + mensaje);
                         }, function(err) {
                             alert('El despacho fue creado con éxito, pero no se pudo enviar por WhatsApp:\n' +
