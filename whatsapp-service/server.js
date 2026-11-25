@@ -140,7 +140,8 @@ function manejar(handler) {
         try {
             await handler(req, res);
         } catch (err) {
-            const status = err instanceof ErrorHttp ? err.status : 500;
+            // ErrorHttp o errores con "status" (p. ej. 503 cuando WhatsApp Web se está reconectando)
+            const status = err instanceof ErrorHttp ? err.status : (Number.isInteger(err.status) ? err.status : 500);
             if (status === 500) log.error('Error inesperado.', { ruta: req.path, error: err.message });
             responderError(res, status, status === 500 ? 'Error interno al enviar el mensaje.' : err.message);
         }

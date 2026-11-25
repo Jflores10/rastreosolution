@@ -6,6 +6,12 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcodeTerminal = require('qrcode-terminal');
 const log = require('./logger');
 
+/** true si el error indica que la página/navegador de WhatsApp Web ya no es utilizable. */
+function esErrorDePagina(err) {
+    const mensaje = String(err && err.message ? err.message : err);
+    return /detached Frame|Target closed|Session closed|Execution context was destroyed|browser has disconnected|Connection closed|Protocol error/i.test(mensaje);
+}
+
 /** Traduce el "ack" de WhatsApp a texto (1 tick = servidor, 2 ticks = teléfono destino). */
 function textoAck(ack) {
     switch (ack) {
@@ -119,6 +125,7 @@ class WhatsAppManager {
             this.ultimoQr = null;
             this.ultimoCodigo = null;
             this.intentos = 0;
+            this._iniciarVigilancia();
             log.info('WhatsApp listo para enviar mensajes.', { numero: client.info && client.info.wid ? client.info.wid.user : null });
         });
 
@@ -184,6 +191,7 @@ class WhatsAppManager {
         const espera = Math.min(5000 * Math.pow(2, this.intentos - 1), 5 * 60 * 1000);
         log.info(`Reconexión programada en ${Math.round(espera / 1000)} s (intento ${this.intentos}).`);
 
+        this._detenerVigilancia();
         setTimeout(async () => {
             const anterior = this.client;
             this.client = null;
@@ -200,25 +208,85 @@ class WhatsAppManager {
     }
 
     /**
+     * Fuerza un reinicio inmediato del cliente cuando la página de WhatsApp Web quedó inservible
+     * (por ejemplo, WhatsApp Web se recargó solo y Puppeteer sigue apuntando a la página vieja).
+     */
+    _reiniciarPorFallo(motivo) {
+        if (this.reconectando || this.detenido) return;
+        this.listo = false;
+        this.intentos = 0; // reintentar enseguida (5 s)
+        log.error('La página de WhatsApp Web dejó de responder. Reiniciando el cliente.', { motivo });
+        this._programarReconexion();
+    }
+
+    /**
+     * Ejecuta una operación sobre WhatsApp Web. Si falla porque la página quedó desconectada,
+     * reinicia el cliente y responde 503 en lugar de seguir fallando en cada envío.
+     */
+    async _usarPagina(operacion) {
+        try {
+            return await operacion();
+        } catch (err) {
+            if (esErrorDePagina(err)) {
+                this._reiniciarPorFallo(err.message);
+                const error = new Error('WhatsApp se está reconectando. Intente de nuevo en un minuto.');
+                error.status = 503;
+                throw error;
+            }
+            throw err;
+        }
+    }
+
+    /**
+     * Revisa cada minuto que la página de WhatsApp Web siga respondiendo; si no, reinicia el cliente.
+     * Detecta recargas de WhatsApp Web que no generan el evento "disconnected".
+     */
+    _iniciarVigilancia() {
+        this._detenerVigilancia();
+        this.vigilancia = setInterval(async () => {
+            if (!this.listo || this.reconectando || !this.client) return;
+            try {
+                const estado = await Promise.race([
+                    this.client.getState(),
+                    new Promise((_, rechazar) => setTimeout(() => rechazar(new Error('Sin respuesta de WhatsApp Web')), 20000)),
+                ]);
+                if (!estado) this._reiniciarPorFallo('Estado vacío');
+            } catch (err) {
+                this._reiniciarPorFallo(err.message);
+            }
+        }, 60000);
+    }
+
+    _detenerVigilancia() {
+        if (this.vigilancia) clearInterval(this.vigilancia);
+        this.vigilancia = null;
+    }
+
+    /**
      * Devuelve el id de WhatsApp ("593...@c.us") o null si el número no tiene WhatsApp.
      */
     async obtenerIdNumero(numero) {
-        const id = await this.client.getNumberId(numero);
-        return id ? id._serialized : null;
+        return this._usarPagina(async () => {
+            const id = await this.client.getNumberId(numero);
+            return id ? id._serialized : null;
+        });
     }
 
     /** Envía un MessageMedia con texto opcional como pie de foto. Devuelve el id del mensaje. */
     async enviarMedia(chatId, media, texto) {
-        const opciones = texto ? { caption: texto } : {};
-        const mensaje = await this.client.sendMessage(chatId, media, opciones);
-        const id = mensaje && mensaje.id ? mensaje.id._serialized : null;
-        if (mensaje) log.info('Mensaje entregado a WhatsApp Web.', { id, destino: chatId, ack: mensaje.ack, estado: textoAck(mensaje.ack) });
-        return id;
+        return this._usarPagina(async () => {
+            const opciones = texto ? { caption: texto } : {};
+            const mensaje = await this.client.sendMessage(chatId, media, opciones);
+            const id = mensaje && mensaje.id ? mensaje.id._serialized : null;
+            if (mensaje) log.info('Mensaje entregado a WhatsApp Web.', { id, destino: chatId, ack: mensaje.ack, estado: textoAck(mensaje.ack) });
+            return id;
+        });
     }
 
     /** Cierra el navegador al apagar el proceso (sin cerrar la sesión de WhatsApp). */
     async detener() {
         this.detenido = true;
+        this._detenerVigilancia();
         if (this.client) {
             try {
                 await this.client.destroy();
