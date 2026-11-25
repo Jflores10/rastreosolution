@@ -6,6 +6,19 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcodeTerminal = require('qrcode-terminal');
 const log = require('./logger');
 
+/** Traduce el "ack" de WhatsApp a texto (1 tick = servidor, 2 ticks = teléfono destino). */
+function textoAck(ack) {
+    switch (ack) {
+        case -1: return 'error';
+        case 0: return 'pendiente (reloj, no salió del teléfono emisor)';
+        case 1: return 'enviado al servidor (1 tick)';
+        case 2: return 'entregado al destino (2 ticks)';
+        case 3: return 'leído';
+        case 4: return 'reproducido';
+        default: return 'desconocido';
+    }
+}
+
 /**
  * Administra el cliente de whatsapp-web.js:
  *  - sesión persistente con LocalAuth (el QR se escanea una sola vez),
@@ -109,6 +122,15 @@ class WhatsAppManager {
             log.info('WhatsApp listo para enviar mensajes.', { numero: client.info && client.info.wid ? client.info.wid.user : null });
         });
 
+        // Estado real de entrega de los mensajes enviados (equivale a los "ticks" de WhatsApp)
+        client.on('message_ack', (mensaje, ack) => {
+            if (!mensaje || !mensaje.fromMe) return;
+            const destino = mensaje.to || (mensaje.id && mensaje.id.remote) || '';
+            const datos = { id: mensaje.id ? mensaje.id._serialized : null, destino, ack, estado: textoAck(ack) };
+            if (ack < 0) log.error('Mensaje NO entregado.', datos);
+            else log.info('Estado de entrega.', datos);
+        });
+
         client.on('change_state', (estado) => {
             log.info('Cambio de estado de WhatsApp.', { estado });
         });
@@ -189,7 +211,9 @@ class WhatsAppManager {
     async enviarMedia(chatId, media, texto) {
         const opciones = texto ? { caption: texto } : {};
         const mensaje = await this.client.sendMessage(chatId, media, opciones);
-        return mensaje && mensaje.id ? mensaje.id._serialized : null;
+        const id = mensaje && mensaje.id ? mensaje.id._serialized : null;
+        if (mensaje) log.info('Mensaje entregado a WhatsApp Web.', { id, destino: chatId, ack: mensaje.ack, estado: textoAck(mensaje.ack) });
+        return id;
     }
 
     /** Cierra el navegador al apagar el proceso (sin cerrar la sesión de WhatsApp). */
