@@ -2299,6 +2299,7 @@ function onClientConnected(socket) {
         let sentTime = 8;
         let fechaSend = 10;
         let data = message.split(',');
+        console.log(`[contador-log] GTDAT TRAMA imei=${data[imei]} flag=${data[flag]} sensor=${data[deviceName]} valor=${data[count]} status=${data[status]} fecha=${data[fechaSend]} buff=${isBuffMessage} | cruda=${String(message).trim()}`);
         const MAX_COUNT = 65535;
         const MAX_COUNT_C2 = 999999;
         // Techos de hardware: P1/C1 = 16 bits; P2/P3/C2 (y similares) = hasta MAX_COUNT_C2.
@@ -2392,6 +2393,7 @@ function onClientConnected(socket) {
                 const tag = data[deviceName];
                 const lecturaContador = toInteger(data[count]);
                 if (lecturaContadorInvalida(lecturaContador, tag)) {
+                  console.log(`[contador-log] GTDAT imei=${document.imei} sensor=${tag} lectura=${lecturaContador} INVALIDA (no numérica, negativa o >= max ${limiteHardwarePorTag(tag)}) -> no se procesa`);
                   if (!isBuffMessage && (lecturaContador === MAX_COUNT || lecturaContador === MAX_COUNT_C2 || lecturaContador > limiteHardwarePorTag(tag))) console.log(`[contador-debug] GTDAT imei=${document.imei} sensor=${tag} lectura=${lecturaContador} descartada (igual o mayor al máximo ${limiteHardwarePorTag(tag)})`);
                   return;
                 }
@@ -2410,11 +2412,17 @@ function onClientConnected(socket) {
                 if (tag === 'P2') { total_anterior = document.contador_total_sensor_2; base_anterior = document.contador_diario_base_sensor_2; }
                 if (tag === 'P3') { total_anterior = document.contador_total_sensor_3; base_anterior = document.contador_diario_base_sensor_3; }
 
+                console.log(`[contador-log] GTDAT BD previo imei=${document.imei} sensor=${tag} lectura=${lecturaContador} | total_anterior=${total_anterior} inicial_anterior=${contador_inicial} diario_anterior=${contador_diario_anterior} base_anterior=${base_anterior} | max=${limiteHardwarePorTag(tag)} buff=${isBuffMessage}`);
                 const calc = calcularContadorGtdat(lecturaContador, contador_inicial, total_anterior, contador_diario_anterior, base_anterior, document.imei, tag);
-                if (!calc) return;
+                if (!calc) {
+                  console.log(`[contador-log] GTDAT RESULTADO imei=${document.imei} sensor=${tag} -> trama DESCARTADA (cálculo devolvió null, no se guarda)`);
+                  return;
+                }
                 contador_inicial = calc.contador_inicial;
                 contador_diario = calc.contador_diario;
                 const contador_diario_base = calc.contador_diario_base;
+                const seGuardaP = (calc.reinicioAuto || contador_diario >= contador_diario_anterior) && !isBuffMessage;
+                console.log(`[contador-log] GTDAT RESULTADO imei=${document.imei} sensor=${tag} -> total=${lecturaContador} inicial=${contador_inicial} diario=${contador_diario} base=${contador_diario_base} reinicioAuto=${calc.reinicioAuto} | guarda=${seGuardaP}${seGuardaP ? '' : (isBuffMessage ? ' (trama BUFF)' : ` (diario ${contador_diario} < diario_anterior ${contador_diario_anterior})`)}`);
 
                 if (calc.reinicioAuto && !isBuffMessage) console.log(`[contador-debug] GTDAT guardando tras reinicio auto imei=${document.imei} sensor=${tag} total=${lecturaContador} inicial=${contador_inicial} diario=${contador_diario} (antes ${contador_diario_anterior}) base=${contador_diario_base}`);
 
@@ -2479,14 +2487,21 @@ function onClientConnected(socket) {
                   const tag = data[deviceName];
                   const lecturaContador = toInteger(data[count]);
                   if (lecturaContadorInvalida(lecturaContador, tag)) {
+                    console.log(`[contador-log] GTDAT imei=${document.imei} sensor=${tag} lectura=${lecturaContador} INVALIDA (no numérica, negativa o >= max ${limiteHardwarePorTag(tag)}) -> no se procesa`);
                     if (!isBuffMessage && (lecturaContador === MAX_COUNT || lecturaContador === MAX_COUNT_C2 || lecturaContador > limiteHardwarePorTag(tag))) console.log(`[contador-debug] GTDAT imei=${document.imei} sensor=${tag} lectura=${lecturaContador} descartada (igual o mayor al máximo ${limiteHardwarePorTag(tag)})`);
                     return;
                   }
 
+                  console.log(`[contador-log] GTDAT BD previo imei=${document.imei} sensor=${tag} lectura=${lecturaContador} | total_anterior=${document.contador_total} inicial_anterior=${document.contador_inicial} diario_anterior=${document.contador_diario} base_anterior=${document.contador_diario_base} | max=${limiteHardwarePorTag(tag)} buff=${isBuffMessage}`);
                   const calc = calcularContadorGtdat(lecturaContador, document.contador_inicial, document.contador_total, document.contador_diario, document.contador_diario_base, document.imei, tag);
-                  if (!calc) return;
+                  if (!calc) {
+                    console.log(`[contador-log] GTDAT RESULTADO imei=${document.imei} sensor=${tag} -> trama DESCARTADA (cálculo devolvió null, no se guarda)`);
+                    return;
+                  }
                   const contador_inicial = calc.contador_inicial;
                   const contador_diario = calc.contador_diario;
+                  const seGuarda = (calc.reinicioAuto || contador_diario >= document.contador_diario) && !isBuffMessage;
+                  console.log(`[contador-log] GTDAT RESULTADO imei=${document.imei} sensor=${tag} -> total=${lecturaContador} inicial=${contador_inicial} diario=${contador_diario} base=${calc.contador_diario_base} reinicioAuto=${calc.reinicioAuto} | guarda=${seGuarda}${seGuarda ? '' : (isBuffMessage ? ' (trama BUFF)' : ` (diario ${contador_diario} < diario_anterior ${document.contador_diario})`)}`);
 
                   if (calc.reinicioAuto && !isBuffMessage) console.log(`[contador-debug] GTDAT guardando tras reinicio auto imei=${document.imei} sensor=${tag} total=${lecturaContador} inicial=${contador_inicial} diario=${contador_diario} (antes ${document.contador_diario}) base=${calc.contador_diario_base}`);
 
@@ -3651,8 +3666,10 @@ function onClientConnected(socket) {
         let data = message.split(',');
 
         const eventType = toInteger(data[type]);
+        console.log(`[contador-log] GTDTT TRAMA imei=${data[imei]} evento=${data[type]} campo8=${data[8]} campo9=${data[9]} dgt=${message.includes(GTDTTDGT)} buff=${isBuffMessage} | cruda=${String(message).trim()}`);
         // IGNORAR evento 17: viene invertido y genera inconsistencias
         if (eventType == 17) {
+          console.log(`[contador-log] GTDTT imei=${data[imei]} evento 17 -> ignorado`);
           return;
         }
 
@@ -3830,6 +3847,7 @@ function onClientConnected(socket) {
                 count_sensor_1 = toInteger(m[1]);
                 count_sensor_2 = toInteger(m[3]);
               } else {
+                console.log(`[contador-log] GTDTT imei=${data[imei]} DGT campo contador con formato inválido "${count_parse}" -> trama descartada`);
                 return;
               }
             } else {
@@ -3840,6 +3858,7 @@ function onClientConnected(socket) {
                 .replace(/ /g, "")
                 .trim();
               if (count_parse.length < 14) {
+                console.log(`[contador-log] GTDTT imei=${data[imei]} campo contador "${count_parse}" con menos de 14 dígitos -> trama descartada`);
                 return;
               }
               const s1 = count_parse.slice(0, 7);
@@ -3849,9 +3868,11 @@ function onClientConnected(socket) {
                 s3 = count_parse.slice(14, 21);
               }
               if (!s1 || !s2 || !s3 || s1.length < 7 || s2.length < 7) {
+                console.log(`[contador-log] GTDTT imei=${data[imei]} campo contador "${count_parse}" sensores incompletos (s1=${s1} s2=${s2} s3=${s3}) -> trama descartada`);
                 return;
               }
               if (!/^\d+$/.test(s1) || !/^\d+$/.test(s2) || !/^\d+$/.test(s3)) {
+                console.log(`[contador-log] GTDTT imei=${data[imei]} campo contador "${count_parse}" no numérico (s1=${s1} s2=${s2} s3=${s3}) -> trama descartada`);
                 return;
               }
               count_sensor_1 = toInteger(s1);
@@ -3859,6 +3880,12 @@ function onClientConnected(socket) {
               count_sensor_3 = toInteger(s3);
             }
 
+            console.log(`[contador-log] GTDTT LECTURAS imei=${data[imei]} S1=${count_sensor_1} S2=${count_sensor_2} S3=${count_sensor_3} | max=${MAX_COUNT} buff=${isBuffMessage}`);
+            console.log(`[contador-log] GTDTT BD previo imei=${data[imei]}`
+              + ` | S1 total=${document.contador_total} inicial=${document.contador_inicial} diario=${document.contador_diario} base=${document.contador_diario_base}`
+              + ` | S2 total=${document.contador_total_sensor_2} inicial=${document.contador_inicial_sensor_2} diario=${document.contador_diario_sensor_2} base=${document.contador_diario_base_sensor_2}`
+              + ` | S3 total=${document.contador_total_sensor_3} inicial=${document.contador_inicial_sensor_3} diario=${document.contador_diario_sensor_3} base=${document.contador_diario_base_sensor_3}`);
+            if (isBuffMessage) console.log(`[contador-log] GTDTT imei=${data[imei]} trama BUFF -> no actualiza contadores de la unidad (solo se inserta en recorridos)`);
 
             if (!isBuffMessage) {
 
@@ -3872,7 +3899,10 @@ function onClientConnected(socket) {
               const s2 = resolverSensorGtdtt(count_sensor_2, document.contador_total_sensor_2, document.contador_inicial_sensor_2, document.contador_diario_sensor_2, reinicioS2, document.contador_diario_base_sensor_2, 'S2');
               const s3 = resolverSensorGtdtt(count_sensor_3, document.contador_total_sensor_3, document.contador_inicial_sensor_3, document.contador_diario_sensor_3, reinicioS3, document.contador_diario_base_sensor_3, 'S3');
 
-             
+              console.log(`[contador-log] GTDTT RESULTADO imei=${data[imei]} (se guarda)`
+                + ` | S1 total=${s1.total} inicial=${s1.inicial} diario=${s1.diario} base=${s1.base}`
+                + ` | S2 total=${s2.total} inicial=${s2.inicial} diario=${s2.diario} base=${s2.base}`
+                + ` | S3 total=${s3.total} inicial=${s3.inicial} diario=${s3.diario} base=${s3.base}`);
 
               dbTrackingSystem.collection('unidads').updateOne({ _id: document._id }, {
                 $set: {
