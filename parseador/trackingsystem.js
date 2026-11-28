@@ -3819,6 +3819,7 @@ function onClientConnected(socket) {
          * Resuelve el estado final (total/inicial/diario) de UN sensor GTDTT sin abortar el mensaje.
          * Cada sensor es independiente: lo que le pase a uno no bloquea a los otros.
          * - Lectura fuera de rango: se conserva el valor anterior de ese sensor.
+         * - Lectura menor que el total sin llegar al máximo: se ignora (total y diario no cambian).
          * - Reinicio manual / salto imposible / diario incoherente: se re-basa al valor nuevo de la trama.
          * - Normal: total = valor nuevo, inicial se mantiene, diario = valor nuevo - inicial.
          */
@@ -3853,6 +3854,14 @@ function onClientConnected(socket) {
             const diario = nuevaBase + countActual;
             if (!isBuffMessage) console.log(`[contador] Reinicio automático de total GTDTT imei=${data[imei]} sensor=${sensorLabel} total ${anteriorTotal} -> ${countActual}; diario ${diarioPrevio} -> ${diario} (base ${basePrevia} + 1 por el paso a 0 + lectura ${countActual})`);
             return { total: countActual, inicial: 0, diario: diario, base: nuevaBase };
+          }
+
+          // 3) Lectura menor que el total sin haber llegado al máximo (p. ej. el equipo se reinició):
+          //    se ignora y se conserva todo lo anterior, como en GTDAT. Si el total estaba a
+          //    MARGEN_HASTA_MAXIMO_GTDTT o menos del máximo, sigue al respaldo de calcularContadoresSensorGtdtt.
+          if (!esReinicioManual && anteriorTotal > 0 && countActual < anteriorTotal && MAX_COUNT - anteriorTotal > MARGEN_HASTA_MAXIMO_GTDTT) {
+            if (!isBuffMessage) console.log(`[contador-debug] GTDTT imei=${data[imei]} sensor=${sensorLabel} lectura=${countActual} < total ${anteriorTotal} sin llegar al máximo ${MAX_COUNT} -> ignorada, se conserva total=${anteriorTotal} diario=${diarioPrevio}`);
+            return { total: anteriorTotal, inicial: prevInicial, diario: diarioPrevio, base: basePrevia };
           }
 
           // Reinicio manual o salto imposible: re-basar al valor que trae la trama.
