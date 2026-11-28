@@ -2332,10 +2332,11 @@ function onClientConnected(socket) {
          * base es 0 hasta el primer reinicio automático, así que el cálculo normal es el de
          * siempre (diario = lectura - inicial).
          * Reinicio automático del TOTAL al llegar al máximo (MAX_COUNT / MAX_COUNT_C2):
-         *   1) Trama con lectura === máximo: se guarda total = máximo, inicial = 0,
-         *      base = diario actual y el diario NO cambia.
-         *   2) Trama siguiente (el equipo volvió a empezar): total = lectura, inicial = 0,
-         *      diario = base + lectura (continúa desde donde se quedó).
+         *   1) Trama con lectura === máximo: el diario se calcula normal (suma lo que subió
+         *      hasta el máximo); se guarda total = máximo, inicial = 0, base = ese diario.
+         *   2) Trama siguiente (el equipo volvió a empezar): el paso máximo -> 0 cuenta 1, así
+         *      que base = base + 1, total = lectura, inicial = 0, diario = base + lectura.
+         *   Ej.: total 65534 diario 100 -> 65535 diario 101 -> 0 diario 102 -> 3 diario 105.
          * Devuelve null cuando la trama no se guarda (lectura menor que inicial sin haber
          * llegado al máximo).
          */
@@ -2357,18 +2358,21 @@ function onClientConnected(socket) {
             if (logDebug) console.log(`[contador-debug] GTDAT imei=${imeiUnidad} sensor=${tag} inicial negativo corregido -> inicial=${inicial} base=${base}`);
           }
 
-          // 1) Llegó al máximo: se guarda el máximo como total, el diario se mantiene y pasa a base.
+          // 1) Llegó al máximo: el diario suma lo que subió hasta el máximo y pasa a base.
           if (lectura === lim) {
-            const diarioMax = diarioPrev; // si el máximo llega repetido, diario y base ya valen esto
-            if (!isBuffMessage) console.log(`[contador] GTDAT llegó al máximo imei=${imeiUnidad} sensor=${tag} total ${totalPrev} -> ${lectura} (máximo ${lim}); diario se mantiene en ${diarioMax}, base=${diarioMax}, inicial=0`);
+            // Sin total previo (unidad nueva / reinicio manual) o máximo repetido: no se suma nada.
+            const subio = (inicial !== null && totalPrev > 0 && totalPrev < lim) ? lim - totalPrev : 0;
+            const diarioMax = diarioPrev + subio;
+            if (!isBuffMessage) console.log(`[contador] GTDAT llegó al máximo imei=${imeiUnidad} sensor=${tag} total ${totalPrev} -> ${lectura} (máximo ${lim}); diario ${diarioPrev} -> ${diarioMax} (+${subio}), base=${diarioMax}, inicial=0`);
             return { contador_inicial: 0, contador_diario: diarioMax, contador_diario_base: diarioMax, reinicioAuto: true };
           }
 
-          // 2) Trama siguiente al máximo: el equipo volvió a empezar, el diario continúa.
+          // 2) Trama siguiente al máximo: el equipo volvió a empezar; máximo -> 0 cuenta 1.
           if (totalPrev === lim) {
-            const diario = base + lectura;
-            if (!isBuffMessage) console.log(`[contador] Reinicio automático de total GTDAT imei=${imeiUnidad} sensor=${tag} total ${totalPrev} -> ${lectura}; diario ${diarioPrev} -> ${diario} (base ${base} + lectura ${lectura})`);
-            return { contador_inicial: 0, contador_diario: diario, contador_diario_base: base, reinicioAuto: true };
+            const nuevaBase = base + 1;
+            const diario = nuevaBase + lectura;
+            if (!isBuffMessage) console.log(`[contador] Reinicio automático de total GTDAT imei=${imeiUnidad} sensor=${tag} total ${totalPrev} -> ${lectura}; diario ${diarioPrev} -> ${diario} (base ${base} + 1 por el paso a 0 + lectura ${lectura})`);
+            return { contador_inicial: 0, contador_diario: diario, contador_diario_base: nuevaBase, reinicioAuto: true };
           }
 
           // Sin línea base, o tras "Reiniciar Contador" (inicial y diario en 0): como siempre,
@@ -2379,11 +2383,12 @@ function onClientConnected(socket) {
           }
 
           // Respaldo: no llegó la trama con el máximo, pero el total estaba cerca y la lectura bajó.
-          // Mismo resultado que el paso 2 (sin sumar lo que faltaba para el máximo).
+          // Mismo resultado que pasos 1 + 2: lo que subió hasta el máximo + 1 (máximo -> 0) + lectura.
           if (totalPrev > 0 && lectura < totalPrev && lim - totalPrev <= MARGEN_HASTA_MAXIMO) {
-            const diario = diarioPrev + lectura;
+            const nuevaBase = diarioPrev + (lim - totalPrev) + 1;
+            const diario = nuevaBase + lectura;
             if (!isBuffMessage) console.log(`[contador] Reinicio automático de total GTDAT (sin trama de máximo) imei=${imeiUnidad} sensor=${tag} total ${totalPrev} -> ${lectura} (máximo ${lim}); diario ${diarioPrev} -> ${diario}`);
-            return { contador_inicial: 0, contador_diario: diario, contador_diario_base: diarioPrev, reinicioAuto: true };
+            return { contador_inicial: 0, contador_diario: diario, contador_diario_base: nuevaBase, reinicioAuto: true };
           }
 
           // Cálculo de siempre, sobre la parte posterior al último reinicio.
@@ -3763,11 +3768,12 @@ function onClientConnected(socket) {
           }
 
           // Respaldo: no llegó la trama con el máximo, pero el total estaba cerca y la lectura bajó.
-          // Mismo resultado que tras la trama de máximo (sin sumar lo que faltaba para el máximo).
+          // Mismo resultado que llegar al máximo + trama siguiente: lo que subió + 1 (máximo -> 0) + lectura.
           if (tieneInicial && totalAnt > 0 && countActual < totalAnt && MAX_COUNT - totalAnt <= MARGEN_HASTA_MAXIMO_GTDTT) {
-            contador_diario = diarioAnt + countActual;
+            const nuevaBase = diarioAnt + (MAX_COUNT - totalAnt) + 1;
+            contador_diario = nuevaBase + countActual;
             if (!isBuffMessage) console.log(`[contador] Reinicio automático de total GTDTT (sin trama de máximo) imei=${data[imei]} sensor=${sensorLabel} total ${totalAnt} -> ${countActual} (máximo ${MAX_COUNT}); diario ${diarioAnt} -> ${contador_diario}`);
-            return { contador_inicial: 0, contador_diario, contador_diario_base: diarioAnt };
+            return { contador_inicial: 0, contador_diario, contador_diario_base: nuevaBase };
           }
 
           // Cálculo de siempre (inicial 0 con base > 0 = reinicio automático con lectura 0).
@@ -3827,17 +3833,22 @@ function onClientConnected(socket) {
           const diarioPrevio = toInteger(prevDiario) || 0;
           const basePrevia = Math.max(0, toInteger(prevBase) || 0);
 
-          // 1) Llegó al máximo: se guarda el máximo como total, el diario se mantiene y pasa a base.
+          // 1) Llegó al máximo: el diario suma lo que subió hasta el máximo y pasa a base.
+          //    Ej.: total 9999998 diario 100 -> 9999999 diario 101 -> 0 diario 102.
           if (countActual === MAX_COUNT) {
-            if (!isBuffMessage) console.log(`[contador] GTDTT llegó al máximo imei=${data[imei]} sensor=${sensorLabel} total ${anteriorTotal} -> ${countActual} (máximo ${MAX_COUNT}); diario se mantiene en ${diarioPrevio}, base=${diarioPrevio}, inicial=0`);
-            return { total: countActual, inicial: 0, diario: diarioPrevio, base: diarioPrevio };
+            // Sin total previo (reinicio manual / sin datos) o máximo repetido: no se suma nada.
+            const subio = (!esReinicioManual && anteriorTotal > 0 && anteriorTotal < MAX_COUNT) ? MAX_COUNT - anteriorTotal : 0;
+            const diarioMax = diarioPrevio + subio;
+            if (!isBuffMessage) console.log(`[contador] GTDTT llegó al máximo imei=${data[imei]} sensor=${sensorLabel} total ${anteriorTotal} -> ${countActual} (máximo ${MAX_COUNT}); diario ${diarioPrevio} -> ${diarioMax} (+${subio}), base=${diarioMax}, inicial=0`);
+            return { total: countActual, inicial: 0, diario: diarioMax, base: diarioMax };
           }
 
-          // 2) Trama siguiente al máximo: el equipo volvió a empezar, el diario continúa.
+          // 2) Trama siguiente al máximo: el equipo volvió a empezar; máximo -> 0 cuenta 1.
           if (anteriorTotal === MAX_COUNT) {
-            const diario = basePrevia + countActual;
-            if (!isBuffMessage) console.log(`[contador] Reinicio automático de total GTDTT imei=${data[imei]} sensor=${sensorLabel} total ${anteriorTotal} -> ${countActual}; diario ${diarioPrevio} -> ${diario} (base ${basePrevia} + lectura ${countActual})`);
-            return { total: countActual, inicial: 0, diario: diario, base: basePrevia };
+            const nuevaBase = basePrevia + 1;
+            const diario = nuevaBase + countActual;
+            if (!isBuffMessage) console.log(`[contador] Reinicio automático de total GTDTT imei=${data[imei]} sensor=${sensorLabel} total ${anteriorTotal} -> ${countActual}; diario ${diarioPrevio} -> ${diario} (base ${basePrevia} + 1 por el paso a 0 + lectura ${countActual})`);
+            return { total: countActual, inicial: 0, diario: diario, base: nuevaBase };
           }
 
           // Reinicio manual o salto imposible: re-basar al valor que trae la trama.
