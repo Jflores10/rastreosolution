@@ -1843,7 +1843,11 @@ function restartCounter() {
             contador_diario_sensor_2: 0,
             contador_inicial_sensor_2: document.contador_total_sensor_2,
             contador_diario_sensor_3: 0,
-            contador_inicial_sensor_3: document.contador_total_sensor_3
+            contador_inicial_sensor_3: document.contador_total_sensor_3,
+            // La base del reinicio automático por máximo es del día: se limpia con el diario.
+            contador_diario_base: 0,
+            contador_diario_base_sensor_2: 0,
+            contador_diario_base_sensor_3: 0
           }
         },
         { writeConcern: { w: 0 } },
